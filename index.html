@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>イチバン羽田チームアプリ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d0d1a;--surface:#161628;--surface2:#1e1e35;--border:#2a2a4a;
+  --text:#e8e8f4;--muted:#7878a0;--accent:#4f8ef7;
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#a855f7;--cyan:#06b6d4;
+  --gold:#fbbf24;--hh:54px;--nh:58px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:var(--bg);color:var(--text);max-width:480px;margin:0 auto;position:relative}
+.hdr{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
+  height:var(--hh);background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 14px;z-index:1000}
+.hdr-title{font-size:15px;font-weight:700;letter-spacing:.3px}
+.duty-btn{padding:6px 13px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s}
+.duty-btn.on{background:var(--green);color:#fff}
+.duty-btn.off{background:var(--red);color:#fff}
+.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
+  height:var(--nh);background:var(--surface);border-top:1px solid var(--border);
+  display:flex;z-index:1000}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;border:none;background:transparent;color:var(--muted);cursor:pointer;
+  font-size:10px;transition:color .2s;padding:6px 2px;position:relative}
+.nb svg{width:20px;height:20px}
+.nb.active{color:var(--accent)}
+.chat-unread{position:absolute;top:6px;right:calc(50% - 18px);width:7px;height:7px;
+  background:var(--red);border-radius:50%;display:none}
+.page{display:none;position:fixed;top:var(--hh);left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;bottom:var(--nh);overflow-y:auto}
+.page.active{display:block}
+#page-map{overflow:hidden}
+#map{width:100%;height:100%;position:relative}
+.map-status-bar{position:absolute;top:8px;left:8px;right:52px;z-index:500;
+  display:flex;gap:6px;pointer-events:auto}
+.sch{flex:1;text-align:center;padding:8px 2px;border-radius:10px;font-size:12px;
+  font-weight:700;cursor:pointer;border:2px solid transparent;
+  backdrop-filter:blur(6px);transition:all .2s}
+.sch.kuusha{background:rgba(34,197,94,.18);color:var(--green)}
+.sch.jitsusha{background:rgba(239,68,68,.18);color:var(--red)}
+.sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
+.sch.sel{border-color:currentColor;transform:scale(1.04)}
+.gps-pill{position:absolute;bottom:8px;left:8px;z-index:500;
+  background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
+  border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);
+  display:flex;align-items:center;gap:6px}
+.gps-dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0}
+.gps-dot.on{background:var(--green);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.locate-me-btn{position:absolute;bottom:52px;right:8px;z-index:500;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:50%;width:44px;height:44px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);transition:all .2s}
+.locate-me-btn:active{transform:scale(.92)}
+.map-ctrl-btn{position:absolute;right:8px;z-index:500;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:50%;width:44px;height:44px;cursor:pointer;font-size:18px;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);transition:all .2s}
+.map-ctrl-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.map-ctrl-btn:active{transform:scale(.92)}
+.map-layer-bar{position:absolute;bottom:100px;left:8px;z-index:500;
+  display:flex;flex-direction:column;gap:5px}
+.map-layer-chip{background:rgba(13,13,26,.85);backdrop-filter:blur(6px);
+  border:1px solid var(--border);border-radius:20px;padding:5px 12px;
+  font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap}
+.map-layer-chip.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+.driver-panel-btn{position:absolute;bottom:8px;right:8px;z-index:500;
+  background:var(--accent);color:#fff;border:none;border-radius:50%;
+  width:44px;height:44px;cursor:pointer;font-size:20px;
+  display:flex;align-items:center;justify-content:center}
+.driver-panel{position:absolute;bottom:0;left:0;right:0;z-index:600;
+  background:var(--surface);border-radius:16px 16px 0 0;
+  border-top:1px solid var(--border);
+  transform:translateY(100%);transition:transform .3s ease;
+  max-height:60%;overflow-y:auto}
+.driver-panel.open{transform:translateY(0)}
+.dp-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 6px}
+.dp-title{font-size:13px;font-weight:700;color:var(--muted);padding:0 14px 8px;
+  display:flex;justify-content:space-between;align-items:center}
+.dp-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
+.driver-row{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--border)}
+.driver-row:last-child{border-bottom:none}
+.driver-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;margin-top:2px}
+.driver-info{flex:1;min-width:0}
+.driver-name{font-size:14px;font-weight:600}
+.driver-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.driver-status{font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap}
+.driver-status.kuusha{background:rgba(34,197,94,.15);color:var(--green)}
+.driver-status.jitsusha{background:rgba(239,68,68,.15);color:var(--red)}
+.driver-status.kaisou{background:rgba(245,158,11,.15);color:var(--amber)}
+.driver-status.offline{background:rgba(120,120,160,.15);color:var(--muted)}
+.pc{padding:12px}
+.sec{font-size:11px;font-weight:700;color:var(--muted);margin:14px 0 8px;
+  text-transform:uppercase;letter-spacing:.8px;
+  display:flex;justify-content:space-between;align-items:center}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:14px;margin-bottom:10px}
+.timer-big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;
+  letter-spacing:1px;color:var(--gold)}
+.timer-med{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--cyan)}
+.btn{padding:8px 14px;border-radius:8px;border:none;cursor:pointer;font-size:13px;
+  font-weight:600;transition:all .2s}
+.btn:active{transform:scale(.95)}
+.btn-p{background:var(--accent);color:#fff}
+.btn-d{background:var(--red);color:#fff}
+.btn-s{background:var(--green);color:#fff}
+.btn-g{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.spot-item{display:flex;align-items:center;gap:10px;padding:11px 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  margin-bottom:8px;cursor:pointer}
+.spot-num{width:28px;height:28px;border-radius:50%;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
+  flex-shrink:0;color:#fff}
+.spot-info{flex:1}
+.spot-name{font-size:13px;font-weight:600}
+.spot-desc{font-size:11px;color:var(--muted);margin-top:1px}
+.spot-time{font-size:12px;font-weight:600;color:var(--cyan)}
+.dest-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:12px;margin-bottom:9px;position:relative}
+.dest-name{font-size:14px;font-weight:600;margin-bottom:2px}
+.dest-addr{font-size:12px;color:var(--muted);margin-bottom:8px}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer}
+.bg{background:rgba(34,197,94,.15);color:var(--green)}
+.br{background:rgba(239,68,68,.15);color:var(--red)}
+.chat-wrap{display:flex;flex-direction:column;height:100%}
+.chat-msgs{flex:1;overflow-y:auto;padding:10px 12px;scroll-behavior:smooth}
+.msg-row{display:flex;gap:8px;margin-bottom:11px;align-items:flex-end}
+.msg-row.me{flex-direction:row-reverse}
+.av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.av.other{background:var(--purple)}
+.av.me-av{background:var(--accent)}
+.bubble{max-width:74%;padding:8px 12px;border-radius:16px;font-size:14px;line-height:1.5}
+.msg-row.me .bubble{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.msg-row:not(.me) .bubble{background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg-meta{font-size:10px;color:var(--muted);margin-top:2px}
+.msg-name{font-size:11px;color:var(--muted);margin-bottom:2px}
+.chat-footer{display:flex;gap:8px;padding:8px 12px;background:var(--surface);
+  border-top:1px solid var(--border)}
+.chat-footer input{flex:1;background:var(--surface2);border:1px solid var(--border);
+  border-radius:20px;color:var(--text);padding:8px 14px;font-size:14px}
+.chat-footer input:focus{outline:none;border-color:var(--accent)}
+.send-btn{width:38px;height:38px;border-radius:50%;border:none;background:var(--accent);
+  color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.send-btn:active{transform:scale(.9)}
+input,textarea,select{width:100%;padding:9px 12px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:8px;color:var(--text);
+  font-size:14px;margin-bottom:9px;-webkit-appearance:none;font-family:inherit}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+.row2{display:flex;justify-content:space-between;align-items:center;padding:3px 0;margin-bottom:4px}
+.rl{font-size:12px;color:var(--muted)}
+.rv{font-size:13px;font-weight:600}
+.toast{position:fixed;top:62px;left:50%;transform:translateX(-50%);
+  background:rgba(30,30,60,.95);color:#fff;padding:7px 18px;border-radius:20px;
+  font-size:13px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s;
+  max-width:280px;text-align:center;border:1px solid var(--border)}
+.toast.show{opacity:1}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+  z-index:2000;align-items:flex-end;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:18px 18px 0 0;padding:18px;
+  width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between}
+.mc{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+.setup-screen{position:fixed;inset:0;background:var(--bg);z-index:5000;
+  display:none;align-items:center;justify-content:center;padding:24px}
+.setup-screen.open{display:flex}
+.setup-box{background:var(--surface);border-radius:16px;padding:24px;width:100%;max-width:420px;
+  border:1px solid var(--border)}
+.setup-box h2{font-size:18px;font-weight:700;margin-bottom:6px}
+.setup-box p{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6}
+textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
+.conn-status{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 0}
+.conn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.map-offline{position:absolute;inset:0;background:rgba(13,13,26,.88);
+  z-index:400;display:none;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;text-align:center}
+.map-offline.show{display:flex}
+.sleep-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface2);font-size:15px;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;transition:all .2s}
+.sleep-btn.on{background:rgba(34,197,94,.2);border-color:var(--green)}
+.arrival-banner{position:fixed;top:62px;left:50%;transform:translateX(-50%);
+  width:calc(100% - 24px);max-width:456px;
+  background:var(--surface);border:1.5px solid var(--green);border-radius:14px;
+  padding:14px 16px;z-index:3000;display:none;
+  box-shadow:0 4px 24px rgba(34,197,94,.25)}
+.arrival-banner.show{display:block;animation:slidein .3s ease}
+@keyframes slidein{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.arrival-title{font-size:15px;font-weight:700;color:var(--green);margin-bottom:4px}
+.arrival-sub{font-size:13px;color:var(--muted)}
+.arrival-close{position:absolute;top:10px;right:12px;background:none;border:none;
+  color:var(--muted);font-size:18px;cursor:pointer}
+.cp-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:13px;margin-bottom:9px}
+.cp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cp-name{font-size:14px;font-weight:700}
+.cp-coords{font-size:11px;color:var(--muted);margin-bottom:8px;font-family:monospace}
+.cp-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.cp-set{background:rgba(34,197,94,.15);color:var(--green)}
+.cp-unset{background:rgba(239,68,68,.15);color:var(--red)}
+.toggle-sw{width:42px;height:24px;background:var(--border);border-radius:12px;
+  position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;border:none}
+.toggle-sw.on{background:var(--green)}
+.toggle-sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;
+  background:#fff;border-radius:50%;transition:left .2s}
+.toggle-sw.on::after{left:21px}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="hdr-title">✈️ イチバン羽田チームアプリ</div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;color:var(--muted)" id="duty-label">休み中</span>
+    <button class="sleep-btn" id="sleep-btn" onclick="toggleWakeLock()" title="スリープ防止">📺</button>
+    <button class="duty-btn off" id="duty-btn" onclick="toggleDuty()">出勤する</button>
+  </div>
+</div>
+
+<div class="page active" id="page-map" style="overflow:hidden">
+  <div id="map" style="width:100%;height:100%;position:relative">
+    <div class="map-offline show" id="map-offline">
+      <div style="font-size:48px">🛑</div>
+      <div style="font-size:17px;font-weight:700">休み中</div>
+      <div style="font-size:13px;color:var(--muted)">GPS停止中<br>出勤するとGPSが起動します</div>
+    </div>
+  </div>
+  <div class="map-status-bar" id="status-bar" style="flex-direction:column;gap:5px">
+    <div style="display:flex;gap:6px;width:100%">
+      <div class="sch kuusha sel" id="sch-kuusha" onclick="setStatus('kuusha')">🟢 空車</div>
+      <div class="sch jitsusha" id="sch-jitsusha" onclick="setStatus('jitsusha')">🔴 実車</div>
+      <div class="sch kaisou" id="sch-kaisou" onclick="setStatus('kaisou')">🟡 回送</div>
+    </div>
+    <div id="spot-chips" style="display:flex;gap:6px;width:100%"></div>
+  </div>
+  <div class="gps-pill">
+    <span class="gps-dot" id="gps-dot"></span>
+    <span id="gps-txt">GPS停止中</span>
+    <span style="color:var(--border)">│</span>
+    <span id="online-count" style="color:var(--cyan)">仲間0人</span>
+  </div>
+  <!-- オートフォロー -->
+  <button class="map-ctrl-btn" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:98px">🎯</button>
+  <!-- 地図種別切替 -->
+  <div class="map-layer-bar" id="layer-bar" style="display:none">
+    <div class="map-layer-chip sel" id="layer-osm"   onclick="setTileLayer('osm')"  >標準</div>
+    <div class="map-layer-chip"     id="layer-gsi"   onclick="setTileLayer('gsi')"  >地理院</div>
+    <div class="map-layer-chip"     id="layer-light" onclick="setTileLayer('light')">ライト</div>
+  </div>
+  <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替" style="bottom:50px;right:8px">🗺</button>
+  <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ" style="bottom:194px">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+      <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
+    </svg>
+  </button>
+  <button class="driver-panel-btn" onclick="toggleDriverPanel()" title="仲間リスト">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  </button>
+  <div class="driver-panel" id="driver-panel">
+    <div class="dp-handle"></div>
+    <div class="dp-title">
+      <span>🚖 仲間の状況</span>
+      <button class="dp-close" onclick="toggleDriverPanel()">✕</button>
+    </div>
+    <div id="driver-list-inner"></div>
+  </div>
+</div>
+
+<div class="page" id="page-wait">
+<div class="pc">
+  <div class="card" style="border-color:var(--cyan)">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px" id="wait-spot-lbl">待機場所: 未設定</div>
+    <div class="timer-big" id="wait-timer">00:00:00</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">チェックポイント到着で自動スタート</div>
+  </div>
+  <div class="sec">🗺 送り先（自動登録）</div>
+  <div id="dest-list"></div>
+  <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
+  <div id="team-dests-list"></div>
+  <div class="sec" style="margin-top:18px">📋 待機履歴（7日分）</div>
+  <div id="wait-history-list"></div>
+</div>
+</div>
+
+<div class="page" id="page-chat">
+  <div class="chat-wrap">
+    <div class="chat-msgs" id="chat-msgs"></div>
+    <div class="chat-footer">
+      <input type="text" id="chat-input" placeholder="メッセージを入力..." onkeypress="if(event.key==='Enter')sendChat()">
+      <button class="send-btn" onclick="sendChat()">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-settings">
+<div class="pc">
+  <div class="sec">👤 ドライバー設定</div>
+  <div class="card">
+    <label>ドライバー名</label><input type="text" id="s-name" placeholder="例: 田中">
+    <label>車両番号</label><input type="text" id="s-car" placeholder="例: 品川 501 あ 1234">
+    <button class="btn btn-p" onclick="saveSettings()" style="width:100%">保存する</button>
+  </div>
+  <div id="admin-lock-area">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
+      <input type="password" id="pin-input" placeholder="管理者PIN"
+        style="width:110px;text-align:center;letter-spacing:3px;font-size:14px;
+          padding:6px 10px;margin-bottom:0;flex-shrink:0"
+        maxlength="8" onkeypress="if(event.key==='Enter')adminLogin()">
+      <button class="btn btn-p" onclick="adminLogin()"
+        style="font-size:11px;padding:6px 12px;flex-shrink:0">🔓 解除</button>
+      <span style="font-size:10px;color:var(--muted)">初期: 0000</span>
+    </div>
+  </div>
+  <div id="admin-area" style="display:none">
+    <div class="card" style="border-color:var(--green);margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;color:var(--green);font-weight:700">🔓 管理者モード</span>
+        <button class="btn btn-g" style="font-size:11px;padding:4px 10px" onclick="adminLogout()">ロック</button>
+      </div>
+    </div>
+    <div class="sec">🔑 PINの変更</div>
+    <div class="card">
+      <label>新しいPIN（数字4〜8桁）</label>
+      <input type="password" id="new-pin" placeholder="新しいPIN" maxlength="8" style="letter-spacing:4px;font-size:18px;text-align:center">
+      <label>確認（もう一度入力）</label>
+      <input type="password" id="new-pin2" placeholder="確認入力" maxlength="8" style="letter-spacing:4px;font-size:18px;text-align:center">
+      <button class="btn btn-p" onclick="changePin()" style="width:100%">PINを変更する</button>
+    </div>
+    <div class="sec">📍 到着通知チェックポイント</div>
+    <div id="cp-list"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.7;padding:0 2px">
+      各場所に近づくと通知・待機タイマーが自動スタートします。
+    </div>
+    <div class="sec">👤 自分のアカウント編集</div>
+    <div class="card">
+      <label>ドライバー名</label>
+      <input type="text" id="admin-name" placeholder="例: 田中">
+      <label>車両番号</label>
+      <input type="text" id="admin-car" placeholder="例: 品川 501 あ 1234">
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-p" onclick="saveAdminAccount()" style="flex:1">保存してFirebaseに反映</button>
+        <button class="btn btn-d" onclick="deleteMyAccount()" style="flex-shrink:0">🗑 削除</button>
+      </div>
+    </div>
+    <div class="sec">🗑 アカウント管理</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Firebaseに登録されているドライバーを削除できます。</div>
+      <div id="account-list"></div>
+      <button class="btn btn-g" onclick="loadAccountList()" style="width:100%;margin-top:4px">🔄 最新の一覧を取得</button>
+    </div>
+    <div class="sec">📡 Firebase接続</div>
+    <div class="card">
+      <div class="conn-status" id="conn-status">
+        <span class="conn-dot" id="conn-dot" style="background:var(--muted)"></span>
+        <span id="conn-txt">接続中...</span>
+      </div>
+      <button class="btn btn-g" onclick="showSetup()" style="margin-top:8px;width:100%">Firebase設定を変更する</button>
+    </div>
+  </div>
+  <div class="sec">📊 本日の記録</div>
+  <div class="card">
+    <div class="row2"><span class="rl">乗務開始</span><span class="rv" id="duty-start">-</span></div>
+    <div class="row2"><span class="rl">乗務時間</span><span class="rv" id="duty-elapsed" style="color:var(--gold)">-</span></div>
+    <div class="row2"><span class="rl">完了送り先</span><span class="rv" id="done-count" style="color:var(--green)">0件</span></div>
+  </div>
+</div>
+</div>
+
+<nav class="nav">
+  <button class="nb active" onclick="showPage('map',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+      <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+    </svg>地図
+  </button>
+  <button class="nb" onclick="showPage('wait',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>待機/送先
+  </button>
+  <button class="nb" onclick="showPage('chat',this)" id="nb-chat">
+    <div class="chat-unread" id="chat-badge"></div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>チャット
+  </button>
+  <button class="nb" onclick="showPage('settings',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>設定
+  </button>
+</nav>
+
+<div class="overlay" id="dest-overlay">
+  <div class="modal">
+    <h3>送り先を追加 <button class="mc" onclick="closeDestModal()">✕</button></h3>
+    <label>送り先名</label><input id="d-name" placeholder="例: 渋谷駅">
+    <label>住所・メモ</label><input id="d-addr" placeholder="例: 東京都渋谷区道玄坂">
+    <label>所要時間（分）</label><input id="d-time" type="number" placeholder="例: 45" min="1">
+    <label>距離（km）</label><input id="d-dist" type="number" placeholder="例: 18" step="0.1">
+    <button class="btn btn-p" onclick="addDest()" style="width:100%">追加する</button>
+  </div>
+</div>
+
+<div class="setup-screen" id="setup-screen">
+  <div class="setup-box">
+    <h2>📡 Firebase設定</h2>
+    <p>firebaseConfigをJSON形式で貼り付けてください。</p>
+    <textarea class="fb-config" id="fb-config-input" placeholder='{"apiKey":"...","databaseURL":"..."}'></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-p" onclick="saveFirebaseConfig()" style="flex:1">接続する</button>
+      <button class="btn btn-g" onclick="skipSetup()" style="flex:1">スキップ</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="cp-adjust-overlay" style="z-index:3000">
+  <div class="modal" style="border-radius:18px 18px 0 0;padding:0;overflow:hidden;height:85vh;display:flex;flex-direction:column">
+    <div style="padding:14px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <div>
+        <div style="font-size:15px;font-weight:700" id="cp-adjust-title">位置を微調整</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">ピンをドラッグして中心を移動してください</div>
+      </div>
+      <button class="mc" onclick="closeCPAdjust()">✕</button>
+    </div>
+    <div id="cp-adjust-map" style="flex:1;min-height:0"></div>
+    <div style="padding:12px 16px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">現在の座標: <span id="cp-adjust-coords" style="color:var(--cyan);font-family:monospace"></span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-s" onclick="saveCPAdjust()" style="flex:1">✅ この位置で保存</button>
+        <button class="btn btn-g" onclick="closeCPAdjust()" style="flex:1">キャンセル</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div class="arrival-banner" id="arrival-banner">
+  <button class="arrival-close" onclick="closeBanner()">✕</button>
+  <div class="arrival-title" id="arrival-title">📍 到着</div>
+  <div class="arrival-sub" id="arrival-sub"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBkvfkNDnPW2jBmdWXYol52DyKwE6fDSSU",
+  authDomain: "ichiban-hanedateam.firebaseapp.com",
+  databaseURL: "https://ichiban-hanedateam-default-rtdb.firebaseio.com",
+  projectId: "ichiban-hanedateam",
+  storageBucket: "ichiban-hanedateam.firebasestorage.app",
+  messagingSenderId: "775194714893",
+  appId: "1:775194714893:web:b89446b29ddbc8213a0644"
+};
+
+let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
+let autoFollow=false;
+const TILE_DEFS={
+  osm:  {url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',        sub:['a','b','c']},
+  gsi:  {url:'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',  sub:null},
+  light:{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',sub:['a','b','c','d']},
+};
+let currentTileKey='osm',tileLayer=null;
+let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0;
+let dutyStart=null,dutyInterval=null,myLat=null,myLng=null;
+let db=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
+let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
+let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false;
+let posHistory=[],stopState=null,bearingBeforeStop=null;
+let wakeLock=null,wakeLockOn=false;
+let seenMsgIds=new Set();
+
+localStorage.setItem('taxi_my_id',myId);
+
+const statusCfg={
+  kuusha: {label:'🟢 空車', color:'#22c55e'},
+  jitsusha:{label:'🔴 実車', color:'#ef4444'},
+  kaisou:  {label:'🟡 回送', color:'#f59e0b'},
+  offline: {label:'⚫ 休み', color:'#7878a0'}
+};
+
+const CP_DEFAULTS=[
+  {id:'shukko', name:'出庫事務所',         icon:'🏢',lat:null,lng:null,radius:150,enabled:true,spots:[]},
+  {id:'nokin',  name:'納金事務所',         icon:'💴',lat:null,lng:null,radius:150,enabled:true,spots:[]},
+  {id:'haneda', name:'羽田空港 国内線プール',icon:'✈️',lat:35.5476,lng:139.7836,radius:200,enabled:true,spots:['１号','２号','３号','４号']},
+];
+let checkpoints=loadCPs();
+let cpInside={};
+let pendingArrivalCP=null;
+let currentSpotSelection=null;
+
+function loadCPs(){
+  const s=localStorage.getItem('taxi_checkpoints');
+  if(!s) return JSON.parse(JSON.stringify(CP_DEFAULTS));
+  const p=JSON.parse(s);
+  CP_DEFAULTS.forEach(d=>{
+    const ex=p.find(x=>x.id===d.id);
+    if(!ex) p.push({...d});
+    else if(!ex.spots) ex.spots=['１号','２号','３号','４号'];
+  });
+  return p;
+}
+function saveCPs(){localStorage.setItem('taxi_checkpoints',JSON.stringify(checkpoints));}
+
+function init(){
+  loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory(); renderTeamDests(); initMap(); initLocalChat(); tryFirebase();
+}
+
+function initMap(){
+  leafletMap=L.map('map',{zoomControl:false,attributionControl:false,rotate:true,bearing:0}).setView([35.5494,139.7798],13);
+  const def=TILE_DEFS.osm;
+  tileLayer=L.tileLayer(def.url,{maxZoom:19,subdomains:def.sub||'abc'}).addTo(leafletMap);
+  L.control.zoom({position:'topright'}).addTo(leafletMap);
+  const hIcon=L.divIcon({html:`<div style="background:#4f8ef7;border:3px solid #fff;border-radius:50%;width:16px;height:16px;box-shadow:0 0 8px rgba(79,142,247,.6)"></div>`,className:'',iconAnchor:[8,8]});
+  L.marker([35.5494,139.7798],{icon:hIcon}).bindPopup('<b>✈️ 羽田空港</b>').addTo(leafletMap);
+}
+
+function makeDriverIcon(status,name,isMe){
+  const cfg=statusCfg[status]||statusCfg.offline;
+  const initial=(name||'?').slice(0,1);
+  const sz=isMe?36:28;
+  const ring=isMe?`box-shadow:0 0 0 3px #fff,0 0 0 6px ${cfg.color};`:'';
+  return L.divIcon({
+    html:`<div style="background:${cfg.color};border:3px solid #fff;border-radius:50%;
+      width:${sz}px;height:${sz}px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:${isMe?'15px':'12px'};font-weight:700;color:#fff;${ring}position:relative">
+      ${initial}
+      <div style="position:absolute;bottom:${isMe?'-22px':'-18px'};left:50%;
+        transform:translateX(-50%);
+        white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
+        font-size:${isMe?'11px':'10px'};padding:2px 7px;border-radius:5px;font-weight:700">
+        ${esc(name)}${isMe?' (自分)':''}
+      </div>
+    </div>`,className:'',iconAnchor:[isMe?18:14,isMe?18:14]
+  });
+}
+
+function updateMyMarker(lat,lng){
+  const name=localStorage.getItem('taxi_name')||'自分';
+  const icon=makeDriverIcon(currentStatus,name,true);
+  if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
+  else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
+}
+
+function updatePeerMarker(id,d){
+  if(id===myId)return;
+  const age=Date.now()-(d.ts||0);
+  const alive=age<5*60*1000;
+  const status=alive?(d.status||'kuusha'):'offline';
+  const icon=makeDriverIcon(status,d.name||'不明',false);
+  if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
+  else if(d.lat&&d.lng){
+    const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
+    m.bindPopup(`<b>${esc(d.name||'不明')}</b><br>${statusCfg[status].label}<br>${d.car||''}`);
+    peerMarkers[id]=m;
+  }
+}
+
+function removePeerMarker(id){
+  if(peerMarkers[id]){leafletMap.removeLayer(peerMarkers[id]);delete peerMarkers[id];}
+}
+
+function centerOnMe(){if(myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);}
+
+function toggleAutoFollow(){
+  autoFollow=!autoFollow;
+  const btn=document.getElementById('follow-btn');
+  btn.classList.toggle('on',autoFollow);
+  toast(autoFollow?'🎯 オートフォロー ON':'🎯 オートフォロー OFF');
+  if(autoFollow&&myLat&&leafletMap)leafletMap.setView([myLat,myLng]);
+}
+
+
+function setTileLayer(key){
+  if(!TILE_DEFS[key])return;
+  currentTileKey=key;
+  if(tileLayer)leafletMap.removeLayer(tileLayer);
+  const def=TILE_DEFS[key];
+  tileLayer=L.tileLayer(def.url,{maxZoom:19,subdomains:def.sub||'abc'}).addTo(leafletMap);
+  ['osm','gsi','light'].forEach(k=>{
+    const el=document.getElementById('layer-'+k);
+    if(el)el.classList.toggle('sel',k===key);
+  });
+}
+
+function toggleLayerBar(){
+  const bar=document.getElementById('layer-bar');
+  const btn=document.getElementById('layer-btn');
+  const visible=bar.style.display!=='none';
+  bar.style.display=visible?'none':'flex';
+  btn.classList.toggle('on',!visible);
+}
+
+function startGPS(){
+  if(!navigator.geolocation){toast('⚠️ GPS非対応');return;}
+  document.getElementById('gps-dot').classList.add('on');
+  document.getElementById('gps-txt').textContent='GPS取得中...';
+  gpsWatch=navigator.geolocation.watchPosition(pos=>{
+    myLat=pos.coords.latitude; myLng=pos.coords.longitude;
+    updateMyMarker(myLat,myLng);
+    document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
+    if(autoFollow&&leafletMap)leafletMap.setView([myLat,myLng]);
+    pushMyPosition();
+    checkGeofences(myLat,myLng);
+    updatePosHistory(myLat,myLng,pos.coords.speed);
+  },err=>{
+    document.getElementById('gps-txt').textContent='GPS失敗';
+    toast('⚠️ GPS: '+err.message);
+  },{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+}
+
+function stopGPS(){
+  if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
+  if(myMarker){leafletMap.removeLayer(myMarker);myMarker=null;}
+  document.getElementById('gps-dot').classList.remove('on');
+  document.getElementById('gps-txt').textContent='GPS停止中';
+}
+
+function toggleDuty(){
+  isDuty=!isDuty;
+  const btn=document.getElementById('duty-btn');
+  const lbl=document.getElementById('duty-label');
+  const offline=document.getElementById('map-offline');
+  if(isDuty){
+    btn.textContent='退勤する';btn.className='duty-btn on';
+    lbl.textContent='乗務中';offline.classList.remove('show');
+    dutyStart=new Date();
+    document.getElementById('duty-start').textContent=fmtTime(dutyStart);
+    requestNotificationPermission();
+    startGPS();
+    if(dutyInterval)clearInterval(dutyInterval);
+    dutyInterval=setInterval(()=>{
+      if(!dutyStart)return;
+      const s=Math.floor((Date.now()-dutyStart)/1000);
+      document.getElementById('duty-elapsed').textContent=toHMS(s);
+    },1000);
+    setStatus('kuusha');
+    toast('✅ 乗務開始');
+  }else{
+    btn.textContent='出勤する';btn.className='duty-btn off';
+    lbl.textContent='休み中';offline.classList.add('show');
+    stopGPS();myLat=null;myLng=null;
+    if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
+    if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
+    if(db)db.ref('drivers/'+myId).remove();
+    toast('🛑 退勤');
+  }
+}
+
+let jitsushaStart=null;
+
+function setStatus(s){
+  const prev=currentStatus; currentStatus=s;
+  ['kuusha','jitsusha','kaisou'].forEach(k=>{
+    document.getElementById('sch-'+k).classList.toggle('sel',k===s);
+  });
+  if(myMarker&&myLat)updateMyMarker(myLat,myLng);
+  pushMyPosition();
+  toast('ステータス: '+statusCfg[s].label);
+  if(s==='jitsusha') jitsushaStart=Date.now();
+  if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
+    const tripMins=jitsushaStart?Math.round((Date.now()-jitsushaStart)/60000):null;
+    jitsushaStart=null;
+    if(myLat!==null)autoRegisterDest(myLat,myLng,'自動（'+statusCfg[s].label+'ボタン）',tripMins);
+  }
+}
+
+function tryFirebase(){connectFirebase(FIREBASE_CONFIG);}
+
+function connectFirebase(config){
+  try{
+    if(!firebase.apps.length)firebase.initializeApp(config);
+    else firebase.app();
+    db=firebase.database();
+    db.ref('.info/connected').on('value',snap=>{
+      const conn=snap.val();
+      const dot=document.getElementById('conn-dot');
+      const txt=document.getElementById('conn-txt');
+      if(conn){dot.style.background='var(--green)';txt.textContent='接続中 ✓';toast('📡 Firebase接続成功');}
+      else{dot.style.background='var(--red)';txt.textContent='切断中...';}
+    });
+    db.ref('drivers').on('value',snap=>{
+      const all=snap.val()||{};
+      Object.keys(all).forEach(id=>{
+        if(id===myId)return;
+        driverData[id]=all[id];
+        updatePeerMarker(id,all[id]);
+      });
+      Object.keys(peerMarkers).forEach(id=>{if(!all[id])removePeerMarker(id);});
+      updateDriverList();
+    });
+    db.ref('chat').limitToLast(100).on('child_added',snap=>{
+      const m=snap.val();if(!m)return;
+      appendChatBubble(m,m.uid===myId);
+      if(!chatOnPage){document.getElementById('chat-badge').style.display='block';}
+    });
+    db.ref('team_dests').on('value',snap=>{
+      teamDests=snap.val()||{};
+      renderTeamDests();
+    });
+  }catch(e){toast('⚠️ Firebase: '+e.message);console.error(e);}
+}
+
+function pushMyPosition(){
+  if(!db||!isDuty||myLat===null)return;
+  const name=localStorage.getItem('taxi_name')||'自分';
+  db.ref('drivers/'+myId).update({
+    name,lat:myLat,lng:myLng,status:currentStatus,
+    car:localStorage.getItem('taxi_car')||'',ts:Date.now()
+  });
+}
+setInterval(()=>{if(isDuty)pushMyPosition();},10000);
+
+function makeDriverRow(id, d, isMe){
+  const age=Date.now()-(d.ts||0);
+  const alive=isMe?isDuty:(age<5*60*1000);
+  const status=alive?(d.status||'kuusha'):'offline';
+  const cfg=statusCfg[status];
+  const initial=(d.name||'?').slice(0,1);
+  const clsMap={kuusha:'kuusha',jitsusha:'jitsusha',kaisou:'kaisou',offline:'offline'};
+  const timeStr=isMe?'自分':(alive?`${Math.floor(age/60000)}分前に更新`:'5分以上前');
+  const waitSince=isMe?waitStart:d.waitSince;
+  const waitSpot=isMe?(document.getElementById('wait-spot-lbl').textContent.replace('待機場所: ','').replace('（終了）','')||null):d.waitSpot;
+  const isWaiting=waitSince&&alive&&(isMe?waitInterval!==null:true);
+  const waitMins=isWaiting?Math.floor((Date.now()-waitSince)/60000):null;
+  const spotIcon=waitSpot?({'出庫事務所':'🏢','納金事務所':'💴','羽田空港 国内線プール':'✈️'}[waitSpot.split(' ')[0]]||'📍'):'';
+  const rowClick=isMe?'':`onclick="focusDriverFromList('${id}')" style="cursor:pointer"`;
+  return `<div class="driver-row" ${rowClick}>
+    <div class="driver-avatar" style="background:${cfg.color}${isMe?';box-shadow:0 0 0 2px #fff,0 0 0 4px '+cfg.color:''}">${esc(initial)}</div>
+    <div class="driver-info">
+      <div class="driver-name" style="${isMe?'':'color:var(--accent);text-decoration:underline dotted'}">${esc(d.name||'不明')}${isMe?' <span style="font-size:10px;color:var(--accent)">(自分)</span>':''}</div>
+      <div class="driver-sub">${esc(d.car||'')} · ${timeStr}</div>
+      ${isWaiting?`
+        <div style="margin-top:5px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);
+          border-radius:8px;padding:6px 10px">
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">⏱ ${waitMins}分 待機中</div>
+          <div style="font-size:12px;color:var(--text);margin-top:2px">${spotIcon} ${esc(waitSpot||'場所不明')}</div>
+        </div>`:''}
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+      <div class="driver-status ${clsMap[status]}">${cfg.label}</div>
+    </div>
+  </div>`;
+}
+
+function updateDriverList(){
+  const container=document.getElementById('driver-list-inner');
+  const myName=localStorage.getItem('taxi_name')||'自分';
+  const myCar=localStorage.getItem('taxi_car')||'';
+  const myRow=isDuty?makeDriverRow(myId,{name:myName,car:myCar,status:currentStatus,ts:Date.now()},true):'';
+  const entries=Object.entries(driverData);
+  let online=isDuty?1:0;
+  const peerRows=entries.map(([id,d])=>{
+    const age=Date.now()-(d.ts||0);
+    if(age<5*60*1000)online++;
+    return makeDriverRow(id,d,false);
+  }).join('');
+  container.innerHTML=myRow+peerRows||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">仲間がいません</div>';
+  document.getElementById('online-count').textContent=`仲間${online}人`;
+}
+
+function focusDriver(id){
+  const d=driverData[id];
+  if(!d||!d.lat){toast('位置情報がありません');return;}
+  leafletMap.setView([d.lat,d.lng],15);
+  if(peerMarkers[id])peerMarkers[id].openPopup();
+  toggleDriverPanel();
+}
+function focusDriverFromList(id){
+  const d=driverData[id];
+  if(!d||!d.lat){toast('位置情報がありません');return;}
+  document.getElementById('driver-panel').classList.remove('open');
+  showPage('map',document.querySelector('.nb'));
+  setTimeout(()=>{
+    leafletMap.setView([d.lat,d.lng],16);
+    if(peerMarkers[id])peerMarkers[id].openPopup();
+  },150);
+}
+
+function toggleDriverPanel(){
+  const p=document.getElementById('driver-panel');
+  document.getElementById('haneda-panel').classList.remove('open');
+  p.classList.toggle('open');
+  if(p.classList.contains('open'))updateDriverList();
+}
+
+function stopWait(){if(waitInterval){clearInterval(waitInterval);waitInterval=null;}}
+function resetWait(){stopWait();waitSec=0;document.getElementById('wait-timer').textContent='00:00:00';}
+
+function saveWaitHistory(spotName,arrivalTimeStr,departureTimeStr,elapsedSec){
+  const hist=JSON.parse(localStorage.getItem('taxi_wait_history')||'[]');
+  const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  hist.unshift({date:today,spot:spotName,arrival:arrivalTimeStr,departure:departureTimeStr,sec:elapsedSec,ts:Date.now()});
+  const cutoff=Date.now()-7*24*60*60*1000;
+  const trimmed=hist.filter(h=>h.ts>cutoff).slice(0,200);
+  localStorage.setItem('taxi_wait_history',JSON.stringify(trimmed));
+  renderWaitHistory();
+}
+
+function renderWaitHistory(){
+  const el=document.getElementById('wait-history-list');
+  if(!el)return;
+  const hist=JSON.parse(localStorage.getItem('taxi_wait_history')||'[]');
+  if(!hist.length){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">履歴がありません</div>';
+    return;
+  }
+  let lastDate='';
+  el.innerHTML=hist.map(h=>{
+    let dateHeader='';
+    if(h.date!==lastDate){lastDate=h.date;dateHeader=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 4px">${h.date}</div>`;}
+    return dateHeader+`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:7px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">${esc(h.spot)}</div>
+      <div style="display:flex;gap:14px;font-size:12px;color:var(--muted)">
+        <span>🟢 ${h.arrival}</span>
+        <span>🔴 ${h.departure||'−'}</span>
+        <span style="color:var(--gold);font-weight:700">⏱ ${toHMS(h.sec)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTeamDests(){
+  const el=document.getElementById('team-dests-list');
+  if(!el)return;
+  const allDriverIds=Object.keys(teamDests);
+  if(!allDriverIds.length){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
+    return;
+  }
+  let html='';
+  allDriverIds.forEach(driverId=>{
+    const entries=Object.values(teamDests[driverId]||{});
+    if(!entries.length)return;
+    entries.sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const driverName=entries[0].driverName||'不明';
+    const isMe=driverId===myId;
+    // 日付ごとにグループ化
+    const groups={};
+    entries.forEach(e=>{
+      const key=e.dateStr||'日付不明';
+      if(!groups[key])groups[key]=[];
+      groups[key].push(e);
+    });
+    const sortedDates=Object.keys(groups).sort((a,b)=>{
+      return (groups[b][0].ts||0)-(groups[a][0].ts||0);
+    });
+    html+=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
+      <div style="padding:10px 14px;background:var(--surface2);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${esc(driverName.slice(0,1))}</div>
+        <span style="font-size:14px;font-weight:700">${esc(driverName)}${isMe?' (自分)':''}</span>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">${entries.length}件</span>
+      </div>
+      <div style="padding:10px 14px">`;
+    sortedDates.forEach(date=>{
+      html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">📅 ${date}</div>`;
+      groups[date].forEach((e,idx)=>{
+        const isLast=idx===groups[date].length-1;
+        html+=`
+        <div style="display:flex;gap:0;margin-bottom:${isLast?'8px':'0'}">
+          <div style="display:flex;flex-direction:column;align-items:center;margin-right:10px;flex-shrink:0">
+            <div style="width:9px;height:9px;border-radius:50%;background:var(--cyan);border:2px solid var(--surface2);margin-top:10px;flex-shrink:0"></div>
+            ${!isLast?`<div style="width:2px;flex:1;background:var(--border);margin-top:2px"></div>`:''}
+          </div>
+          <div style="flex:1;padding-bottom:8px">
+            <div style="font-size:10px;color:var(--cyan)">${e.timeStr||''}</div>
+            <div style="font-size:13px;font-weight:600;margin:1px 0">${esc(e.name)}</div>
+            <div style="font-size:11px;color:var(--muted)">${esc(e.addr||'')}</div>
+          </div>
+        </div>`;
+      });
+    });
+    html+=`</div></div>`;
+  });
+  el.innerHTML=html||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
+}
+
+function clearWaitHistory(){
+  if(!confirm('待機履歴を全て削除しますか？'))return;
+  localStorage.removeItem('taxi_wait_history');
+  renderWaitHistory();
+  toast('🗑 履歴をクリアしました');
+}
+
+function checkGeofences(lat,lng){
+  checkpoints.forEach(cp=>{
+    if(!cp.enabled||cp.lat===null)return;
+    const dist=haversine(lat,lng,cp.lat,cp.lng);
+    const wasInside=cpInside[cp.id]||false;
+    const nowInside=dist<=cp.radius;
+    if(nowInside&&!wasInside)onArrival(cp,Math.round(dist));
+    if(!nowInside&&wasInside)onDeparture(cp);
+    cpInside[cp.id]=nowInside;
+  });
+}
+
+function onDeparture(cp){
+  const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  stopWait();
+  const elapsed=toHMS(waitSec);
+  document.getElementById('wait-spot-lbl').textContent=`待機場所: ${cp.name}（終了）`;
+  document.getElementById('arrival-title').textContent=cp.icon+' '+cp.name+' を出発';
+  document.getElementById('arrival-sub').textContent=`出発時刻 ${timeStr}　待機時間 ${elapsed}`;
+  const banner=document.getElementById('arrival-banner');
+  banner.style.borderColor='var(--amber)';banner.classList.add('show');
+  if(bannerTimer)clearTimeout(bannerTimer);
+  bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
+  if(navigator.vibrate)navigator.vibrate([200,100,200]);
+  saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
+  if(db)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
+  if(db&&isDuty){
+    const name=localStorage.getItem('taxi_name')||'自分';
+    db.ref('chat').push({uid:myId,name,
+      text:`🚕【自動】${cp.name} を出発（${timeStr}）待機: ${elapsed}`,
+      time:timeStr,ts:Date.now(),isAuto:true});
+  }
+  toast(cp.icon+' '+cp.name+' 出発 — 待機: '+elapsed);
+}
+
+function onArrival(cp,dist){
+  const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  if(Notification.permission==='granted'){
+    new Notification(cp.icon+' '+cp.name+' に到着',{body:`到着時刻 ${timeStr}`,tag:'taxi-'+cp.id,renotify:true});
+  }
+  if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
+  toast(cp.icon+' '+cp.name+' 到着！');
+  currentSpotSelection=null;
+  startWaitAt(cp,cp.name,dist,timeStr);
+  renderSpotRow();
+}
+
+function selectSpot(spotName){
+  const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
+  if(!hCp)return;
+  currentSpotSelection=spotName;
+  const fullSpot=hCp.name+' '+currentSpotSelection;
+  hCp.currentSpot=fullSpot;
+  document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
+  if(db)db.ref('drivers/'+myId).update({waitSpot:fullSpot});
+  renderSpotRow();
+  toast(currentSpotSelection?('📍 '+currentSpotSelection+' を選択'):'スポット選択解除');
+}
+
+function renderSpotRow(){
+  const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
+  const el=document.getElementById('spot-chips');
+  if(!hCp||!hCp.spots||!hCp.spots.length){el.innerHTML='';return;}
+  el.innerHTML=(hCp.spots||[]).map(s=>{
+    const sel=currentSpotSelection===s;
+    return `<div onclick="selectSpot('${s.replace(/'/g,"\\'")}') "
+      style="flex:1;text-align:center;padding:8px 2px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
+      background:${sel?'var(--accent)':'rgba(79,142,247,.18)'};
+      color:${sel?'#fff':'var(--accent)'};
+      border:2px solid ${sel?'var(--accent)':'transparent'};
+      backdrop-filter:blur(6px);transition:all .2s">${esc(s)}</div>`;
+  }).join('');
+}
+
+function startWaitAt(cp,spotName,dist,timeStr){
+  cp.currentSpot=spotName; cp.arrivalTimeStr=timeStr;
+  document.getElementById('arrival-title').textContent=cp.icon+' '+spotName+' に到着';
+  document.getElementById('arrival-sub').textContent=`到着時刻 ${timeStr}　約 ${dist}m`;
+  const banner=document.getElementById('arrival-banner');
+  banner.style.borderColor='var(--green)';banner.classList.add('show');
+  if(bannerTimer)clearTimeout(bannerTimer);
+  bannerTimer=setTimeout(()=>banner.classList.remove('show'),8000);
+  resetWait();
+  document.getElementById('wait-spot-lbl').textContent='待機場所: '+spotName;
+  if(isDuty){
+    waitStart=Date.now();waitSec=0;
+    if(waitInterval)clearInterval(waitInterval);
+    waitInterval=setInterval(()=>{
+      waitSec=Math.floor((Date.now()-waitStart)/1000);
+      document.getElementById('wait-timer').textContent=toHMS(waitSec);
+    },1000);
+    if(db)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:spotName});
+  }
+  if(db&&isDuty){
+    const name=localStorage.getItem('taxi_name')||'自分';
+    db.ref('chat').push({uid:myId,name,
+      text:`📍【自動】${spotName} に到着（${timeStr}）`,
+      time:timeStr,ts:Date.now(),isAuto:true});
+  }
+}
+
+function closeBanner(){
+  document.getElementById('arrival-banner').classList.remove('show');
+  if(bannerTimer){clearTimeout(bannerTimer);bannerTimer=null;}
+}
+
+function requestNotificationPermission(){
+  if('Notification'in window&&Notification.permission==='default'){
+    Notification.requestPermission().then(p=>{
+      if(p==='granted')toast('🔔 通知が許可されました');
+    });
+  }
+}
+
+function haversine(lat1,lng1,lat2,lng2){
+  const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function calcBearing(lat1,lng1,lat2,lng2){
+  const dL=(lng2-lng1)*Math.PI/180,φ1=lat1*Math.PI/180,φ2=lat2*Math.PI/180;
+  const y=Math.sin(dL)*Math.cos(φ2),x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(dL);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function angleDiff(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d;}
+
+function updatePosHistory(lat,lng,rawSpeed){
+  const now=Date.now(),prev=posHistory[posHistory.length-1];
+  let speed=rawSpeed,bearing=null;
+  if(prev){
+    const dist=haversine(prev.lat,prev.lng,lat,lng),dt=(now-prev.ts)/1000;
+    if(speed===null||speed===undefined)speed=dt>0?dist/dt:0;
+    if(dist>2)bearing=calcBearing(prev.lat,prev.lng,lat,lng);
+  }else{if(!speed)speed=0;}
+  posHistory.push({lat,lng,ts:now,speed,bearing});
+  if(posHistory.length>60)posHistory.shift();
+  detectStopAndTurn(lat,lng,speed,bearing,now);
+}
+
+function detectStopAndTurn(lat,lng,speed,bearing,now){
+  const isSlow=speed!==null&&speed<2.0;
+  if(isSlow){
+    if(!stopState){
+      const mp=[...posHistory].reverse().find(p=>p.speed>=2.0&&p.bearing!==null);
+      bearingBeforeStop=mp?mp.bearing:null;
+      stopState={lat,lng,ts:now};
+    }
+  }else{
+    if(stopState){
+      const stopped=now-stopState.ts;
+      if(stopped>=2*60*1000){
+        const bigTurn=bearing!==null&&bearingBeforeStop!==null&&angleDiff(bearing,bearingBeforeStop)>=60;
+        if(bigTurn)autoRegisterDest(stopState.lat,stopState.lng,'自動（停車＋方向転換）');
+      }
+      stopState=null;bearingBeforeStop=null;
+    }
+  }
+}
+
+function truncateToChome(displayName){
+  if(!displayName)return displayName;
+  const m=displayName.match(/^(.+?[〇一二三四五六七八九十百千万億兆\d]+丁目)/);
+  if(m)return m[1];
+  const parts=displayName.split(',');
+  return parts.slice(0,3).join(',').trim();
+}
+
+async function autoRegisterDest(lat,lng,reason,tripMins=null){
+  const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  let name=`${timeStr} 自動登録`,addr=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      {headers:{'Accept-Language':'ja'}});
+    if(res.ok){
+      const data=await res.json();const a=data.address||{};
+      const parts=[a.road,a.suburb||a.neighbourhood,a.city||a.town||a.village].filter(Boolean);
+      if(parts.length){
+        name=parts.slice(0,2).join(' ')+` (${timeStr})`;
+        addr=truncateToChome(data.display_name)||addr;
+      }
+    }
+  }catch(e){}
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const entry={name,addr,done:false,auto:true,reason,timeStr,dateStr,ts:now.getTime(),tripMins};
+  destinations.push(entry);
+  saveDests();renderDests();
+  pushDestToFirebase(entry);
+  toast(`📍 送り先を自動登録: ${name}`);
+}
+
+function pushDestToFirebase(entry){
+  if(!db||!isDuty)return;
+  const driverName=localStorage.getItem('taxi_name')||'自分';
+  db.ref('team_dests/'+myId).push({
+    ...entry,driverName,driverId:myId
+  });
+}
+
+function renderCPs(){
+  document.getElementById('cp-list').innerHTML=checkpoints.map((cp,i)=>`
+    <div class="cp-item">
+      <div class="cp-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${cp.icon}</span>
+          <div>
+            <div class="cp-name">${esc(cp.name)}</div>
+            <div style="margin-top:2px">
+              <span class="cp-badge ${cp.lat!==null?'cp-set':'cp-unset'}">${cp.lat!==null?'位置登録済み':'未登録'}</span>
+            </div>
+          </div>
+        </div>
+        <button class="toggle-sw ${cp.enabled?'on':''}" onclick="toggleCP(${i})"></button>
+      </div>
+      <div class="cp-coords">${cp.lat!==null?`${cp.lat.toFixed(5)}, ${cp.lng.toFixed(5)}`:'位置が未設定です'}</div>
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--muted)">通知範囲（半径）</span>
+          <span style="font-size:13px;font-weight:700;color:var(--cyan)" id="cp-radius-val-${i}">${cp.radius}m</span>
+        </div>
+        <input type="range" min="50" max="1000" step="50" value="${cp.radius}"
+          style="width:100%;margin-bottom:0;padding:0;background:transparent;border:none"
+          oninput="updateCPRadius(${i},this.value)">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px">
+          <span>50m</span><span>500m</span><span>1000m</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button class="btn btn-s" style="font-size:11px;padding:5px 10px" onclick="setCPFromGPS(${i})">📍 現在地を登録</button>
+        <button class="btn btn-g" style="font-size:11px;padding:5px 10px" onclick="openCPEdit(${i})">✏️ 手動入力</button>
+        ${cp.lat!==null?`<button class="btn btn-g" style="font-size:11px;padding:5px 10px" onclick="previewCP(${i})">🗺 地図で確認</button>`:''}
+        ${cp.lat!==null?`<button class="btn btn-p" style="font-size:11px;padding:5px 10px" onclick="openCPAdjust(${i})">🎯 地図で微調整</button>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function updateCPRadius(i,val){checkpoints[i].radius=parseInt(val);document.getElementById('cp-radius-val-'+i).textContent=val+'m';saveCPs();}
+function toggleCP(i){checkpoints[i].enabled=!checkpoints[i].enabled;saveCPs();renderCPs();toast(checkpoints[i].name+' 通知'+(checkpoints[i].enabled?'ON':'OFF'));}
+function setCPFromGPS(i){if(myLat===null){toast('⚠️ GPSを取得できていません');return;}checkpoints[i].lat=myLat;checkpoints[i].lng=myLng;saveCPs();renderCPs();toast('✅ '+checkpoints[i].name+' の位置を登録');}
+function openCPEdit(i){
+  const cp=checkpoints[i];
+  const lat=prompt(cp.name+'\n緯度を入力',cp.lat||'');if(lat===null)return;
+  const lng=prompt(cp.name+'\n経度を入力',cp.lng||'');if(lng===null)return;
+  const r=prompt('通知半径（m）',cp.radius||150);if(r===null)return;
+  const pLat=parseFloat(lat),pLng=parseFloat(lng),pR=parseInt(r);
+  if(isNaN(pLat)||isNaN(pLng)){toast('⚠️ 数値を正しく入力してください');return;}
+  checkpoints[i].lat=pLat;checkpoints[i].lng=pLng;checkpoints[i].radius=isNaN(pR)?150:Math.max(50,pR);
+  saveCPs();renderCPs();toast('✅ '+cp.name+' を設定しました');
+}
+let cpAdjustMap=null,cpAdjustMarker=null,cpAdjustCircle=null,cpAdjustIdx=null;
+function openCPAdjust(i){
+  const cp=checkpoints[i];if(!cp.lat)return;
+  cpAdjustIdx=i;
+  document.getElementById('cp-adjust-title').textContent=cp.icon+' '+cp.name+' の位置を微調整';
+  document.getElementById('cp-adjust-coords').textContent=cp.lat.toFixed(6)+', '+cp.lng.toFixed(6);
+  document.getElementById('cp-adjust-overlay').classList.add('open');
+  setTimeout(()=>{
+    if(!cpAdjustMap){
+      cpAdjustMap=L.map('cp-adjust-map',{zoomControl:true,attributionControl:false}).setView([cp.lat,cp.lng],17);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(cpAdjustMap);
+    }else{
+      cpAdjustMap.setView([cp.lat,cp.lng],17);
+    }
+    cpAdjustMap.invalidateSize();
+    if(cpAdjustCircle){cpAdjustMap.removeLayer(cpAdjustCircle);}
+    if(cpAdjustMarker){cpAdjustMap.removeLayer(cpAdjustMarker);}
+    cpAdjustCircle=L.circle([cp.lat,cp.lng],{radius:cp.radius,color:'#22c55e',fillOpacity:0.15,weight:2}).addTo(cpAdjustMap);
+    cpAdjustMarker=L.marker([cp.lat,cp.lng],{
+      draggable:true,
+      icon:L.divIcon({html:`<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))">${cp.icon}</div>`,className:'',iconAnchor:[14,28]})
+    }).addTo(cpAdjustMap);
+    cpAdjustMarker.on('drag',e=>{
+      const ll=e.target.getLatLng();
+      cpAdjustCircle.setLatLng(ll);
+      document.getElementById('cp-adjust-coords').textContent=ll.lat.toFixed(6)+', '+ll.lng.toFixed(6);
+    });
+  },100);
+}
+function saveCPAdjust(){
+  if(cpAdjustIdx===null||!cpAdjustMarker)return;
+  const ll=cpAdjustMarker.getLatLng();
+  checkpoints[cpAdjustIdx].lat=ll.lat;
+  checkpoints[cpAdjustIdx].lng=ll.lng;
+  saveCPs();renderCPs();
+  toast('✅ '+checkpoints[cpAdjustIdx].name+' の位置を更新しました');
+  closeCPAdjust();
+}
+function closeCPAdjust(){
+  document.getElementById('cp-adjust-overlay').classList.remove('open');
+}
+function previewCP(i){
+  const cp=checkpoints[i];if(!cp.lat)return;
+  showPage('map',document.querySelector('.nb'));
+  setTimeout(()=>{
+    leafletMap.setView([cp.lat,cp.lng],16);
+    const circle=L.circle([cp.lat,cp.lng],{radius:cp.radius,color:'#22c55e',fillOpacity:0.15}).addTo(leafletMap);
+    L.marker([cp.lat,cp.lng],{icon:L.divIcon({html:`<div style="font-size:24px;line-height:1">${cp.icon}</div>`,className:'',iconAnchor:[12,12]})})
+      .bindPopup(`<b>${cp.name}</b><br>半径 ${cp.radius}m`).addTo(leafletMap).openPopup();
+    setTimeout(()=>leafletMap.removeLayer(circle),8000);
+  },200);
+}
+
+function adminLogin(){
+  const input=document.getElementById('pin-input').value;
+  const saved=localStorage.getItem('taxi_admin_pin')||'0000';
+  if(input===saved){
+    isAdmin=true;
+    document.getElementById('admin-lock-area').style.display='none';
+    document.getElementById('admin-area').style.display='block';
+    document.getElementById('admin-name').value=localStorage.getItem('taxi_name')||'';
+    document.getElementById('admin-car').value=localStorage.getItem('taxi_car')||'';
+    renderCPs();toast('🔓 管理者モード');
+  }else{toast('⚠️ PINが違います');document.getElementById('pin-input').value='';}
+}
+
+function saveAdminAccount(){
+  const name=document.getElementById('admin-name').value.trim();
+  const car=document.getElementById('admin-car').value.trim();
+  if(!name){toast('⚠️ ドライバー名を入力してください');return;}
+  localStorage.setItem('taxi_name',name);
+  localStorage.setItem('taxi_car',car);
+  document.getElementById('s-name').value=name;
+  document.getElementById('s-car').value=car;
+  if(db&&isDuty){
+    db.ref('drivers/'+myId).update({name,car,ts:Date.now()});
+  }
+  toast('✅ アカウントを更新しました');
+}
+function deleteMyAccount(){
+  const name=localStorage.getItem('taxi_name')||'自分';
+  if(!confirm(name+'のアカウントを削除しますか？\nFirebaseからも削除されます。'))return;
+  if(db){
+    db.ref('drivers/'+myId).remove();
+    db.ref('team_dests/'+myId).remove();
+  }
+  localStorage.removeItem('taxi_name');
+  localStorage.removeItem('taxi_car');
+  localStorage.removeItem('taxi_my_id');
+  isDuty=false;
+  stopGPS();
+  document.getElementById('duty-btn').textContent='出勤する';
+  document.getElementById('duty-btn').className='duty-btn off';
+  document.getElementById('duty-label').textContent='休み中';
+  document.getElementById('map-offline').classList.add('show');
+  document.getElementById('admin-name').value='';
+  document.getElementById('admin-car').value='';
+  document.getElementById('s-name').value='';
+  document.getElementById('s-car').value='';
+  toast('🗑 アカウントを削除しました');
+}
+function adminLogout(){
+  isAdmin=false;
+  document.getElementById('admin-lock-area').style.display='block';
+  document.getElementById('admin-area').style.display='none';
+  document.getElementById('pin-input').value='';
+  toast('🔒 ロック');
+}
+
+function loadAccountList(){
+  const el=document.getElementById('account-list');
+  if(!db){el.innerHTML='<div style="font-size:12px;color:var(--red)">Firebase未接続</div>';return;}
+  el.innerHTML='<div style="font-size:12px;color:var(--muted)">読み込み中...</div>';
+  db.ref('drivers').once('value',snap=>{
+    const all=snap.val()||{};
+    const entries=Object.entries(all);
+    if(!entries.length){
+      el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:8px 0">登録ドライバーがいません</div>';
+      return;
+    }
+    el.innerHTML=entries.map(([id,d])=>{
+      const isMe=id===myId;
+      const age=Date.now()-(d.ts||0);
+      const alive=age<5*60*1000;
+      const statusCls=alive?'color:var(--green)':'color:var(--muted)';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">${esc(d.name||'名前なし')}${isMe?' <span style="font-size:10px;color:var(--accent)">(自分)</span>':''}</div>
+          <div style="font-size:11px;color:var(--muted)">${esc(d.car||'車番なし')} · <span style="${statusCls}">${alive?'オンライン':'オフライン'}</span></div>
+          <div style="font-size:10px;color:var(--muted);font-family:monospace">${id}</div>
+        </div>
+        ${!isMe?`<button class="btn btn-d" style="font-size:11px;padding:5px 10px;flex-shrink:0"
+          onclick="deleteAccount('${id}','${esc(d.name||'このアカウント')}')">削除</button>`:'<span style="font-size:11px;color:var(--muted)">自分</span>'}
+      </div>`;
+    }).join('');
+  });
+}
+
+function deleteAccount(id,name){
+  if(!confirm(name+'を削除しますか？\nこの操作は取り消せません。'))return;
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  db.ref('drivers/'+id).remove()
+    .then(()=>{
+      db.ref('team_dests/'+id).remove();
+      toast('🗑 '+name+' を削除しました');
+      loadAccountList();
+    })
+    .catch(e=>toast('⚠️ 削除失敗: '+e.message));
+}
+function changePin(){
+  const p1=document.getElementById('new-pin').value,p2=document.getElementById('new-pin2').value;
+  if(p1.length<4){toast('⚠️ PINは4桁以上');return;}
+  if(p1!==p2){toast('⚠️ PINが一致しません');return;}
+  if(!/^\d+$/.test(p1)){toast('⚠️ 数字のみ');return;}
+  localStorage.setItem('taxi_admin_pin',p1);
+  document.getElementById('new-pin').value='';document.getElementById('new-pin2').value='';
+  toast('✅ PIN変更完了');
+}
+
+function renderDests(){
+  const el=document.getElementById('dest-list');
+  if(!destinations.length){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">自動登録された送り先がありません</div>';
+    document.getElementById('done-count').textContent='0件';
+    return;
+  }
+  // 日付ごとにグループ化
+  const groups={};
+  destinations.forEach((d,i)=>{
+    const key=d.dateStr||'日付不明';
+    if(!groups[key])groups[key]=[];
+    groups[key].push({d,i});
+  });
+  // 新しい日付順にソート
+  const sortedDates=Object.keys(groups).sort((a,b)=>{
+    const ta=groups[a][0].d.ts||0,tb=groups[b][0].d.ts||0;
+    return tb-ta;
+  });
+  let html='';
+  sortedDates.forEach(date=>{
+    html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 6px">📅 ${date}</div>`;
+    const items=groups[date];
+    items.forEach(({d,i},idx)=>{
+      const isLast=idx===items.length-1;
+      html+=`
+      <div style="display:flex;gap:0;margin-bottom:${isLast?'12px':'0'}">
+        <div style="display:flex;flex-direction:column;align-items:center;margin-right:10px;flex-shrink:0">
+          <div style="width:11px;height:11px;border-radius:50%;background:${d.done?'var(--muted)':'var(--accent)'};border:2px solid var(--surface2);margin-top:12px;flex-shrink:0"></div>
+          ${!isLast?`<div style="width:2px;flex:1;background:var(--border);margin-top:2px"></div>`:''}
+        </div>
+        <div class="dest-card" style="flex:1;margin-bottom:8px;${d.done?'opacity:.5':''}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px">
+            <div>
+              ${d.timeStr?`<div style="font-size:10px;color:var(--cyan);margin-bottom:2px">🕐 ${d.timeStr}</div>`:''}
+              <div class="dest-name" style="font-size:13px">${esc(d.name)}</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-shrink:0;margin-left:6px">
+              <span class="badge bg" onclick="markDone(${i})">${d.done?'↩':'✓'}</span>
+            </div>
+          </div>
+          ${d.addr?`<div class="dest-addr" style="font-size:11px">${esc(d.addr)}</div>`:''}
+          ${d.tripMins!==null&&d.tripMins!==undefined?`<div style="font-size:11px;color:var(--gold);font-weight:700;margin-top:4px">🚕 所要時間 ${d.tripMins}分</div>`:''}
+          ${d.reason?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(d.reason)}</div>`:''}
+        </div>
+      </div>`;
+    });
+  });
+  el.innerHTML=html;
+  document.getElementById('done-count').textContent=destinations.filter(d=>d.done).length+'件';
+}
+function openDestModal(){document.getElementById('dest-overlay').classList.add('open');}
+function closeDestModal(){
+  document.getElementById('dest-overlay').classList.remove('open');
+  ['d-name','d-addr','d-time','d-dist'].forEach(id=>document.getElementById(id).value='');
+}
+function addDest(){
+  const name=document.getElementById('d-name').value.trim();
+  if(!name){toast('⚠️ 送り先名を入力');return;}
+  destinations.push({name,addr:document.getElementById('d-addr').value.trim(),
+    time:document.getElementById('d-time').value,dist:document.getElementById('d-dist').value,done:false});
+  saveDests();renderDests();closeDestModal();toast('✅ 追加しました');
+}
+function rmDest(i){destinations.splice(i,1);saveDests();renderDests();}
+function markDone(i){destinations[i].done=!destinations[i].done;saveDests();renderDests();}
+function saveDests(){localStorage.setItem('taxi_dests',JSON.stringify(destinations));}
+
+
+function initLocalChat(){
+  broadcastCh=new BroadcastChannel('taxi_chat_v2');
+  broadcastCh.onmessage=e=>{if(e.data.type==='msg'&&e.data.uid!==myId){appendChatBubble(e.data,false);}};
+  const hist=JSON.parse(localStorage.getItem('taxi_chat_hist')||'[]');
+  hist.slice(-60).forEach(m=>appendChatBubble(m,m.uid===myId));
+}
+
+function sendChat(){
+  const inp=document.getElementById('chat-input');
+  const text=inp.value.trim();if(!text)return;
+  const name=localStorage.getItem('taxi_name')||'自分';
+  const m={uid:myId,name,text,time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()};
+  inp.value='';
+  if(db){db.ref('chat').push(m);}
+  else{
+    appendChatBubble(m,true);
+    const hist=JSON.parse(localStorage.getItem('taxi_chat_hist')||'[]');
+    hist.push(m);if(hist.length>200)hist.splice(0,hist.length-200);
+    localStorage.setItem('taxi_chat_hist',JSON.stringify(hist));
+    broadcastCh.postMessage({...m,type:'msg'});
+  }
+}
+
+function appendChatBubble(m,isMe){
+  const key=m.ts+'_'+(m.uid||'');
+  if(seenMsgIds.has(key))return;seenMsgIds.add(key);
+  const container=document.getElementById('chat-msgs');
+  const div=document.createElement('div');
+  div.className='msg-row'+(isMe?' me':'');
+  const init=(m.name||'?').slice(0,2);
+  div.innerHTML=`
+    <div class="av ${isMe?'me-av':'other'}">${esc(init)}</div>
+    <div>
+      ${!isMe?`<div class="msg-name">${esc(m.name)}</div>`:''}
+      <div class="bubble">${esc(m.text)}</div>
+      <div class="msg-meta">${m.time}</div>
+    </div>`;
+  container.appendChild(div);container.scrollTop=container.scrollHeight;
+}
+
+function loadSettings(){
+  document.getElementById('s-name').value=localStorage.getItem('taxi_name')||'';
+  document.getElementById('s-car').value=localStorage.getItem('taxi_car')||'';
+}
+function saveSettings(){
+  localStorage.setItem('taxi_name',document.getElementById('s-name').value.trim()||'自分');
+  localStorage.setItem('taxi_car',document.getElementById('s-car').value.trim());
+  toast('✅ 設定保存');
+}
+
+function showSetup(){document.getElementById('setup-screen').classList.add('open');}
+function skipSetup(){document.getElementById('setup-screen').classList.remove('open');}
+function saveFirebaseConfig(){
+  const raw=document.getElementById('fb-config-input').value.trim();
+  if(!raw){toast('⚠️ 設定を入力');return;}
+  try{
+    const parsed=JSON.parse(raw);
+    if(!parsed.databaseURL){toast('⚠️ databaseURLが見つかりません');return;}
+    localStorage.setItem('firebase_config',JSON.stringify(parsed));
+    document.getElementById('setup-screen').classList.remove('open');
+    location.reload();
+  }catch(e){toast('⚠️ JSON形式が正しくありません');}
+}
+
+async function toggleWakeLock(){
+  if(!('wakeLock'in navigator)){toast('⚠️ このブラウザはスリープ防止非対応');return;}
+  if(wakeLockOn){
+    if(wakeLock){await wakeLock.release();wakeLock=null;}
+    wakeLockOn=false;
+    document.getElementById('sleep-btn').classList.remove('on');
+    document.getElementById('sleep-btn').textContent='📺';
+    toast('📺 スリープ防止 OFF');
+  }else{
+    try{
+      wakeLock=await navigator.wakeLock.request('screen');
+      wakeLockOn=true;
+      document.getElementById('sleep-btn').classList.add('on');
+      document.getElementById('sleep-btn').textContent='🔆';
+      toast('🔆 スリープ防止 ON');
+      wakeLock.addEventListener('release',()=>{
+        wakeLockOn=false;
+        document.getElementById('sleep-btn').classList.remove('on');
+        document.getElementById('sleep-btn').textContent='📺';
+      });
+    }catch(e){toast('⚠️ スリープ防止失敗: '+e.message);}
+  }
+}
+document.addEventListener('visibilitychange',async()=>{
+  if(wakeLockOn&&document.visibilityState==='visible'){
+    try{wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
+  }
+});
+
+function showPage(name,btn){
+  const wasSettings=document.getElementById('page-settings').classList.contains('active');
+  if(wasSettings&&name!=='settings')adminLogout();
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='map'){setTimeout(()=>leafletMap.invalidateSize(),80);}
+  if(name==='chat'){
+    chatOnPage=true;document.getElementById('chat-badge').style.display='none';
+    setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
+  }else{chatOnPage=false;}
+}
+
+function toHMS(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return`${pad(h)}:${pad(m)}:${pad(sec)}`;}
+function pad(n){return String(n).padStart(2,'0');}
+function fmtTime(d){return d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function toast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+setInterval(()=>{
+  if(document.getElementById('driver-panel').classList.contains('open'))updateDriverList();
+},30000);
+
+init();
+window.addEventListener('load',()=>{
+  setTimeout(()=>{if(leafletMap){leafletMap.invalidateSize();leafletMap.setView([35.5494,139.7798],13);}},500);
+  setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},1500);
+});
+</script>
+</body>
+</html>
