@@ -243,22 +243,29 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
   </div>
   <div class="map-status-bar" id="status-bar" style="flex-direction:column;gap:5px">
+    <!-- Row 1: 空車・実車・回送 -->
     <div style="display:flex;gap:6px;width:100%">
       <div class="sch kuusha sel" id="sch-kuusha" onclick="setStatus('kuusha')">🟢 空車</div>
       <div class="sch jitsusha" id="sch-jitsusha" onclick="setStatus('jitsusha')">🔴 実車</div>
       <div class="sch kaisou" id="sch-kaisou" onclick="setStatus('kaisou')">🟡 回送</div>
     </div>
-    <div id="spot-chips" style="display:flex;gap:6px;width:100%"></div>
-    <div style="display:flex;align-items:center;gap:8px;width:100%">
+    <!-- Row 2: 待機開始・タイマー・リセット -->
+    <div style="display:flex;align-items:center;gap:6px;width:100%">
       <div onclick="startWaitManual()"
-        style="padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+        style="padding:7px 10px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
         background:rgba(79,142,247,.22);color:var(--accent);border:2px solid var(--accent);
         backdrop-filter:blur(6px);white-space:nowrap;flex-shrink:0">⏱ 待機開始</div>
       <div id="map-wait-timer"
-        style="font-size:22px;font-weight:800;color:var(--gold);letter-spacing:2px;
-        background:rgba(0,0,0,.35);border-radius:10px;padding:6px 12px;flex:1;text-align:center;
+        style="font-size:18px;font-weight:800;color:var(--gold);letter-spacing:1px;
+        background:rgba(0,0,0,.35);border-radius:10px;padding:5px 8px;flex:1;text-align:center;
         backdrop-filter:blur(6px)">00:00:00</div>
+      <div onclick="resetWaitAndHistory()"
+        style="padding:7px 10px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
+        background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
+        backdrop-filter:blur(6px);white-space:nowrap;flex-shrink:0">🔄 リセット</div>
     </div>
+    <!-- Row 3: 1号・2号・3号・4号 -->
+    <div id="spot-chips" style="display:flex;gap:6px;width:100%"></div>
   </div>
   <div class="gps-pill">
     <span class="gps-dot" id="gps-dot"></span>
@@ -267,7 +274,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span id="online-count" style="color:var(--cyan)">仲間0人</span>
   </div>
   <!-- オートフォロー -->
-  <button class="map-ctrl-btn" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:98px">🎯</button>
+  <button class="map-ctrl-btn" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:104px">🎯</button>
   <!-- 地図種別切替 -->
   <div class="map-layer-bar" id="layer-bar" style="display:none">
     <div class="map-layer-chip sel" id="layer-osm"   onclick="setTileLayer('osm')"  >標準</div>
@@ -275,7 +282,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="map-layer-chip"     id="layer-light" onclick="setTileLayer('light')">ライト</div>
   </div>
   <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替" style="bottom:50px;right:8px">🗺</button>
-  <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ" style="bottom:194px">
+  <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ" style="bottom:156px">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
       <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
       <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
@@ -603,11 +610,11 @@ function removePeerMarker(id){
 function centerOnMe(){if(myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);}
 
 function toggleAutoFollow(){
-  autoFollow=true;
+  autoFollow=!autoFollow;
   const btn=document.getElementById('follow-btn');
-  if(btn)btn.classList.add('on');
-  if(myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);
-  toast('🎯 オートフォロー ON');
+  if(btn)btn.classList.toggle('on',autoFollow);
+  if(autoFollow&&myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);
+  toast('🎯 オートフォロー '+(autoFollow?'ON':'OFF'));
 }
 
 
@@ -688,6 +695,9 @@ function toggleDuty(){
 }
 
 let jitsushaStart=null;
+let boardInfo=null;          // 実車時の乗車情報
+let manualWaitStartTime=null; // 待機開始ボタンを押した時刻
+let manualWaitAddr=null;      // 待機開始した場所の住所
 
 function setStatus(s){
   const prev=currentStatus; currentStatus=s;
@@ -699,6 +709,16 @@ function setStatus(s){
   toast('ステータス: '+statusCfg[s].label);
   if(s==='jitsusha'){
     jitsushaStart=Date.now();
+    // 待機時間を計算してboardInfoに保存
+    const waitMins=manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null;
+    boardInfo={
+      time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),
+      lat:myLat,lng:myLng,
+      spot:currentSpotSelection,
+      waitMins:(waitMins&&waitMins>0)?waitMins:null,
+      waitAddr:manualWaitAddr
+    };
+    manualWaitStartTime=null;manualWaitAddr=null;
     if(waitInterval&&waitSec>0){
       const nowStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
       const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
@@ -709,9 +729,9 @@ function setStatus(s){
     }
   }
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
-    const tripMins=jitsushaStart?Math.round((Date.now()-jitsushaStart)/60000):null;
     jitsushaStart=null;
-    if(myLat!==null)autoRegisterDest(myLat,myLng,'自動（'+statusCfg[s].label+'ボタン）',tripMins);
+    if(myLat!==null&&boardInfo)createTripEntry(myLat,myLng);
+    boardInfo=null;
   }
 }
 
@@ -836,8 +856,67 @@ function toggleDriverPanel(){
 
 function stopWait(){if(waitInterval){clearInterval(waitInterval);waitInterval=null;}}
 function resetWait(){stopWait();waitSec=0;document.getElementById('wait-timer').textContent='00:00:00';const m=document.getElementById('map-wait-timer');if(m)m.textContent='00:00:00';}
+
+function resetWaitAndHistory(){
+  resetWait();
+  boardInfo=null;manualWaitStartTime=null;manualWaitAddr=null;
+  // 直近の自動登録された送り先エントリを1件削除
+  for(let i=destinations.length-1;i>=0;i--){
+    if(destinations[i].type==='trip'||destinations[i].auto){
+      destinations.splice(i,1);
+      saveDests();renderDests();
+      break;
+    }
+  }
+  renderSpotRow();
+  toast('🔄 タイマーをリセット・履歴を削除しました');
+}
+
+async function reverseGeocode(lat,lng){
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      {headers:{'Accept-Language':'ja'}});
+    if(res.ok){
+      const data=await res.json();
+      return truncateToChome(data.display_name)||`${lat.toFixed(4)},${lng.toFixed(4)}`;
+    }
+  }catch(e){}
+  return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+}
+
+async function createTripEntry(alightLat,alightLng){
+  const saved=boardInfo; // capture before async
+  const alightTime=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const [alightAddr,boardAddr]=await Promise.all([
+    reverseGeocode(alightLat,alightLng),
+    saved&&saved.lat!==null?reverseGeocode(saved.lat,saved.lng):Promise.resolve(null)
+  ]);
+  const entry={
+    type:'trip',
+    boardTime:saved?saved.time:'−',
+    boardAddr:boardAddr||'',
+    boardSpot:saved?saved.spot:null,
+    alightTime,
+    alightAddr:alightAddr||'',
+    waitMins:saved?saved.waitMins:null,
+    waitAddr:saved?saved.waitAddr:null,
+    dateStr,ts:now.getTime()
+  };
+  destinations.push(entry);
+  saveDests();renderDests();
+  pushDestToFirebase(entry);
+  toast('📍 行き先を記録しました');
+}
 function startWaitManual(){
   if(waitInterval){toast('⏱ タイマーはすでに動いています');return;}
+  manualWaitStartTime=Date.now();
+  manualWaitAddr=null;
+  // 待機開始場所を非同期で取得
+  if(myLat!==null){
+    reverseGeocode(myLat,myLng).then(addr=>{manualWaitAddr=addr;});
+  }
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   waitStart=Date.now();waitSec=0;
   if(waitInterval)clearInterval(waitInterval);
@@ -890,7 +969,7 @@ function renderWaitHistory(){
 function renderTeamDests(){
   const el=document.getElementById('team-dests-list');
   if(!el)return;
-  const allDriverIds=Object.keys(teamDests);
+  const allDriverIds=Object.keys(teamDests).filter(id=>id!==myId);
   if(!allDriverIds.length){
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
     return;
@@ -976,7 +1055,20 @@ function onDeparture(cp){
   if(bannerTimer)clearTimeout(bannerTimer);
   bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
   if(navigator.vibrate)navigator.vibrate([200,100,200]);
+  const durMins=Math.round(waitSec/60);
   if(hadTimer)saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
+  // チェックポイント滞在を送先リストに追加
+  if(hadTimer&&durMins>0){
+    const cpEntry={
+      type:'cp',name:cp.name,icon:cp.icon||'📍',
+      startTime:cp.arrivalTimeStr||'−',endTime:timeStr,durMins,
+      dateStr:new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}),
+      ts:Date.now()
+    };
+    destinations.push(cpEntry);
+    saveDests();renderDests();
+    pushDestToFirebase(cpEntry);
+  }
   waitSec=0;
   currentSpotSelection=null;
   cp.currentSpot=null;cp.arrivalTimeStr=null;
@@ -986,6 +1078,10 @@ function onDeparture(cp){
     db.ref('chat').push({uid:myId,name,
       text:`🚕【自動】${cp.name} を出発（${timeStr}）待機: ${elapsed}`,
       time:timeStr,ts:Date.now(),isAuto:true});
+  }
+  // スマホ通知
+  if(Notification.permission==='granted'){
+    new Notification(cp.icon+' '+cp.name+' を出発',{body:`出発 ${timeStr}　待機 ${elapsed}`,tag:'taxi-depart-'+cp.id,renotify:true});
   }
   toast(cp.icon+' '+cp.name+' 出発 — 待機: '+elapsed);
   renderSpotRow();
@@ -1386,54 +1482,68 @@ function changePin(){
 
 function renderDests(){
   const el=document.getElementById('dest-list');
-  if(!destinations.length){
-    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">自動登録された送り先がありません</div>';
+  // 不要エントリをフィルタ（旧フォーマットの自動エントリは除外）
+  const visible=destinations.filter(d=>{
+    if(d.type==='trip'||d.type==='cp')return true;
+    // 旧フォーマット: 不要なものを除外
+    if(!d.reason)return true; // 手動追加は表示
+    if(d.reason.includes('停車＋方向転換'))return false;
+    if(d.reason.includes('空車ボタン'))return false;
+    if(d.reason.includes('回送ボタン'))return false;
+    if(d.tripMins===0)return false;
+    return false; // その他の自動エントリも非表示
+  });
+  if(!visible.length){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">送り先がありません</div>';
     document.getElementById('done-count').textContent='0件';
     return;
   }
-  // 日付ごとにグループ化
   const groups={};
-  destinations.forEach((d,i)=>{
+  visible.forEach(d=>{
     const key=d.dateStr||'日付不明';
     if(!groups[key])groups[key]=[];
-    groups[key].push({d,i});
+    groups[key].push(d);
   });
-  // 新しい日付順にソート
-  const sortedDates=Object.keys(groups).sort((a,b)=>{
-    const ta=groups[a][0].d.ts||0,tb=groups[b][0].d.ts||0;
-    return tb-ta;
-  });
+  const sortedDates=Object.keys(groups).sort((a,b)=>(groups[b][0].ts||0)-(groups[a][0].ts||0));
   let html='';
   sortedDates.forEach(date=>{
     html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 6px">📅 ${date}</div>`;
-    const items=groups[date];
-    items.forEach(({d,i},idx)=>{
-      const isLast=idx===items.length-1;
-      html+=`
-      <div style="display:flex;gap:0;margin-bottom:${isLast?'12px':'0'}">
-        <div style="display:flex;flex-direction:column;align-items:center;margin-right:10px;flex-shrink:0">
-          <div style="width:11px;height:11px;border-radius:50%;background:${d.done?'var(--muted)':'var(--accent)'};border:2px solid var(--surface2);margin-top:12px;flex-shrink:0"></div>
-          ${!isLast?`<div style="width:2px;flex:1;background:var(--border);margin-top:2px"></div>`:''}
-        </div>
-        <div class="dest-card" style="flex:1;margin-bottom:8px;${d.done?'opacity:.5':''}">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px">
-            <div>
-              ${d.timeStr?`<div style="font-size:10px;color:var(--cyan);margin-bottom:2px">🕐 ${d.timeStr}</div>`:''}
-              <div class="dest-name" style="font-size:13px">${esc(d.name)}</div>
-            </div>
-            <div style="display:flex;gap:5px;flex-shrink:0;margin-left:6px">
-              <span class="badge bg" onclick="markDone(${i})">${d.done?'↩':'✓'}</span>
-            </div>
+    groups[date].slice().reverse().forEach(d=>{
+      if(d.type==='trip'){
+        const spotLbl=d.boardSpot?`（${d.boardSpot}）`:'';
+        const waitLbl=d.waitMins?`（待機${d.waitMins}分${d.waitAddr?'・'+d.waitAddr:''}）`:'';
+        html+=`
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:10px">
+          <div style="font-size:13px;margin-bottom:5px">
+            <span style="color:var(--cyan);font-weight:700;margin-right:6px">${esc(d.boardTime)}</span>${esc(d.boardAddr)}${esc(spotLbl)}
           </div>
-          ${d.addr?`<div class="dest-addr" style="font-size:11px">${esc(d.addr)}</div>`:''}
-          ${d.tripMins!==null&&d.tripMins!==undefined?`<div style="font-size:11px;color:var(--gold);font-weight:700;margin-top:4px">🚕 所要時間 ${d.tripMins}分</div>`:''}
-          ${d.reason?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${esc(d.reason)}</div>`:''}
-        </div>
-      </div>`;
+          <div style="font-size:13px;${waitLbl?'margin-bottom:5px':''}">
+            <span style="color:var(--amber);font-weight:700;margin-right:6px">${esc(d.alightTime)}</span>${esc(d.alightAddr)}
+          </div>
+          ${waitLbl?`<div style="font-size:12px;color:var(--muted)">${esc(waitLbl)}</div>`:''}
+        </div>`;
+      } else if(d.type==='cp'){
+        html+=`
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:10px">
+          <div style="font-size:13px;color:var(--muted)">
+            <span style="color:var(--gold);font-weight:700">${esc(d.startTime)}-${esc(d.endTime)}</span>
+            　${esc(d.icon||'')} ${esc(d.name)}
+            <span style="color:var(--muted)">（${d.durMins}分）</span>
+          </div>
+        </div>`;
+      } else {
+        // 手動追加エントリ（旧フォーマット互換）
+        html+=`
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:10px">
+          ${d.timeStr?`<div style="font-size:11px;color:var(--cyan);margin-bottom:3px">🕐 ${esc(d.timeStr)}</div>`:''}
+          <div style="font-size:13px;font-weight:600">${esc(d.name||'')}</div>
+          ${d.addr?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(d.addr)}</div>`:''}
+        </div>`;
+      }
     });
   });
   el.innerHTML=html;
-  document.getElementById('done-count').textContent=destinations.filter(d=>d.done).length+'件';
+  document.getElementById('done-count').textContent=visible.length+'件';
 }
 function openDestModal(){document.getElementById('dest-overlay').classList.add('open');}
 function closeDestModal(){
