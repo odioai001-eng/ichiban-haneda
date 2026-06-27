@@ -249,6 +249,16 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div class="sch kaisou" id="sch-kaisou" onclick="setStatus('kaisou')">🟡 回送</div>
     </div>
     <div id="spot-chips" style="display:flex;gap:6px;width:100%"></div>
+    <div style="display:flex;align-items:center;gap:8px;width:100%">
+      <div onclick="startWaitManual()"
+        style="padding:8px 14px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+        background:rgba(79,142,247,.22);color:var(--accent);border:2px solid var(--accent);
+        backdrop-filter:blur(6px);white-space:nowrap;flex-shrink:0">⏱ 待機開始</div>
+      <div id="map-wait-timer"
+        style="font-size:22px;font-weight:800;color:var(--gold);letter-spacing:2px;
+        background:rgba(0,0,0,.35);border-radius:10px;padding:6px 12px;flex:1;text-align:center;
+        backdrop-filter:blur(6px)">00:00:00</div>
+    </div>
   </div>
   <div class="gps-pill">
     <span class="gps-dot" id="gps-dot"></span>
@@ -289,11 +299,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <div class="page" id="page-wait">
 <div class="pc">
-  <div class="card" style="border-color:var(--cyan)">
-    <div style="font-size:12px;color:var(--muted);margin-bottom:4px" id="wait-spot-lbl">待機場所: 未設定</div>
-    <div class="timer-big" id="wait-timer">00:00:00</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:6px">チェックポイント到着で自動スタート</div>
-  </div>
+  <div id="wait-spot-lbl" style="font-size:13px;color:var(--muted);padding:8px 4px 0">待機場所: 未設定</div>
+  <div id="wait-timer" style="display:none"></div>
   <div class="sec">🗺 送り先（自動登録）</div>
   <div id="dest-list"></div>
   <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
@@ -488,7 +495,7 @@ const TILE_DEFS={
   light:{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',sub:['a','b','c','d']},
 };
 let currentTileKey='osm',tileLayer=null;
-let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0;
+let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0,arrivalAutoTimer=null;
 let dutyStart=null,dutyInterval=null,myLat=null,myLng=null;
 let db=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
@@ -540,6 +547,11 @@ function initMap(){
   L.control.zoom({position:'topright'}).addTo(leafletMap);
   const hIcon=L.divIcon({html:`<div style="background:#4f8ef7;border:3px solid #fff;border-radius:50%;width:16px;height:16px;box-shadow:0 0 8px rgba(79,142,247,.6)"></div>`,className:'',iconAnchor:[8,8]});
   L.marker([35.5494,139.7798],{icon:hIcon}).bindPopup('<b>✈️ 羽田空港</b>').addTo(leafletMap);
+  leafletMap.on('dragstart',()=>{
+    autoFollow=false;
+    const btn=document.getElementById('follow-btn');
+    if(btn)btn.classList.remove('on');
+  });
 }
 
 function makeDriverIcon(status,name,isMe){
@@ -591,11 +603,11 @@ function removePeerMarker(id){
 function centerOnMe(){if(myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);}
 
 function toggleAutoFollow(){
-  autoFollow=!autoFollow;
+  autoFollow=true;
   const btn=document.getElementById('follow-btn');
-  btn.classList.toggle('on',autoFollow);
-  toast(autoFollow?'🎯 オートフォロー ON':'🎯 オートフォロー OFF');
-  if(autoFollow&&myLat&&leafletMap)leafletMap.setView([myLat,myLng]);
+  if(btn)btn.classList.add('on');
+  if(myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);
+  toast('🎯 オートフォロー ON');
 }
 
 
@@ -685,7 +697,17 @@ function setStatus(s){
   if(myMarker&&myLat)updateMyMarker(myLat,myLng);
   pushMyPosition();
   toast('ステータス: '+statusCfg[s].label);
-  if(s==='jitsusha') jitsushaStart=Date.now();
+  if(s==='jitsusha'){
+    jitsushaStart=Date.now();
+    if(waitInterval&&waitSec>0){
+      const nowStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+      const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
+      const spotLabel=currentSpotSelection||(hCp?hCp.name:'待機中');
+      const arrStr=(hCp&&hCp.arrivalTimeStr)||'−';
+      saveWaitHistory(spotLabel,arrStr,nowStr,waitSec);
+      stopWait();waitSec=0;
+    }
+  }
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
     const tripMins=jitsushaStart?Math.round((Date.now()-jitsushaStart)/60000):null;
     jitsushaStart=null;
@@ -813,7 +835,21 @@ function toggleDriverPanel(){
 }
 
 function stopWait(){if(waitInterval){clearInterval(waitInterval);waitInterval=null;}}
-function resetWait(){stopWait();waitSec=0;document.getElementById('wait-timer').textContent='00:00:00';}
+function resetWait(){stopWait();waitSec=0;document.getElementById('wait-timer').textContent='00:00:00';const m=document.getElementById('map-wait-timer');if(m)m.textContent='00:00:00';}
+function startWaitManual(){
+  if(waitInterval){toast('⏱ タイマーはすでに動いています');return;}
+  const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  waitStart=Date.now();waitSec=0;
+  if(waitInterval)clearInterval(waitInterval);
+  waitInterval=setInterval(()=>{
+    waitSec=Math.floor((Date.now()-waitStart)/1000);
+    const t=toHMS(waitSec);
+    document.getElementById('wait-timer').textContent=t;
+    const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
+  },1000);
+  if(db&&isDuty)db.ref('drivers/'+myId).update({waitSince:Date.now()});
+  toast('⏱ 待機タイマー スタート');
+}
 
 function saveWaitHistory(spotName,arrivalTimeStr,departureTimeStr,elapsedSec){
   const hist=JSON.parse(localStorage.getItem('taxi_wait_history')||'[]');
@@ -837,9 +873,11 @@ function renderWaitHistory(){
   el.innerHTML=hist.map(h=>{
     let dateHeader='';
     if(h.date!==lastDate){lastDate=h.date;dateHeader=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 4px">${h.date}</div>`;}
+    const mins=Math.round((h.sec||0)/60);
+    const minsLabel=mins>=1?` 待機時間${mins}分`:'';
     return dateHeader+`
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:7px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px">${esc(h.spot)}</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">${esc(h.spot)}${minsLabel}</div>
       <div style="display:flex;gap:14px;font-size:12px;color:var(--muted)">
         <span>🟢 ${h.arrival}</span>
         <span>🔴 ${h.departure||'−'}</span>
@@ -926,6 +964,8 @@ function checkGeofences(lat,lng){
 
 function onDeparture(cp){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
+  const hadTimer=waitInterval!==null||waitSec>0;
   stopWait();
   const elapsed=toHMS(waitSec);
   document.getElementById('wait-spot-lbl').textContent=`待機場所: ${cp.name}（終了）`;
@@ -936,7 +976,10 @@ function onDeparture(cp){
   if(bannerTimer)clearTimeout(bannerTimer);
   bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
   if(navigator.vibrate)navigator.vibrate([200,100,200]);
-  saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
+  if(hadTimer)saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
+  waitSec=0;
+  currentSpotSelection=null;
+  cp.currentSpot=null;cp.arrivalTimeStr=null;
   if(db)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
   if(db&&isDuty){
     const name=localStorage.getItem('taxi_name')||'自分';
@@ -945,6 +988,7 @@ function onDeparture(cp){
       time:timeStr,ts:Date.now(),isAuto:true});
   }
   toast(cp.icon+' '+cp.name+' 出発 — 待機: '+elapsed);
+  renderSpotRow();
 }
 
 function onArrival(cp,dist){
@@ -955,7 +999,12 @@ function onArrival(cp,dist){
   if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
   toast(cp.icon+' '+cp.name+' 到着！');
   currentSpotSelection=null;
-  startWaitAt(cp,cp.name,dist,timeStr);
+  cp.arrivalTimeStr=timeStr;
+  if(arrivalAutoTimer)clearTimeout(arrivalAutoTimer);
+  arrivalAutoTimer=setTimeout(()=>{
+    arrivalAutoTimer=null;
+    if(cpInside[cp.id]&&isDuty&&!waitInterval)startWaitAt(cp,cp.name,dist,timeStr);
+  },120000);
   renderSpotRow();
 }
 
@@ -967,8 +1016,17 @@ function selectSpot(spotName){
   hCp.currentSpot=fullSpot;
   document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
   if(db)db.ref('drivers/'+myId).update({waitSpot:fullSpot});
+  if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
+  if(!waitInterval){
+    const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    hCp.arrivalTimeStr=hCp.arrivalTimeStr||timeStr;
+    startWaitAt(hCp,fullSpot,0,hCp.arrivalTimeStr);
+  } else {
+    hCp.currentSpot=fullSpot;
+    document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
+  }
   renderSpotRow();
-  toast(currentSpotSelection?('📍 '+currentSpotSelection+' を選択'):'スポット選択解除');
+  toast('📍 '+currentSpotSelection+' を選択 — タイマー計測中');
 }
 
 function renderSpotRow(){
@@ -1001,7 +1059,9 @@ function startWaitAt(cp,spotName,dist,timeStr){
     if(waitInterval)clearInterval(waitInterval);
     waitInterval=setInterval(()=>{
       waitSec=Math.floor((Date.now()-waitStart)/1000);
-      document.getElementById('wait-timer').textContent=toHMS(waitSec);
+      const t=toHMS(waitSec);
+      document.getElementById('wait-timer').textContent=t;
+      const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
     },1000);
     if(db)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:spotName});
   }
@@ -1074,10 +1134,13 @@ function detectStopAndTurn(lat,lng,speed,bearing,now){
 
 function truncateToChome(displayName){
   if(!displayName)return displayName;
-  const m=displayName.match(/^(.+?[〇一二三四五六七八九十百千万億兆\d]+丁目)/);
-  if(m)return m[1];
-  const parts=displayName.split(',');
-  return parts.slice(0,3).join(',').trim();
+  // 都道府県から始まる部分を抽出
+  const mPref=displayName.match(/([一-龥]+(?:都|道|府|県).+)/);
+  const rest=mPref?mPref[1]:displayName;
+  // 丁目まであれば丁目で切る
+  const mChome=rest.match(/^(.+?[〇一二三四五六七八九十百千万億兆\d]+丁目)/);
+  if(mChome)return mChome[1];
+  return rest.split(',')[0].trim();
 }
 
 async function autoRegisterDest(lat,lng,reason,tripMins=null){
