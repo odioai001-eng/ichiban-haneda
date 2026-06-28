@@ -993,6 +993,14 @@ async function reverseGeocode(lat,lng){
       {headers:{'Accept-Language':'ja'}});
     if(res.ok){
       const data=await res.json();
+      const a=data.address||{};
+      // 都道府県 → 市区町村 → 町名・丁目 の順で結合
+      const pref=a.state||a.province||'';
+      const city=a.city||a.city_district||a.town||a.village||a.county||'';
+      const area=a.quarter||a.suburb||a.neighbourhood||a.road||'';
+      const parts=[pref,city,area].filter(Boolean);
+      if(parts.length>=2)return parts.join('');
+      // フォールバック: display_name パース
       return truncateToChome(data.display_name)||`${lat.toFixed(4)},${lng.toFixed(4)}`;
     }
   }catch(e){}
