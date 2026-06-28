@@ -916,11 +916,11 @@ function updateDriverList(){
   const myRow=isDuty?makeDriverRow(myId,{name:myName,car:myCar,status:currentStatus,ts:Date.now()},true):'';
   const entries=Object.entries(driverData);
   let online=isDuty?1:0;
-  const peerRows=entries.map(([id,d])=>{
+  const peerRows=entries.filter(([id,d])=>{
     const age=Date.now()-(d.ts||0);
-    if(age<5*60*1000)online++;
-    return makeDriverRow(id,d,false);
-  }).join('');
+    if(age<5*60*1000){online++;return true;}
+    return false; // オフライン（5分以上更新なし）は非表示
+  }).map(([id,d])=>makeDriverRow(id,d,false)).join('');
   container.innerHTML=myRow+peerRows||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">仲間がいません</div>';
   document.getElementById('online-count').textContent=`仲間${online}人`;
 }
