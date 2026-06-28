@@ -1205,6 +1205,13 @@ function onArrival(cp,dist){
   sendNotif(cp.icon+' '+cp.name+' に到着',`到着時刻 ${timeStr}`,'taxi-'+cp.id);
   if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
   toast(cp.icon+' '+cp.name+' 到着！');
+  // 到着をチャットに即時通知
+  if(db&&isDuty){
+    const name=localStorage.getItem('taxi_name')||'自分';
+    db.ref('chat').push({uid:myId,name,
+      text:`${cp.icon}【自動】${cp.name} に到着（${timeStr}）`,
+      time:timeStr,ts:Date.now(),isAuto:true});
+  }
   currentSpotSelection=null;
   cp.arrivalTimeStr=timeStr;
   if(arrivalAutoTimer)clearTimeout(arrivalAutoTimer);
@@ -1272,12 +1279,6 @@ function startWaitAt(cp,spotName,dist,timeStr){
       const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
     },1000);
     if(db)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:spotName});
-  }
-  if(db&&isDuty){
-    const name=localStorage.getItem('taxi_name')||'自分';
-    db.ref('chat').push({uid:myId,name,
-      text:`📍【自動】${spotName} に到着（${timeStr}）`,
-      time:timeStr,ts:Date.now(),isAuto:true});
   }
 }
 
