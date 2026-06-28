@@ -562,6 +562,7 @@ function saveCPs(){localStorage.setItem('taxi_checkpoints',JSON.stringify(checkp
 
 function init(){
   loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory(); renderTeamDests(); initMap(); initLocalChat(); tryFirebase();
+  restoreAppState(); // リロード後の状態復元
 }
 
 function initMap(){
@@ -698,6 +699,7 @@ function toggleDuty(){
       document.getElementById('duty-elapsed').textContent=toHMS(s);
     },1000);
     setStatus('kuusha');
+    saveAppState();
     toast('✅ 乗務開始');
   }else{
     btn.textContent='出勤する';btn.className='duty-btn off';
@@ -706,6 +708,7 @@ function toggleDuty(){
     if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
     if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
     if(db)db.ref('drivers/'+myId).remove();
+    localStorage.removeItem('taxi_runtime_state'); // 退勤時は保存状態を消去
     toast('🛑 退勤');
   }
 }
@@ -715,6 +718,73 @@ let boardInfo=null;          // 実車時の乗車情報
 let manualWaitStartTime=null; // 待機開始ボタンを押した時刻
 let manualWaitAddr=null;      // 待機開始した場所の住所
 
+function saveAppState(){
+  localStorage.setItem('taxi_runtime_state',JSON.stringify({
+    isDuty,
+    currentStatus,
+    dutyStartTs:dutyStart?dutyStart.getTime():null,
+    waitStartTs:waitInterval?waitStart:null,
+    currentSpotSelection,
+    boardInfo,
+    manualWaitStartTime,
+    manualWaitAddr
+  }));
+}
+
+function restoreAppState(){
+  const raw=localStorage.getItem('taxi_runtime_state');
+  if(!raw)return;
+  let st; try{st=JSON.parse(raw);}catch(e){return;}
+  if(!st.isDuty)return; // 退勤中なら復元しない
+  // 出勤状態を復元
+  isDuty=true;
+  currentStatus=st.currentStatus||'kuusha';
+  dutyStart=st.dutyStartTs?new Date(st.dutyStartTs):new Date();
+  const btn=document.getElementById('duty-btn');
+  const lbl=document.getElementById('duty-label');
+  const offline=document.getElementById('map-offline');
+  if(btn){btn.textContent='退勤する';btn.className='duty-btn on';}
+  if(lbl)lbl.textContent='乗務中';
+  if(offline)offline.classList.remove('show');
+  document.getElementById('duty-start').textContent=fmtTime(dutyStart);
+  if(dutyInterval)clearInterval(dutyInterval);
+  dutyInterval=setInterval(()=>{
+    if(!dutyStart)return;
+    const s=Math.floor((Date.now()-dutyStart.getTime())/1000);
+    document.getElementById('duty-elapsed').textContent=toHMS(s);
+  },1000);
+  // ステータスボタン復元
+  ['kuusha','jitsusha','kaisou'].forEach(k=>{
+    const el=document.getElementById('sch-'+k);
+    if(el)el.classList.toggle('sel',k===currentStatus);
+  });
+  // タイマー復元
+  if(st.waitStartTs){
+    waitStart=st.waitStartTs;
+    waitSec=Math.floor((Date.now()-waitStart)/1000);
+    if(waitInterval)clearInterval(waitInterval);
+    waitInterval=setInterval(()=>{
+      waitSec=Math.floor((Date.now()-waitStart)/1000);
+      const t=toHMS(waitSec);
+      const wt=document.getElementById('wait-timer');if(wt)wt.textContent=t;
+      const mt=document.getElementById('map-wait-timer');if(mt)mt.textContent=t;
+    },1000);
+    // 現在の経過時間を即時反映
+    const t=toHMS(waitSec);
+    const wt=document.getElementById('wait-timer');if(wt)wt.textContent=t;
+    const mt=document.getElementById('map-wait-timer');if(mt)mt.textContent=t;
+  }
+  // その他の状態を復元
+  if(st.currentSpotSelection)currentSpotSelection=st.currentSpotSelection;
+  if(st.boardInfo)boardInfo=st.boardInfo;
+  if(st.manualWaitStartTime)manualWaitStartTime=st.manualWaitStartTime;
+  if(st.manualWaitAddr)manualWaitAddr=st.manualWaitAddr;
+  // GPS再開・Firebase更新
+  startGPS();
+  requestNotificationPermission();
+  toast('🔄 乗務状態を復元しました');
+}
+
 function setStatus(s){
   const prev=currentStatus; currentStatus=s;
   ['kuusha','jitsusha','kaisou'].forEach(k=>{
@@ -722,6 +792,7 @@ function setStatus(s){
   });
   if(myMarker&&myLat)updateMyMarker(myLat,myLng);
   pushMyPosition();
+  saveAppState();
   toast('ステータス: '+statusCfg[s].label);
   if(s==='jitsusha'){
     jitsushaStart=Date.now();
@@ -871,7 +942,7 @@ function toggleDriverPanel(){
   if(p.classList.contains('open'))updateDriverList();
 }
 
-function stopWait(){if(waitInterval){clearInterval(waitInterval);waitInterval=null;}}
+function stopWait(){if(waitInterval){clearInterval(waitInterval);waitInterval=null;}saveAppState();}
 function resetWait(){stopWait();waitSec=0;document.getElementById('wait-timer').textContent='00:00:00';const m=document.getElementById('map-wait-timer');if(m)m.textContent='00:00:00';}
 
 function resetWaitAndHistory(){
@@ -944,6 +1015,7 @@ function startWaitManual(){
     const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
   },1000);
   if(db&&isDuty)db.ref('drivers/'+myId).update({waitSince:Date.now()});
+  saveAppState();
   toast('⏱ 待機タイマー スタート');
 }
 
@@ -1133,6 +1205,7 @@ function selectSpot(spotName){
     hCp.currentSpot=fullSpot;
     document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
   }
+  saveAppState();
   renderSpotRow();
   toast('📍 '+currentSpotSelection+' を選択 — タイマー計測中');
 }
