@@ -625,6 +625,12 @@ function updatePeerMarker(id,d){
   else if(d.lat&&d.lng){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
     m.bindPopup(`<b>${esc(d.name||'不明')}</b><br>${statusCfg[status].label}<br>${d.car||''}`);
+    m.on('click',()=>{
+      autoFollow=false;
+      const fb=document.getElementById('follow-btn');
+      if(fb)fb.classList.remove('on');
+      leafletMap.setView([d.lat,d.lng],16);
+    });
     peerMarkers[id]=m;
   }
 }
@@ -633,7 +639,13 @@ function removePeerMarker(id){
   if(peerMarkers[id]){leafletMap.removeLayer(peerMarkers[id]);delete peerMarkers[id];}
 }
 
-function centerOnMe(){if(myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);}
+function centerOnMe(){
+  if(!myLat||!leafletMap)return;
+  autoFollow=true;
+  const btn=document.getElementById('follow-btn');
+  if(btn)btn.classList.add('on');
+  leafletMap.setView([myLat,myLng],15);
+}
 
 function toggleAutoFollow(){
   autoFollow=!autoFollow;
@@ -928,18 +940,22 @@ function updateDriverList(){
 function focusDriver(id){
   const d=driverData[id];
   if(!d||!d.lat){toast('位置情報がありません');return;}
-  leafletMap.setView([d.lat,d.lng],15);
-  if(peerMarkers[id])peerMarkers[id].openPopup();
+  autoFollow=false;
+  const btn=document.getElementById('follow-btn');
+  if(btn)btn.classList.remove('on');
+  leafletMap.setView([d.lat,d.lng],16);
   toggleDriverPanel();
 }
 function focusDriverFromList(id){
   const d=driverData[id];
   if(!d||!d.lat){toast('位置情報がありません');return;}
+  autoFollow=false;
+  const btn=document.getElementById('follow-btn');
+  if(btn)btn.classList.remove('on');
   document.getElementById('driver-panel').classList.remove('open');
-  showPage('map',document.querySelector('.nb'));
+  showPage('map',document.querySelector('.nb[onclick*="map"]'));
   setTimeout(()=>{
     leafletMap.setView([d.lat,d.lng],16);
-    if(peerMarkers[id])peerMarkers[id].openPopup();
   },150);
 }
 
