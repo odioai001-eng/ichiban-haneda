@@ -817,6 +817,8 @@ function setStatus(s){
   toast('ステータス: '+statusCfg[s].label);
   if(s==='jitsusha'){
     jitsushaStart=Date.now();
+    currentSpotSelection=null;
+    renderSpotRow();
     // 待機時間を計算してboardInfoに保存
     const waitMins=manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null;
     boardInfo={
