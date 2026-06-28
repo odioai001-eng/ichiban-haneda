@@ -550,8 +550,11 @@ function loadCPs(){
   const p=JSON.parse(s);
   CP_DEFAULTS.forEach(d=>{
     const ex=p.find(x=>x.id===d.id);
-    if(!ex) p.push({...d});
-    else if(!ex.spots) ex.spots=['１号','２号','３号','４号'];
+    if(!ex){p.push({...d});}
+    else{
+      // デフォルトのspotsを常に引き継ぐ（空配列や未定義の場合）
+      if(!ex.spots||!ex.spots.length) ex.spots=d.spots||[];
+    }
   });
   return p;
 }
