@@ -339,6 +339,20 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <label>車両番号</label><input type="text" id="s-car" placeholder="例: 品川 501 あ 1234">
     <button class="btn btn-p" onclick="saveSettings()" style="width:100%">保存する</button>
   </div>
+  <div class="sec">🔔 プッシュ通知設定</div>
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <div style="font-size:14px;font-weight:600">到着・出発の通知を受け取る</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">チェックポイント入出時にスマホ通知</div>
+      </div>
+      <button class="toggle-sw" id="notif-toggle" onclick="toggleNotifSetting()"></button>
+    </div>
+    <button class="btn btn-g" onclick="requestNotificationPermission()" style="width:100%;font-size:12px">
+      🔔 OS通知を許可する（初回）
+    </button>
+    <div id="notif-status" style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center"></div>
+  </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
       <input type="password" id="pin-input" placeholder="管理者PIN"
@@ -564,21 +578,20 @@ function initMap(){
 function makeDriverIcon(status,name,isMe){
   const cfg=statusCfg[status]||statusCfg.offline;
   const initial=(name||'?').slice(0,1);
-  const sz=isMe?36:28;
   const ring=isMe?`box-shadow:0 0 0 3px #fff,0 0 0 6px ${cfg.color};`:'';
   return L.divIcon({
     html:`<div style="background:${cfg.color};border:3px solid #fff;border-radius:50%;
-      width:${sz}px;height:${sz}px;
+      width:36px;height:36px;
       display:flex;align-items:center;justify-content:center;
-      font-size:${isMe?'15px':'12px'};font-weight:700;color:#fff;${ring}position:relative">
+      font-size:15px;font-weight:700;color:#fff;${ring}position:relative">
       ${initial}
-      <div style="position:absolute;bottom:${isMe?'-22px':'-18px'};left:50%;
+      <div style="position:absolute;bottom:-22px;left:50%;
         transform:translateX(-50%);
         white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
-        font-size:${isMe?'11px':'10px'};padding:2px 7px;border-radius:5px;font-weight:700">
+        font-size:11px;padding:2px 7px;border-radius:5px;font-weight:700">
         ${esc(name)}${isMe?' (自分)':''}
       </div>
-    </div>`,className:'',iconAnchor:[isMe?18:14,isMe?18:14]
+    </div>`,className:'',iconAnchor:[18,18]
   });
 }
 
@@ -849,7 +862,8 @@ function focusDriverFromList(id){
 
 function toggleDriverPanel(){
   const p=document.getElementById('driver-panel');
-  document.getElementById('haneda-panel').classList.remove('open');
+  const hPanel=document.getElementById('haneda-panel');
+  if(hPanel)hPanel.classList.remove('open');
   p.classList.toggle('open');
   if(p.classList.contains('open'))updateDriverList();
 }
@@ -1079,19 +1093,14 @@ function onDeparture(cp){
       text:`🚕【自動】${cp.name} を出発（${timeStr}）待機: ${elapsed}`,
       time:timeStr,ts:Date.now(),isAuto:true});
   }
-  // スマホ通知
-  if(Notification.permission==='granted'){
-    new Notification(cp.icon+' '+cp.name+' を出発',{body:`出発 ${timeStr}　待機 ${elapsed}`,tag:'taxi-depart-'+cp.id,renotify:true});
-  }
+  sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}　待機 ${elapsed}`,'taxi-depart-'+cp.id);
   toast(cp.icon+' '+cp.name+' 出発 — 待機: '+elapsed);
   renderSpotRow();
 }
 
 function onArrival(cp,dist){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-  if(Notification.permission==='granted'){
-    new Notification(cp.icon+' '+cp.name+' に到着',{body:`到着時刻 ${timeStr}`,tag:'taxi-'+cp.id,renotify:true});
-  }
+  sendNotif(cp.icon+' '+cp.name+' に到着',`到着時刻 ${timeStr}`,'taxi-'+cp.id);
   if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
   toast(cp.icon+' '+cp.name+' 到着！');
   currentSpotSelection=null;
@@ -1174,12 +1183,39 @@ function closeBanner(){
   if(bannerTimer){clearTimeout(bannerTimer);bannerTimer=null;}
 }
 
-function requestNotificationPermission(){
-  if('Notification'in window&&Notification.permission==='default'){
-    Notification.requestPermission().then(p=>{
-      if(p==='granted')toast('🔔 通知が許可されました');
-    });
+function isNotifEnabled(){
+  return localStorage.getItem('taxi_notif_enabled')!=='false';
+}
+function toggleNotifSetting(){
+  const cur=isNotifEnabled();
+  localStorage.setItem('taxi_notif_enabled',cur?'false':'true');
+  renderNotifToggle();
+  toast('🔔 通知: '+(cur?'OFF':'ON'));
+}
+function renderNotifToggle(){
+  const btn=document.getElementById('notif-toggle');
+  if(btn)btn.classList.toggle('on',isNotifEnabled());
+  const st=document.getElementById('notif-status');
+  if(!st)return;
+  const perm='Notification'in window?Notification.permission:'未対応';
+  const permLabel={granted:'許可済み ✓',denied:'拒否されています ✗',default:'未設定'}[perm]||perm;
+  st.textContent='OS通知権限: '+permLabel;
+  st.style.color=perm==='granted'?'var(--green)':perm==='denied'?'var(--red)':'var(--muted)';
+}
+function sendNotif(title,body,tag){
+  if(!isNotifEnabled())return;
+  if('Notification'in window&&Notification.permission==='granted'){
+    new Notification(title,{body,tag,renotify:true});
   }
+}
+function requestNotificationPermission(){
+  if(!('Notification'in window)){toast('⚠️ この端末は通知非対応');return;}
+  if(Notification.permission==='granted'){toast('🔔 通知はすでに許可されています');renderNotifToggle();return;}
+  Notification.requestPermission().then(p=>{
+    if(p==='granted'){toast('🔔 通知が許可されました');}
+    else{toast('🔔 通知が拒否されました');}
+    renderNotifToggle();
+  });
 }
 
 function haversine(lat1,lng1,lat2,lng2){
@@ -1663,6 +1699,7 @@ function showPage(name,btn){
   document.getElementById('page-'+name).classList.add('active');
   btn.classList.add('active');
   if(name==='map'){setTimeout(()=>leafletMap.invalidateSize(),80);}
+  if(name==='settings'){renderNotifToggle();}
   if(name==='chat'){
     chatOnPage=true;document.getElementById('chat-badge').style.display='none';
     setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
