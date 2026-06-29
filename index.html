@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -332,6 +333,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
           <path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
         </svg>
       </button>
+      <button class="send-btn" onclick="document.getElementById('chat-img-input').click()" title="画像を送る" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);flex-shrink:0">🖼</button>
+      <button class="send-btn" onclick="document.getElementById('chat-vid-input').click()" title="動画を送る" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);flex-shrink:0">🎥</button>
+      <input type="file" id="chat-img-input" accept="image/*" style="display:none" onchange="uploadChatMedia(this,'image')">
+      <input type="file" id="chat-vid-input" accept="video/*" style="display:none" onchange="uploadChatMedia(this,'video')">
       <input type="text" id="chat-input" placeholder="メッセージを入力..." onkeypress="if(event.key==='Enter')sendChat()">
       <button class="send-btn" onclick="sendChat()">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -571,7 +576,7 @@ const TILE_DEFS={
 let currentTileKey='osm',tileLayer=null;
 let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0,arrivalAutoTimer=null;
 let dutyStart=null,dutyInterval=null,myLat=null,myLng=null;
-let db=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
+let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false;
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
@@ -964,6 +969,7 @@ function connectFirebase(config){
     if(!firebase.apps.length)firebase.initializeApp(config);
     else firebase.app();
     db=firebase.database();
+    storage=firebase.storage();
     db.ref('.info/connected').on('value',snap=>{
       const conn=snap.val();
       const dot=document.getElementById('conn-dot');
@@ -1898,6 +1904,26 @@ function toggleVoiceInput(){
   voiceRecog.start();
 }
 
+async function uploadChatMedia(input, mediaType){
+  const file=input.files[0];
+  input.value='';
+  if(!file||!storage||!db)return;
+  const maxMB=mediaType==='image'?10:50;
+  if(file.size>maxMB*1024*1024){toast(`⚠️ ファイルが大きすぎます（最大${maxMB}MB）`);return;}
+  const name=localStorage.getItem('taxi_name')||'自分';
+  const time=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  const ext=file.name.split('.').pop();
+  const path=`chat_media/${Date.now()}_${myId}.${ext}`;
+  toast(mediaType==='image'?'🖼 画像をアップロード中...':'🎥 動画をアップロード中...');
+  try{
+    const ref=storage.ref(path);
+    await ref.put(file);
+    const url=await ref.getDownloadURL();
+    const m={uid:myId,name,text:'',time,ts:Date.now(),mediaUrl:url,mediaType};
+    db.ref('chat').push(m);
+  }catch(e){toast('⚠️ アップロード失敗: '+e.message);}
+}
+
 function sendChat(){
   const inp=document.getElementById('chat-input');
   const text=inp.value.trim();if(!text)return;
@@ -1921,11 +1947,23 @@ function appendChatBubble(m,isMe){
   const div=document.createElement('div');
   div.className='msg-row'+(isMe?' me':'');
   const init=(m.name||'?').slice(0,2);
+  let bodyHtml='';
+  if(m.mediaType==='image'&&m.mediaUrl){
+    bodyHtml=`<div class="bubble" style="padding:4px;background:transparent">
+      <img src="${m.mediaUrl}" style="max-width:220px;max-height:280px;border-radius:10px;display:block;cursor:pointer" onclick="window.open('${m.mediaUrl}','_blank')">
+    </div>`;
+  }else if(m.mediaType==='video'&&m.mediaUrl){
+    bodyHtml=`<div class="bubble" style="padding:4px;background:transparent">
+      <video src="${m.mediaUrl}" controls playsinline style="max-width:220px;max-height:280px;border-radius:10px;display:block"></video>
+    </div>`;
+  }else{
+    bodyHtml=`<div class="bubble">${esc(m.text)}</div>`;
+  }
   div.innerHTML=`
     <div class="av ${isMe?'me-av':'other'}">${esc(init)}</div>
     <div>
       ${!isMe?`<div class="msg-name">${esc(m.name)}</div>`:''}
-      <div class="bubble">${esc(m.text)}</div>
+      ${bodyHtml}
       <div class="msg-meta">${m.time}</div>
     </div>`;
   container.appendChild(div);container.scrollTop=container.scrollHeight;
