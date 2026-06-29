@@ -499,6 +499,19 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 </div>
 
 
+<!-- 退勤時 お疲れさまモーダル -->
+<div id="duty-end-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surface);border-radius:20px;padding:36px 24px 28px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6);text-align:center">
+    <div style="font-size:40px;margin-bottom:16px">🌙</div>
+    <div id="duty-end-msg" style="font-size:18px;font-weight:700;margin-bottom:10px;line-height:1.5"></div>
+    <div style="font-size:14px;color:var(--muted);margin-bottom:28px">ゆっくり休んでください。</div>
+    <button onclick="document.getElementById('duty-end-modal').style.display='none'"
+      style="padding:12px 40px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer">
+      OK
+    </button>
+  </div>
+</div>
+
 <!-- 出勤時 車番入力モーダル -->
 <div id="duty-car-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
@@ -791,7 +804,9 @@ function toggleDuty(){
   if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
   if(db)db.ref('drivers/'+myId).remove();
   localStorage.removeItem('taxi_runtime_state');
-  toast('🛑 退勤');
+  const name=localStorage.getItem('taxi_name')||'自分';
+  document.getElementById('duty-end-msg').textContent=`${name}さん、お疲れさまでした。`;
+  document.getElementById('duty-end-modal').style.display='flex';
 }
 
 function confirmDutyCarModal(){
