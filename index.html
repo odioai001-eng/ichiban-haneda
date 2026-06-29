@@ -58,6 +58,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
   border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);
   display:flex;align-items:center;gap:6px}
+.map-zoom-ctrl{position:absolute;bottom:50px;left:8px;z-index:500;
+  display:flex;flex-direction:column;gap:2px}
+.map-zoom-ctrl button{width:34px;height:34px;background:rgba(13,13,26,.82);
+  backdrop-filter:blur(6px);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:20px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.map-zoom-ctrl button:active{background:var(--surface)}
 .gps-dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0}
 .gps-dot.on{background:var(--green);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -270,6 +277,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <!-- Row 3: 1号・2号・3号・4号 -->
     <div id="spot-chips" style="display:flex;gap:6px;width:100%"></div>
+  </div>
+  <div class="map-zoom-ctrl" id="zoom-ctrl">
+    <button onclick="if(leafletMap)leafletMap.zoomIn()">+</button>
+    <button onclick="if(leafletMap)leafletMap.zoomOut()">−</button>
   </div>
   <div class="gps-pill">
     <span class="gps-dot" id="gps-dot"></span>
@@ -639,21 +650,15 @@ function init(){
 }
 
 function syncZoomCtrlVisibility(visible){
-  const zc=document.querySelector('.leaflet-bottom.leaflet-left');
-  if(zc)zc.style.display=visible?'block':'none';
+  const zc=document.getElementById('zoom-ctrl');
+  if(zc)zc.style.display=visible?'flex':'none';
 }
 
 function initMap(){
   leafletMap=L.map('map',{zoomControl:false,attributionControl:false,rotate:true,bearing:0}).setView([35.5494,139.7798],13);
   const def=TILE_DEFS.osm;
   tileLayer=L.tileLayer(def.url,{maxZoom:19,subdomains:def.sub||'abc'}).addTo(leafletMap);
-  L.control.zoom({position:'bottomleft'}).addTo(leafletMap);
-  // ズームコントロールをGPSピルの上に配置・初期表示状態を同期
-  setTimeout(()=>{
-    const zc=document.querySelector('.leaflet-bottom.leaflet-left');
-    if(zc){zc.style.bottom='44px';zc.style.left='8px';zc.style.display='block';}
-    syncZoomCtrlVisibility(document.getElementById('page-map').classList.contains('active'));
-  },150);
+  syncZoomCtrlVisibility(document.getElementById('page-map').classList.contains('active'));
   const hIcon=L.divIcon({html:`<div style="background:#4f8ef7;border:3px solid #fff;border-radius:50%;width:16px;height:16px;box-shadow:0 0 8px rgba(79,142,247,.6)"></div>`,className:'',iconAnchor:[8,8]});
   L.marker([35.5494,139.7798],{icon:hIcon}).bindPopup('<b>✈️ 羽田空港</b>').addTo(leafletMap);
   leafletMap.on('dragstart',()=>{
@@ -671,12 +676,15 @@ function gpsAgeDot(ageSec){
   return '#ef4444';                  // 赤: 2分超
 }
 
-function makeDriverIcon(status,name,isMe,car,ageSec){
+function makeDriverIcon(status,name,isMe,car,ageSec,plate){
   const cfg=statusCfg[status]||statusCfg.offline;
   const initial=(name||'?').slice(0,1);
   const ring=isMe?`box-shadow:0 0 0 3px #fff,0 0 0 6px ${cfg.color};`:'';
-  const carLine=car?`<div style="font-size:9px;color:rgba(255,255,255,.8);font-weight:600;margin-top:1px;letter-spacing:.3px">${esc(car)}</div>`:'';
-  const labelBottom=car?'-34px':'-22px';
+  const carLines=car
+    ?`<div style="font-size:9px;color:rgba(255,255,255,.85);font-weight:600;margin-top:1px">${esc(car)}号車</div>`
+     +(plate?`<div style="font-size:9px;color:rgba(255,255,255,.7);font-weight:600">${esc(plate)}</div>`:'')
+    :'';
+  const labelBottom=car?(plate?'-46px':'-34px'):'-22px';
   const dotColor=gpsAgeDot(ageSec??null);
   const gpsDot=`<div style="position:absolute;top:-5px;left:50%;transform:translateX(-50%);
     width:9px;height:9px;border-radius:50%;background:${dotColor};
@@ -693,7 +701,7 @@ function makeDriverIcon(status,name,isMe,car,ageSec){
         white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
         font-size:11px;padding:2px 7px;border-radius:5px;font-weight:700;text-align:center">
         ${esc(name)}${isMe?' (自分)':''}
-        ${carLine}
+        ${carLines}
       </div>
     </div>`,className:'',iconAnchor:[18,18]
   });
@@ -702,8 +710,9 @@ function makeDriverIcon(status,name,isMe,car,ageSec){
 function updateMyMarker(lat,lng){
   const name=localStorage.getItem('taxi_name')||'自分';
   const car=localStorage.getItem('taxi_car')||'';
+  const plate=localStorage.getItem('taxi_number')||'';
   const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
-  const icon=makeDriverIcon(currentStatus,name,true,car,ageSec);
+  const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
 }
@@ -714,7 +723,7 @@ function updatePeerMarker(id,d){
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
-  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec);
+  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'');
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
@@ -1060,7 +1069,8 @@ function pushMyPosition(){
   const name=localStorage.getItem('taxi_name')||'自分';
   db.ref('drivers/'+myId).update({
     name,lat:myLat,lng:myLng,status:currentStatus,
-    car:localStorage.getItem('taxi_car')||'',ts:Date.now()
+    car:localStorage.getItem('taxi_car')||'',
+    plate:localStorage.getItem('taxi_number')||'',ts:Date.now()
   });
 }
 setInterval(()=>{if(isDuty)pushMyPosition();},10000);
@@ -1140,7 +1150,9 @@ function toggleDriverPanel(){
   const hPanel=document.getElementById('haneda-panel');
   if(hPanel)hPanel.classList.remove('open');
   p.classList.toggle('open');
-  if(p.classList.contains('open'))updateDriverList();
+  const isOpen=p.classList.contains('open');
+  if(isOpen)updateDriverList();
+  syncZoomCtrlVisibility(!isOpen);
 }
 
 function stopWait(){if(waitInterval){clearInterval(waitInterval);waitInterval=null;}saveAppState();}
