@@ -323,7 +323,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <div class="page" id="page-wait">
 <div class="pc">
-  <div id="wait-spot-lbl" style="font-size:13px;color:var(--muted);padding:8px 4px 0">待機場所: 未設定</div>
+  <div id="wait-spot-lbl" style="font-size:13px;color:var(--muted);padding:8px 4px 0">待機場所: </div>
   <div id="wait-timer" style="display:none"></div>
   <div class="sec">🗺 送り先（自動登録）</div>
   <div id="dest-list"></div>
@@ -1003,10 +1003,8 @@ function restoreAppState(){
   if(st.manualWaitAddr)manualWaitAddr=st.manualWaitAddr;
   if(st.jitsushaStart)jitsushaStart=st.jitsushaStart;
   // 待機場所ラベル復元
-  if(st.waitSpot){
-    const lbl=document.getElementById('wait-spot-lbl');
-    if(lbl)lbl.textContent='待機場所: '+st.waitSpot;
-  }
+  const spotLblEl=document.getElementById('wait-spot-lbl');
+  if(spotLblEl)spotLblEl.textContent='待機場所: '+(st.waitSpot||'');
   // スポットチップ・マーカー再描画
   renderSpotRow();
   // GPS再開・Firebase更新
