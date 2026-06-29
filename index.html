@@ -592,21 +592,24 @@ function initMap(){
   });
 }
 
-function makeDriverIcon(status,name,isMe){
+function makeDriverIcon(status,name,isMe,car){
   const cfg=statusCfg[status]||statusCfg.offline;
   const initial=(name||'?').slice(0,1);
   const ring=isMe?`box-shadow:0 0 0 3px #fff,0 0 0 6px ${cfg.color};`:'';
+  const carLine=car?`<div style="font-size:9px;color:rgba(255,255,255,.8);font-weight:600;margin-top:1px;letter-spacing:.3px">${esc(car)}</div>`:'';
+  const labelBottom=car?'-34px':'-22px';
   return L.divIcon({
     html:`<div style="background:${cfg.color};border:3px solid #fff;border-radius:50%;
       width:36px;height:36px;
       display:flex;align-items:center;justify-content:center;
       font-size:15px;font-weight:700;color:#fff;${ring}position:relative">
       ${initial}
-      <div style="position:absolute;bottom:-22px;left:50%;
+      <div style="position:absolute;bottom:${labelBottom};left:50%;
         transform:translateX(-50%);
         white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
-        font-size:11px;padding:2px 7px;border-radius:5px;font-weight:700">
+        font-size:11px;padding:2px 7px;border-radius:5px;font-weight:700;text-align:center">
         ${esc(name)}${isMe?' (自分)':''}
+        ${carLine}
       </div>
     </div>`,className:'',iconAnchor:[18,18]
   });
@@ -614,7 +617,8 @@ function makeDriverIcon(status,name,isMe){
 
 function updateMyMarker(lat,lng){
   const name=localStorage.getItem('taxi_name')||'自分';
-  const icon=makeDriverIcon(currentStatus,name,true);
+  const car=localStorage.getItem('taxi_car')||'';
+  const icon=makeDriverIcon(currentStatus,name,true,car);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
 }
@@ -624,7 +628,7 @@ function updatePeerMarker(id,d){
   const age=Date.now()-(d.ts||0);
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
-  const icon=makeDriverIcon(status,d.name||'不明',false);
+  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'');
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
