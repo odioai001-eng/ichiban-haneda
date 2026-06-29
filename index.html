@@ -499,6 +499,33 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 </div>
 
 
+<!-- 出勤時 車番入力モーダル -->
+<div id="duty-car-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
+    <div id="duty-car-greeting" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:22px;line-height:1.5"></div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">車番</div>
+      <input id="duty-car-num" type="text" inputmode="numeric" placeholder="例: 5" maxlength="6"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
+    </div>
+    <div style="margin-bottom:24px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">ナンバー</div>
+      <input id="duty-car-plate" type="text" placeholder="例: 品川501あ1234" maxlength="20"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="skipDutyCarModal()"
+        style="flex:1;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--muted);font-size:14px;font-weight:600;cursor:pointer">
+        スキップ
+      </button>
+      <button onclick="confirmDutyCarModal()"
+        style="flex:2;padding:12px;border:none;border-radius:10px;background:var(--green);color:#fff;font-size:15px;font-weight:700;cursor:pointer">
+        ✅ 出勤する
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="arrival-banner" id="arrival-banner">
   <button class="arrival-close" onclick="closeBanner()">✕</button>
   <div class="arrival-title" id="arrival-title">📍 到着</div>
@@ -742,36 +769,65 @@ function stopGPS(){
 }
 
 function toggleDuty(){
-  isDuty=!isDuty;
+  if(!isDuty){
+    // 出勤前に車番入力モーダルを表示
+    const name=localStorage.getItem('taxi_name')||'自分';
+    document.getElementById('duty-car-greeting').textContent=`${name}さん おはようございます。`;
+    document.getElementById('duty-car-num').value=localStorage.getItem('taxi_car')||'';
+    document.getElementById('duty-car-plate').value=localStorage.getItem('taxi_number')||'';
+    document.getElementById('duty-car-modal').style.display='flex';
+    setTimeout(()=>document.getElementById('duty-car-num').focus(),200);
+    return;
+  }
+  // 退勤処理
+  isDuty=false;
   const btn=document.getElementById('duty-btn');
   const lbl=document.getElementById('duty-label');
   const offline=document.getElementById('map-offline');
-  if(isDuty){
-    btn.textContent='退勤する';btn.className='duty-btn on';
-    lbl.textContent='乗務中';offline.classList.remove('show');
-    dutyStart=new Date();
-    document.getElementById('duty-start').textContent=fmtTime(dutyStart);
-    requestNotificationPermission();
-    startGPS();
-    if(dutyInterval)clearInterval(dutyInterval);
-    dutyInterval=setInterval(()=>{
-      if(!dutyStart)return;
-      const s=Math.floor((Date.now()-dutyStart)/1000);
-      document.getElementById('duty-elapsed').textContent=toHMS(s);
-    },1000);
-    setStatus('kuusha');
-    saveAppState();
-    toast('✅ 乗務開始');
-  }else{
-    btn.textContent='出勤する';btn.className='duty-btn off';
-    lbl.textContent='休み中';offline.classList.add('show');
-    stopGPS();myLat=null;myLng=null;
-    if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
-    if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
-    if(db)db.ref('drivers/'+myId).remove();
-    localStorage.removeItem('taxi_runtime_state'); // 退勤時は保存状態を消去
-    toast('🛑 退勤');
-  }
+  btn.textContent='出勤する';btn.className='duty-btn off';
+  lbl.textContent='休み中';offline.classList.add('show');
+  stopGPS();myLat=null;myLng=null;
+  if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
+  if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
+  if(db)db.ref('drivers/'+myId).remove();
+  localStorage.removeItem('taxi_runtime_state');
+  toast('🛑 退勤');
+}
+
+function confirmDutyCarModal(){
+  const carNum=document.getElementById('duty-car-num').value.trim();
+  const plate=document.getElementById('duty-car-plate').value.trim();
+  if(carNum)localStorage.setItem('taxi_car',carNum);
+  if(plate)localStorage.setItem('taxi_number',plate);
+  document.getElementById('duty-car-modal').style.display='none';
+  _startDuty();
+}
+
+function skipDutyCarModal(){
+  document.getElementById('duty-car-modal').style.display='none';
+  _startDuty();
+}
+
+function _startDuty(){
+  isDuty=true;
+  const btn=document.getElementById('duty-btn');
+  const lbl=document.getElementById('duty-label');
+  const offline=document.getElementById('map-offline');
+  btn.textContent='退勤する';btn.className='duty-btn on';
+  lbl.textContent='乗務中';offline.classList.remove('show');
+  dutyStart=new Date();
+  document.getElementById('duty-start').textContent=fmtTime(dutyStart);
+  requestNotificationPermission();
+  startGPS();
+  if(dutyInterval)clearInterval(dutyInterval);
+  dutyInterval=setInterval(()=>{
+    if(!dutyStart)return;
+    const s=Math.floor((Date.now()-dutyStart)/1000);
+    document.getElementById('duty-elapsed').textContent=toHMS(s);
+  },1000);
+  setStatus('kuusha');
+  saveAppState();
+  toast('✅ 乗務開始');
 }
 
 let jitsushaStart=null;
