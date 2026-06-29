@@ -1214,20 +1214,18 @@ async function reverseGeocode(lat,lng){
       {headers:{'Accept-Language':'ja'}});
     if(res.ok){
       const data=await res.json();
-      // display_name は「丁目, 町名, 区, 都, 郵便番号, 日本」の小→大順
-      // 逆順にして都道府県→丁目の日本語住所を作る
-      const parts=(data.display_name||'').split(', ')
-        .map(s=>s.trim())
-        .filter(s=>s&&!/^\d{3}-?\d{4}$/.test(s)&&!/^\d+$/.test(s)&&s!=='日本'&&s!=='Japan');
-      parts.reverse();
-      const prefIdx=parts.findIndex(p=>/[都道府県]$/.test(p));
-      if(prefIdx>=0){
-        const addr=parts.slice(prefIdx);
-        const chomeIdx=addr.findIndex(p=>p.includes('丁目'));
-        const end=chomeIdx>=0?chomeIdx+1:Math.min(addr.length,3);
-        const result=addr.slice(0,end).join('');
-        if(result)return result;
+      const a=data.address||{};
+      // state が空のことがある（東京都など）→ display_name から補完
+      let pref=a.state||a.province||'';
+      if(!pref){
+        const m=(data.display_name||'').match(/([^\s,]+(?:都|道|府|県))/);
+        if(m)pref=m[1];
       }
+      const city=a.city||a.city_district||a.town||a.village||a.county||'';
+      // neighbourhood > quarter > suburb > road の順で丁目を含むものを優先
+      const candidates=[a.neighbourhood,a.quarter,a.suburb,a.road].filter(Boolean);
+      let area=candidates.find(c=>c.includes('丁目')||c.includes('番地'))||candidates[0]||'';
+      return [pref,city,area].filter(Boolean).join('');
     }
   }catch(e){}
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
