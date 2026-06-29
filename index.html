@@ -1093,7 +1093,7 @@ function makeDriverRow(id, d, isMe){
     <div class="driver-avatar" style="background:${cfg.color}${isMe?';box-shadow:0 0 0 2px #fff,0 0 0 4px '+cfg.color:''}">${esc(initial)}</div>
     <div class="driver-info">
       <div class="driver-name" style="${isMe?'':'color:var(--accent);text-decoration:underline dotted'}">${esc(d.name||'不明')}${isMe?' <span style="font-size:10px;color:var(--accent)">(自分)</span>':''}</div>
-      <div class="driver-sub">${esc(d.car||'')} · ${timeStr}</div>
+      <div class="driver-sub">${d.car?`${esc(d.car)}号車${d.plate?' '+esc(d.plate):''}  · `:''}${timeStr}</div>
       ${isWaiting?`
         <div style="margin-top:5px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);
           border-radius:8px;padding:6px 10px">
