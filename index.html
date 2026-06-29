@@ -61,6 +61,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .gps-dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0}
 .gps-dot.on{background:var(--green);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.leaflet-bottom.leaflet-left{bottom:calc(var(--nh) + 8px) !important;left:8px !important;}
 .locate-me-btn{position:absolute;bottom:52px;right:8px;z-index:500;
   background:var(--surface);color:var(--text);border:1px solid var(--border);
   border-radius:50%;width:44px;height:44px;cursor:pointer;
@@ -635,6 +636,7 @@ function saveCPs(){localStorage.setItem('taxi_checkpoints',JSON.stringify(checkp
 function init(){
   loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory(); renderTeamDests(); initMap(); initLocalChat(); tryFirebase();
   restoreAppState(); // リロード後の状態復元
+  if(localStorage.getItem('taxi_wakelock')==='1')toggleWakeLock(); // スリープ防止を復元
 }
 
 function initMap(){
@@ -2038,6 +2040,7 @@ async function toggleWakeLock(){
   if(wakeLockOn){
     if(wakeLock){await wakeLock.release();wakeLock=null;}
     wakeLockOn=false;
+    localStorage.removeItem('taxi_wakelock');
     document.getElementById('sleep-btn').classList.remove('on');
     document.getElementById('sleep-btn').textContent='📺';
     toast('📺 スリープ防止 OFF');
@@ -2045,6 +2048,7 @@ async function toggleWakeLock(){
     try{
       wakeLock=await navigator.wakeLock.request('screen');
       wakeLockOn=true;
+      localStorage.setItem('taxi_wakelock','1');
       document.getElementById('sleep-btn').classList.add('on');
       document.getElementById('sleep-btn').textContent='🔆';
       toast('🔆 スリープ防止 ON');
