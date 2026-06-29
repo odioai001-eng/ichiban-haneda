@@ -870,15 +870,18 @@ let manualWaitStartTime=null; // 待機開始ボタンを押した時刻
 let manualWaitAddr=null;      // 待機開始した場所の住所
 
 function saveAppState(){
+  const waitSpotLbl=document.getElementById('wait-spot-lbl');
   localStorage.setItem('taxi_runtime_state',JSON.stringify({
     isDuty,
     currentStatus,
     dutyStartTs:dutyStart?dutyStart.getTime():null,
     waitStartTs:waitInterval?waitStart:null,
+    jitsushaStart,
     currentSpotSelection,
     boardInfo,
     manualWaitStartTime,
-    manualWaitAddr
+    manualWaitAddr,
+    waitSpot:waitSpotLbl?waitSpotLbl.textContent.replace('待機場所: ',''):''
   }));
 }
 
@@ -930,6 +933,14 @@ function restoreAppState(){
   if(st.boardInfo)boardInfo=st.boardInfo;
   if(st.manualWaitStartTime)manualWaitStartTime=st.manualWaitStartTime;
   if(st.manualWaitAddr)manualWaitAddr=st.manualWaitAddr;
+  if(st.jitsushaStart)jitsushaStart=st.jitsushaStart;
+  // 待機場所ラベル復元
+  if(st.waitSpot){
+    const lbl=document.getElementById('wait-spot-lbl');
+    if(lbl)lbl.textContent='待機場所: '+st.waitSpot;
+  }
+  // スポットチップ・マーカー再描画
+  renderSpotRow();
   // GPS再開・Firebase更新
   startGPS();
   requestNotificationPermission();
