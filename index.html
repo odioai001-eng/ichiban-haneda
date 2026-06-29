@@ -949,7 +949,7 @@ function saveAppState(){
     boardInfo,
     manualWaitStartTime,
     manualWaitAddr,
-    waitSpot:waitSpotLbl?waitSpotLbl.textContent.replace('待機場所: ',''):''
+    waitSpot:waitSpotLbl?waitSpotLbl.textContent.replace('待機場所: ','').replace('未設定','').trim():''
   }));
 }
 
@@ -1004,7 +1004,8 @@ function restoreAppState(){
   if(st.jitsushaStart)jitsushaStart=st.jitsushaStart;
   // 待機場所ラベル復元
   const spotLblEl=document.getElementById('wait-spot-lbl');
-  if(spotLblEl)spotLblEl.textContent='待機場所: '+(st.waitSpot||'');
+  const restoredSpot=(st.waitSpot||'').replace('未設定','').trim();
+  if(spotLblEl)spotLblEl.textContent='待機場所: '+restoredSpot;
   // スポットチップ・マーカー再描画
   renderSpotRow();
   // GPS再開・Firebase更新
