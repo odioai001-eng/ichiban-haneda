@@ -638,16 +638,22 @@ function init(){
   if(localStorage.getItem('taxi_wakelock')==='1')toggleWakeLock(); // スリープ防止を復元
 }
 
+function syncZoomCtrlVisibility(visible){
+  const zc=document.querySelector('.leaflet-bottom.leaflet-left');
+  if(zc)zc.style.display=visible?'block':'none';
+}
+
 function initMap(){
   leafletMap=L.map('map',{zoomControl:false,attributionControl:false,rotate:true,bearing:0}).setView([35.5494,139.7798],13);
   const def=TILE_DEFS.osm;
   tileLayer=L.tileLayer(def.url,{maxZoom:19,subdomains:def.sub||'abc'}).addTo(leafletMap);
   L.control.zoom({position:'bottomleft'}).addTo(leafletMap);
-  // ズームコントロールをGPSピルの上に配置
+  // ズームコントロールをGPSピルの上に配置・初期表示状態を同期
   setTimeout(()=>{
     const zc=document.querySelector('.leaflet-bottom.leaflet-left');
     if(zc){zc.style.bottom='46px';zc.style.left='8px';}
-  },100);
+    syncZoomCtrlVisibility(document.getElementById('page-map').classList.contains('active'));
+  },150);
   const hIcon=L.divIcon({html:`<div style="background:#4f8ef7;border:3px solid #fff;border-radius:50%;width:16px;height:16px;box-shadow:0 0 8px rgba(79,142,247,.6)"></div>`,className:'',iconAnchor:[8,8]});
   L.marker([35.5494,139.7798],{icon:hIcon}).bindPopup('<b>✈️ 羽田空港</b>').addTo(leafletMap);
   leafletMap.on('dragstart',()=>{
@@ -2092,8 +2098,7 @@ function showPage(name,btn){
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   btn.classList.add('active');
-  const zoomCtrl=document.querySelector('.leaflet-control-zoom');
-  if(zoomCtrl)zoomCtrl.style.display=name==='map'?'':'none';
+  syncZoomCtrlVisibility(name==='map');
   if(name==='map'){setTimeout(()=>leafletMap.invalidateSize(),80);}
   if(name==='settings'){renderNotifToggle();}
   if(name==='chat'){
