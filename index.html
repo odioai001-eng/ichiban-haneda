@@ -1250,6 +1250,10 @@ function startWaitManual(){
   if(waitInterval){toast('⏱ タイマーはすでに動いています');return;}
   manualWaitStartTime=Date.now();
   manualWaitAddr=null;
+  // 号チップ未選択状態にリセット
+  currentSpotSelection=null;
+  const lbl=document.getElementById('wait-spot-lbl');
+  if(lbl)lbl.textContent='待機場所: ';
   // 待機開始場所を非同期で取得
   if(myLat!==null){
     reverseGeocode(myLat,myLng).then(addr=>{manualWaitAddr=addr;});
@@ -1263,7 +1267,8 @@ function startWaitManual(){
     document.getElementById('wait-timer').textContent=t;
     const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
   },1000);
-  if(db&&isDuty)db.ref('drivers/'+myId).update({waitSince:Date.now()});
+  if(db&&isDuty)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:null});
+  renderSpotRow();
   saveAppState();
   toast('⏱ 待機タイマー スタート');
 }
