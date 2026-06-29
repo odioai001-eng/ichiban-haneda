@@ -1116,7 +1116,7 @@ function makeDriverRow(id, d, isMe){
   const clsMap={kuusha:'kuusha',jitsusha:'jitsusha',kaisou:'kaisou',offline:'offline'};
   const timeStr=isMe?'自分':(alive?`${Math.floor(age/60000)}分前に更新`:'5分以上前');
   const waitSince=isMe?waitStart:d.waitSince;
-  const waitSpot=isMe?(document.getElementById('wait-spot-lbl').textContent.replace('待機場所: ','').replace('（終了）','')||null):d.waitSpot;
+  const waitSpot=isMe?(document.getElementById('wait-spot-lbl').textContent.replace('待機場所: ','').replace('（終了）','').replace('未設定','').trim()||null):d.waitSpot;
   const isWaiting=waitSince&&alive&&(isMe?waitInterval!==null:true);
   const waitMins=isWaiting?Math.floor((Date.now()-waitSince)/60000):null;
   const spotIcon=waitSpot?({'出庫事務所':'🏢','納金事務所':'💴','羽田空港 国内線プール':'✈️'}[waitSpot.split(' ')[0]]||'📍'):'';
