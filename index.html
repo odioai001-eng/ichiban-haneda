@@ -590,6 +590,7 @@ const FIREBASE_CONFIG = {
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let autoFollow=false;
+let followPeerId=null;
 const TILE_DEFS={
   osm:    {url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',          sub:['a','b','c']},
   gsi:    {url:'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',    sub:null},
@@ -724,14 +725,15 @@ function updatePeerMarker(id,d){
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
   const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'');
+  if(followPeerId===id&&d.lat&&leafletMap)leafletMap.setView([d.lat,d.lng]);
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
     m.bindPopup(`<b>${esc(d.name||'不明')}</b><br>${statusCfg[status].label}<br>${d.car||''}`);
     m.on('click',()=>{
-      autoFollow=false;
+      followPeerId=null;autoFollow=false;
       const fb=document.getElementById('follow-btn');
-      if(fb)fb.classList.remove('on');
+      if(fb){fb.classList.remove('on');fb.title='オートフォロー';}
       leafletMap.setView([d.lat,d.lng],16);
     });
     peerMarkers[id]=m;
@@ -751,11 +753,35 @@ function centerOnMe(){
 }
 
 function toggleAutoFollow(){
+  // 仲間フォロー中なら解除して自分フォローへ
+  if(followPeerId){
+    followPeerId=null;
+    autoFollow=true;
+    const btn=document.getElementById('follow-btn');
+    if(btn){btn.classList.add('on');btn.title='オートフォロー（自分）';}
+    if(myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);
+    toast('🎯 自分をフォロー中');
+    return;
+  }
   autoFollow=!autoFollow;
   const btn=document.getElementById('follow-btn');
-  if(btn)btn.classList.toggle('on',autoFollow);
+  if(btn){btn.classList.toggle('on',autoFollow);btn.title='オートフォロー';}
   if(autoFollow&&myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);
   toast('🎯 オートフォロー '+(autoFollow?'ON':'OFF'));
+}
+
+function followPeer(id){
+  const d=driverData[id];
+  if(!d||!d.lat){toast('位置情報がありません');return;}
+  followPeerId=id;
+  autoFollow=false;
+  const btn=document.getElementById('follow-btn');
+  if(btn){btn.classList.add('on');btn.title='フォロー中: '+(d.name||'仲間');}
+  document.getElementById('driver-panel').classList.remove('open');
+  syncZoomCtrlVisibility(true);
+  showPage('map',document.querySelector('.nb[onclick*="map"]'));
+  setTimeout(()=>leafletMap.setView([d.lat,d.lng],16),150);
+  toast('🎯 '+(d.name||'仲間')+'をフォロー中');
 }
 
 
@@ -809,7 +835,7 @@ function _attachGPSWatch(){
     document.getElementById('gps-dot').style.background='';
     document.getElementById('gps-dot').classList.add('on');
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
-    if(autoFollow&&leafletMap)leafletMap.setView([myLat,myLng]);
+    if(autoFollow&&!followPeerId&&leafletMap)leafletMap.setView([myLat,myLng]);
     pushMyPosition();
     checkGeofences(myLat,myLng);
     updatePosHistory(myLat,myLng,pos.coords.speed);
@@ -1103,6 +1129,9 @@ function makeDriverRow(id, d, isMe){
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
       ${status!=='offline'?`<div class="driver-status ${clsMap[status]}">${cfg.label}</div>`:''}
+      ${!isMe&&alive?`<button onclick="event.stopPropagation();followPeer('${id}')"
+        style="background:${followPeerId===id?'var(--accent)':'var(--surface2)'};border:1px solid var(--border);
+        border-radius:8px;padding:4px 8px;font-size:14px;cursor:pointer;color:var(--text)">🎯</button>`:''}
     </div>
   </div>`;
 }
