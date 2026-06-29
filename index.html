@@ -54,7 +54,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(239,68,68,.18);color:var(--red)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-.gps-pill{position:absolute;bottom:calc(var(--nh) + 8px);left:8px;z-index:500;
+.gps-pill{position:absolute;bottom:8px;left:8px;z-index:500;
   background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
   border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);
   display:flex;align-items:center;gap:6px}
@@ -651,7 +651,7 @@ function initMap(){
   // ズームコントロールをGPSピルの上に配置・初期表示状態を同期
   setTimeout(()=>{
     const zc=document.querySelector('.leaflet-bottom.leaflet-left');
-    if(zc){zc.style.bottom='46px';zc.style.left='8px';}
+    if(zc){zc.style.bottom='44px';zc.style.left='8px';zc.style.display='block';}
     syncZoomCtrlVisibility(document.getElementById('page-map').classList.contains('active'));
   },150);
   const hIcon=L.divIcon({html:`<div style="background:#4f8ef7;border:3px solid #fff;border-radius:50%;width:16px;height:16px;box-shadow:0 0 8px rgba(79,142,247,.6)"></div>`,className:'',iconAnchor:[8,8]});
