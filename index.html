@@ -1000,10 +1000,15 @@ function connectFirebase(config){
       Object.keys(peerMarkers).forEach(id=>{if(!all[id])removePeerMarker(id);});
       updateDriverList();
     });
+    const chatInitTs=Date.now();
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
-      appendChatBubble(m,m.uid===myId);
-      if(!chatOnPage){unreadChatCount++;updateChatBadge();}
+      const isMe=m.uid===myId;
+      appendChatBubble(m,isMe);
+      // 接続後に届いた他人のメッセージのみ未読カウント
+      if(!chatOnPage&&!isMe&&(m.ts||0)>chatInitTs){
+        unreadChatCount++;updateChatBadge();
+      }
     });
     db.ref('team_dests').on('value',snap=>{
       teamDests=snap.val()||{};
