@@ -641,7 +641,7 @@ function initMap(){
   leafletMap=L.map('map',{zoomControl:false,attributionControl:false,rotate:true,bearing:0}).setView([35.5494,139.7798],13);
   const def=TILE_DEFS.osm;
   tileLayer=L.tileLayer(def.url,{maxZoom:19,subdomains:def.sub||'abc'}).addTo(leafletMap);
-  L.control.zoom({position:'topright'}).addTo(leafletMap);
+  L.control.zoom({position:'bottomleft'}).addTo(leafletMap);
   const hIcon=L.divIcon({html:`<div style="background:#4f8ef7;border:3px solid #fff;border-radius:50%;width:16px;height:16px;box-shadow:0 0 8px rgba(79,142,247,.6)"></div>`,className:'',iconAnchor:[8,8]});
   L.marker([35.5494,139.7798],{icon:hIcon}).bindPopup('<b>✈️ 羽田空港</b>').addTo(leafletMap);
   leafletMap.on('dragstart',()=>{
