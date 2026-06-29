@@ -693,7 +693,7 @@ function startGPS(){
     if(!isDuty)return;
     const age=Date.now()-gpsLastUpdate;
     if(age>20000&&gpsLastUpdate>0){
-      document.getElementById('gps-dot').style.background='var(--amber)';
+      document.getElementById('gps-dot').style.background='var(--purple)';
       document.getElementById('gps-txt').textContent='GPS再接続中...';
       _restartGPS();
     }
@@ -715,7 +715,7 @@ function _attachGPSWatch(){
     checkGeofences(myLat,myLng);
     updatePosHistory(myLat,myLng,pos.coords.speed);
   },err=>{
-    document.getElementById('gps-dot').style.background='var(--red)';
+    document.getElementById('gps-dot').style.background='var(--purple)';
     document.getElementById('gps-txt').textContent='GPS失敗 — 再試行中';
     // 3秒後に再起動
     if(gpsRetryTimer)clearTimeout(gpsRetryTimer);
