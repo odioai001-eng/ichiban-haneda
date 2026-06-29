@@ -450,6 +450,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <button class="btn btn-g" onclick="showSetup()" style="margin-top:8px;width:100%">Firebase設定を変更する</button>
     </div>
   </div>
+  <div class="sec">🔍 住所デバッグ</div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">現在地のNominatimレスポンスを確認します</div>
+    <button class="btn btn-p" onclick="debugGeocode()" style="width:100%">📍 現在地の住所をテスト</button>
+    <div id="debug-geo-out" style="margin-top:10px;font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;display:none"></div>
+  </div>
   <div class="sec">📊 本日の記録</div>
   <div class="card">
     <div class="row2"><span class="rl">乗務開始</span><span class="rv" id="duty-start">-</span></div>
@@ -2087,6 +2093,40 @@ function appendChatBubble(m,isMe){
       <div class="msg-meta">${m.time}</div>
     </div>`;
   container.appendChild(div);container.scrollTop=container.scrollHeight;
+}
+
+async function debugGeocode(){
+  const out=document.getElementById('debug-geo-out');
+  out.style.display='block';
+  out.textContent='取得中...';
+  if(myLat===null){out.textContent='⚠️ GPS未取得。地図タブでGPSを有効にしてから試してください。';return;}
+  out.textContent=`GPS: ${myLat.toFixed(6)}, ${myLng.toFixed(6)}\n取得中...`;
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${myLat}&lon=${myLng}&format=json`,
+      {headers:{'Accept-Language':'ja'}});
+    const data=await res.json();
+    const a=data.address||{};
+    const parsed=await reverseGeocode(myLat,myLng);
+    out.textContent=[
+      `✅ 解析結果: ${parsed}`,
+      ``,
+      `--- display_name ---`,
+      data.display_name||'(なし)',
+      ``,
+      `--- address フィールド ---`,
+      `state: ${a.state||'-'}`,
+      `city: ${a.city||'-'}`,
+      `city_district: ${a.city_district||'-'}`,
+      `suburb: ${a.suburb||'-'}`,
+      `quarter: ${a.quarter||'-'}`,
+      `road: ${a.road||'-'}`,
+      `neighbourhood: ${a.neighbourhood||'-'}`,
+      `house_number: ${a.house_number||'-'}`,
+      `postcode: ${a.postcode||'-'}`,
+    ].join('\n');
+  }catch(e){
+    out.textContent='❌ エラー: '+e.message;
+  }
 }
 
 function loadSettings(){
