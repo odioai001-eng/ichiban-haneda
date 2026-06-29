@@ -335,8 +335,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       </button>
       <button class="send-btn" onclick="document.getElementById('chat-img-input').click()" title="画像を送る" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);flex-shrink:0">🖼</button>
       <button class="send-btn" onclick="document.getElementById('chat-vid-input').click()" title="動画を送る" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);flex-shrink:0">🎥</button>
+      <button class="send-btn" onclick="document.getElementById('chat-file-input').click()" title="ファイルを送る" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);flex-shrink:0">📎</button>
       <input type="file" id="chat-img-input" accept="image/*" style="display:none" onchange="uploadChatMedia(this,'image')">
       <input type="file" id="chat-vid-input" accept="video/*" style="display:none" onchange="uploadChatMedia(this,'video')">
+      <input type="file" id="chat-file-input" accept="*/*" style="display:none" onchange="uploadChatMedia(this,'file')">
       <input type="text" id="chat-input" placeholder="メッセージを入力..." onkeypress="if(event.key==='Enter')sendChat()">
       <button class="send-btn" onclick="sendChat()">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -1908,18 +1910,20 @@ async function uploadChatMedia(input, mediaType){
   const file=input.files[0];
   input.value='';
   if(!file||!storage||!db)return;
-  const maxMB=mediaType==='image'?10:50;
+  const maxMB=mediaType==='image'?10:mediaType==='video'?100:50;
   if(file.size>maxMB*1024*1024){toast(`⚠️ ファイルが大きすぎます（最大${maxMB}MB）`);return;}
   const name=localStorage.getItem('taxi_name')||'自分';
   const time=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   const ext=file.name.split('.').pop();
   const path=`chat_media/${Date.now()}_${myId}.${ext}`;
-  toast(mediaType==='image'?'🖼 画像をアップロード中...':'🎥 動画をアップロード中...');
+  const toastLabel={image:'🖼 画像',video:'🎥 動画',file:'📎 ファイル'}[mediaType]||'📎 ファイル';
+  toast(`${toastLabel}をアップロード中...`);
   try{
     const ref=storage.ref(path);
     await ref.put(file);
     const url=await ref.getDownloadURL();
-    const m={uid:myId,name,text:'',time,ts:Date.now(),mediaUrl:url,mediaType};
+    const m={uid:myId,name,text:'',time,ts:Date.now(),
+      mediaUrl:url,mediaType,fileName:file.name,fileSize:file.size};
     db.ref('chat').push(m);
   }catch(e){toast('⚠️ アップロード失敗: '+e.message);}
 }
@@ -1955,6 +1959,15 @@ function appendChatBubble(m,isMe){
   }else if(m.mediaType==='video'&&m.mediaUrl){
     bodyHtml=`<div class="bubble" style="padding:4px;background:transparent">
       <video src="${m.mediaUrl}" controls playsinline style="max-width:220px;max-height:280px;border-radius:10px;display:block"></video>
+    </div>`;
+  }else if(m.mediaType==='file'&&m.mediaUrl){
+    const kb=m.fileSize?Math.round(m.fileSize/1024)+'KB':'';
+    bodyHtml=`<div class="bubble" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer" onclick="window.open('${m.mediaUrl}','_blank')">
+      <span style="font-size:24px">📎</span>
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;word-break:break-all">${esc(m.fileName||'ファイル')}</div>
+        ${kb?`<div style="font-size:11px;color:var(--muted)">${kb}</div>`:''}
+      </div>
     </div>`;
   }else{
     bodyHtml=`<div class="bubble">${esc(m.text)}</div>`;
