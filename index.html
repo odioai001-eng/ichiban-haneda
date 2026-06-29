@@ -1328,7 +1328,12 @@ function renderTeamDests(){
   }
   let html='';
   allDriverIds.forEach(driverId=>{
-    const entries=Object.values(teamDests[driverId]||{});
+    const entries=Object.values(teamDests[driverId]||{}).filter(e=>{
+      if(e.type==='trip'||e.type==='cp')return true;
+      // 旧フォーマットの自動登録エントリ（"道路名 地名 (時刻)" 形式）を除外
+      if(e.auto||(e.name&&/\(\d{2}:\d{2}\)$/.test(e.name)))return false;
+      return true;
+    });
     if(!entries.length)return;
     entries.sort((a,b)=>(b.ts||0)-(a.ts||0));
     const driverName=entries[0].driverName||'不明';
@@ -1883,6 +1888,8 @@ function renderDests(){
   // 不要エントリをフィルタ（旧フォーマットの自動エントリは除外）
   const visible=destinations.filter(d=>{
     if(d.type==='trip'||d.type==='cp')return true;
+    // 旧フォーマットの自動登録エントリ（"道路名 地名 (時刻)" 形式）はreasonの有無を問わず除外
+    if(d.auto||(d.name&&/\(\d{2}:\d{2}\)$/.test(d.name)))return false;
     // 旧フォーマット: 不要なものを除外
     if(!d.reason)return true; // 手動追加は表示
     if(d.reason.includes('停車＋方向転換'))return false;
