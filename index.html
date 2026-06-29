@@ -1340,7 +1340,7 @@ function renderTeamDests(){
       <div style="padding:10px 14px">`;
     sortedDates.forEach(date=>{
       html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">📅 ${date}</div>`;
-      groups[date].slice().reverse().forEach((e,idx,arr)=>{
+      groups[date].forEach((e,idx,arr)=>{
         const isLast=idx===arr.length-1;
         if(e.type==='trip'){
           const spotLbl=e.boardSpot?`（${e.boardSpot}）`:'';
