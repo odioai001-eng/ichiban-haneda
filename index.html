@@ -279,9 +279,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <button class="map-ctrl-btn" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:104px">🎯</button>
   <!-- 地図種別切替 -->
   <div class="map-layer-bar" id="layer-bar" style="display:none">
-    <div class="map-layer-chip sel" id="layer-osm"   onclick="setTileLayer('osm')"  >標準</div>
-    <div class="map-layer-chip"     id="layer-gsi"   onclick="setTileLayer('gsi')"  >地理院</div>
-    <div class="map-layer-chip"     id="layer-light" onclick="setTileLayer('light')">ライト</div>
+    <div class="map-layer-chip sel" id="layer-osm"    onclick="setTileLayer('osm')"   >標準</div>
+    <div class="map-layer-chip"     id="layer-gsi"    onclick="setTileLayer('gsi')"   >地理院</div>
+    <div class="map-layer-chip"     id="layer-light"  onclick="setTileLayer('light')" >ライト</div>
+    <div class="map-layer-chip"     id="layer-google" onclick="setTileLayer('google')">Google</div>
+    <div class="map-layer-chip"     id="layer-gsat"   onclick="setTileLayer('gsat')"  >衛星</div>
   </div>
   <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替" style="bottom:50px;right:8px">🗺</button>
   <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ" style="bottom:156px">
@@ -519,9 +521,11 @@ const FIREBASE_CONFIG = {
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let autoFollow=false;
 const TILE_DEFS={
-  osm:  {url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',        sub:['a','b','c']},
-  gsi:  {url:'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',  sub:null},
-  light:{url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',sub:['a','b','c','d']},
+  osm:    {url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',          sub:['a','b','c']},
+  gsi:    {url:'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',    sub:null},
+  light:  {url:'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',sub:['a','b','c','d']},
+  google: {url:'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',       sub:['0','1','2','3']},
+  gsat:   {url:'https://mt{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',     sub:['0','1','2','3']},
 };
 let currentTileKey='osm',tileLayer=null;
 let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0,arrivalAutoTimer=null;
@@ -662,7 +666,7 @@ function setTileLayer(key){
   if(tileLayer)leafletMap.removeLayer(tileLayer);
   const def=TILE_DEFS[key];
   tileLayer=L.tileLayer(def.url,{maxZoom:19,subdomains:def.sub||'abc'}).addTo(leafletMap);
-  ['osm','gsi','light'].forEach(k=>{
+  ['osm','gsi','light','google','gsat'].forEach(k=>{
     const el=document.getElementById('layer-'+k);
     if(el)el.classList.toggle('sel',k===key);
   });
@@ -676,25 +680,57 @@ function toggleLayerBar(){
   btn.classList.toggle('on',!visible);
 }
 
+let gpsLastUpdate=0,gpsStaleTimer=null,gpsRetryTimer=null;
+
 function startGPS(){
   if(!navigator.geolocation){toast('⚠️ GPS非対応');return;}
   document.getElementById('gps-dot').classList.add('on');
   document.getElementById('gps-txt').textContent='GPS取得中...';
+  _attachGPSWatch();
+  // 20秒更新がなければ自動再起動
+  if(gpsStaleTimer)clearInterval(gpsStaleTimer);
+  gpsStaleTimer=setInterval(()=>{
+    if(!isDuty)return;
+    const age=Date.now()-gpsLastUpdate;
+    if(age>20000&&gpsLastUpdate>0){
+      document.getElementById('gps-dot').style.background='var(--amber)';
+      document.getElementById('gps-txt').textContent='GPS再接続中...';
+      _restartGPS();
+    }
+  },10000);
+}
+
+function _attachGPSWatch(){
+  if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
   gpsWatch=navigator.geolocation.watchPosition(pos=>{
+    gpsLastUpdate=Date.now();
+    if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
     myLat=pos.coords.latitude; myLng=pos.coords.longitude;
     updateMyMarker(myLat,myLng);
+    document.getElementById('gps-dot').style.background='';
+    document.getElementById('gps-dot').classList.add('on');
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
     if(autoFollow&&leafletMap)leafletMap.setView([myLat,myLng]);
     pushMyPosition();
     checkGeofences(myLat,myLng);
     updatePosHistory(myLat,myLng,pos.coords.speed);
   },err=>{
-    document.getElementById('gps-txt').textContent='GPS失敗';
-    toast('⚠️ GPS: '+err.message);
-  },{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+    document.getElementById('gps-dot').style.background='var(--red)';
+    document.getElementById('gps-txt').textContent='GPS失敗 — 再試行中';
+    // 3秒後に再起動
+    if(gpsRetryTimer)clearTimeout(gpsRetryTimer);
+    gpsRetryTimer=setTimeout(()=>{if(isDuty)_restartGPS();},3000);
+  },{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+}
+
+function _restartGPS(){
+  if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
+  setTimeout(()=>{if(isDuty)_attachGPSWatch();},500);
 }
 
 function stopGPS(){
+  if(gpsStaleTimer){clearInterval(gpsStaleTimer);gpsStaleTimer=null;}
+  if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
   if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
   if(myMarker){leafletMap.removeLayer(myMarker);myMarker=null;}
   document.getElementById('gps-dot').classList.remove('on');
@@ -1125,20 +1161,41 @@ function renderTeamDests(){
       <div style="padding:10px 14px">`;
     sortedDates.forEach(date=>{
       html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">📅 ${date}</div>`;
-      groups[date].forEach((e,idx)=>{
-        const isLast=idx===groups[date].length-1;
-        html+=`
-        <div style="display:flex;gap:0;margin-bottom:${isLast?'8px':'0'}">
-          <div style="display:flex;flex-direction:column;align-items:center;margin-right:10px;flex-shrink:0">
-            <div style="width:9px;height:9px;border-radius:50%;background:var(--cyan);border:2px solid var(--surface2);margin-top:10px;flex-shrink:0"></div>
-            ${!isLast?`<div style="width:2px;flex:1;background:var(--border);margin-top:2px"></div>`:''}
-          </div>
-          <div style="flex:1;padding-bottom:8px">
-            <div style="font-size:10px;color:var(--cyan)">${e.timeStr||''}</div>
-            <div style="font-size:13px;font-weight:600;margin:1px 0">${esc(e.name)}</div>
-            <div style="font-size:11px;color:var(--muted)">${esc(e.addr||'')}</div>
-          </div>
-        </div>`;
+      groups[date].slice().reverse().forEach((e,idx,arr)=>{
+        const isLast=idx===arr.length-1;
+        if(e.type==='trip'){
+          const spotLbl=e.boardSpot?`（${e.boardSpot}）`:'';
+          const waitLbl=e.waitMins?`（待機${e.waitMins}分${e.waitAddr?'・'+e.waitAddr:''}）`:'';
+          html+=`
+          <div style="border-bottom:${isLast?'none':'1px solid var(--border)'};padding:8px 0;margin-bottom:${isLast?'0':'4px'}">
+            <div style="font-size:13px;margin-bottom:3px">
+              <span style="color:var(--cyan);font-weight:700;margin-right:5px">${esc(e.boardTime||'')}</span>${esc(e.boardAddr||'')}${esc(spotLbl)}
+            </div>
+            <div style="font-size:13px;${waitLbl?'margin-bottom:3px':''}">
+              <span style="color:var(--amber);font-weight:700;margin-right:5px">${esc(e.alightTime||'')}</span>${esc(e.alightAddr||'')}
+            </div>
+            ${waitLbl?`<div style="font-size:11px;color:var(--muted)">${esc(waitLbl)}</div>`:''}
+          </div>`;
+        } else if(e.type==='cp'){
+          html+=`
+          <div style="border-bottom:${isLast?'none':'1px solid var(--border)'};padding:8px 0">
+            <span style="color:var(--gold);font-weight:700;font-size:13px">${esc(e.startTime||'')}-${esc(e.endTime||'')}</span>
+            <span style="font-size:13px;margin-left:6px">${esc(e.icon||'')} ${esc(e.name||'')}（${e.durMins||0}分）</span>
+          </div>`;
+        } else {
+          html+=`
+          <div style="display:flex;gap:0;margin-bottom:${isLast?'8px':'0'}">
+            <div style="display:flex;flex-direction:column;align-items:center;margin-right:10px;flex-shrink:0">
+              <div style="width:9px;height:9px;border-radius:50%;background:var(--cyan);border:2px solid var(--surface2);margin-top:10px;flex-shrink:0"></div>
+              ${!isLast?`<div style="width:2px;flex:1;background:var(--border);margin-top:2px"></div>`:''}
+            </div>
+            <div style="flex:1;padding-bottom:8px">
+              <div style="font-size:10px;color:var(--cyan)">${e.timeStr||''}</div>
+              <div style="font-size:13px;font-weight:600;margin:1px 0">${esc(e.name||'')}</div>
+              <div style="font-size:11px;color:var(--muted)">${esc(e.addr||'')}</div>
+            </div>
+          </div>`;
+        }
       });
     });
     html+=`</div></div>`;
