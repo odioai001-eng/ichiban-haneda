@@ -1208,15 +1208,15 @@ async function reverseGeocode(lat,lng){
       {headers:{'Accept-Language':'ja'}});
     if(res.ok){
       const data=await res.json();
+      // display_name から丁目まで切り取り（最も正確）
+      const chome=truncateToChome(data.display_name);
+      if(chome)return chome;
       const a=data.address||{};
-      // 都道府県 → 市区町村 → 町名・丁目 の順で結合
       const pref=a.state||a.province||'';
       const city=a.city||a.city_district||a.town||a.village||a.county||'';
       const area=a.quarter||a.suburb||a.neighbourhood||a.road||'';
       const parts=[pref,city,area].filter(Boolean);
       if(parts.length>=2)return parts.join('');
-      // フォールバック: display_name パース
-      return truncateToChome(data.display_name)||`${lat.toFixed(4)},${lng.toFixed(4)}`;
     }
   }catch(e){}
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
@@ -1894,17 +1894,18 @@ function renderDests(){
     html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 6px">📅 ${date}</div>`;
     groups[date].slice().reverse().forEach(d=>{
       if(d.type==='trip'){
-        const spotLbl=d.boardSpot?`（${d.boardSpot}）`:'';
-        const waitLbl=d.waitMins?`（待機${d.waitMins}分${d.waitAddr?'・'+d.waitAddr:''}）`:'';
+        const spotLine=d.boardSpot
+          ?`<div style="font-size:12px;color:var(--cyan);margin-top:3px">✈️ ${esc(d.boardSpot)}乗り場${d.waitMins?`（${d.waitMins}分）`:''}</div>`
+          :'';
         html+=`
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:10px">
           <div style="font-size:13px;margin-bottom:5px">
-            <span style="color:var(--cyan);font-weight:700;margin-right:6px">${esc(d.boardTime)}</span>${esc(d.boardAddr)}${esc(spotLbl)}
+            <span style="color:var(--cyan);font-weight:700;margin-right:6px">${esc(d.boardTime)}</span>${esc(d.boardAddr)}
+            ${spotLine}
           </div>
-          <div style="font-size:13px;${waitLbl?'margin-bottom:5px':''}">
+          <div style="font-size:13px">
             <span style="color:var(--amber);font-weight:700;margin-right:6px">${esc(d.alightTime)}</span>${esc(d.alightAddr)}
           </div>
-          ${waitLbl?`<div style="font-size:12px;color:var(--muted)">${esc(waitLbl)}</div>`:''}
         </div>`;
       } else if(d.type==='cp'){
         html+=`
