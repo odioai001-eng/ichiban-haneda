@@ -2088,6 +2088,8 @@ function showPage(name,btn){
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   btn.classList.add('active');
+  const zoomCtrl=document.querySelector('.leaflet-control-zoom');
+  if(zoomCtrl)zoomCtrl.style.display=name==='map'?'':'none';
   if(name==='map'){setTimeout(()=>leafletMap.invalidateSize(),80);}
   if(name==='settings'){renderNotifToggle();}
   if(name==='chat'){
