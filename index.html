@@ -282,6 +282,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
     </div>
+    <!-- Row 4: プールグラフ（常時表示） -->
+    <div id="pool-chart-row" style="display:none;width:100%;margin-top:4px">
+      <div style="display:flex;gap:4px;align-items:flex-end;height:40px" id="pool-chart"></div>
+    </div>
   </div>
   <div class="map-zoom-ctrl" id="zoom-ctrl">
     <button onclick="if(leafletMap)leafletMap.zoomIn()">+</button>
@@ -309,25 +313,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="map-layer-chip"     id="layer-gsat"   onclick="setTileLayer('gsat')"  >衛星</div>
   </div>
   <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替" style="bottom:50px;right:8px">🗺</button>
-  <!-- プール移動計測パネル -->
-  <div id="pool-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;z-index:550;
-    background:rgba(13,13,26,.95);backdrop-filter:blur(8px);border-top:1px solid var(--border);padding:8px 10px 10px">
-    <!-- 棒グラフ -->
-    <div style="display:flex;gap:6px;align-items:flex-end;height:54px;margin-bottom:8px" id="pool-chart"></div>
-    <!-- 8ボタン 4列×2行 -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
-      <button id="pool-btn-1号_2列" onclick="recordPoolMove('1号','2列')" class="pool-btn">1号 2列</button>
-      <button id="pool-btn-2号_2列" onclick="recordPoolMove('2号','2列')" class="pool-btn">2号 2列</button>
-      <button id="pool-btn-3号_2列" onclick="recordPoolMove('3号','2列')" class="pool-btn">3号 2列</button>
-      <button id="pool-btn-4号_2列" onclick="recordPoolMove('4号','2列')" class="pool-btn">4号 2列</button>
-      <button id="pool-btn-1号_1列" onclick="recordPoolMove('1号','1列')" class="pool-btn">1号 1列</button>
-      <button id="pool-btn-2号_1列" onclick="recordPoolMove('2号','1列')" class="pool-btn">2号 1列</button>
-      <button id="pool-btn-3号_1列" onclick="recordPoolMove('3号','1列')" class="pool-btn">3号 1列</button>
-      <button id="pool-btn-4号_1列" onclick="recordPoolMove('4号','1列')" class="pool-btn">4号 1列</button>
-    </div>
-    <!-- 履歴ポップアップ -->
-    <div id="pool-history" style="display:none;margin-top:8px;padding:8px;background:rgba(255,255,255,.07);border-radius:8px;font-size:12px;line-height:1.8"></div>
-  </div>
   <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ" style="bottom:156px">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
       <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
@@ -1070,6 +1055,7 @@ function setStatus(s){
     jitsushaStart=Date.now();
     currentSpotSelection=null;
     renderSpotRow();
+    hidePoolPanel();hidePoolHistory();syncPoolPanel();
     // 待機時間を計算してboardInfoに保存
     const waitMins=manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null;
     boardInfo={
@@ -1136,6 +1122,7 @@ function connectFirebase(config){
       poolMoves.push(m);poolMoves.sort((a,b)=>a.ts-b.ts);
       if(poolMoves.length>100)poolMoves.shift();
       renderPoolChart();
+      if(poolHistoryOpen)refreshPoolHistory(null);
     });
     db.ref('pool_locks').on('value',snap=>{
       poolLocks=snap.val()||{};
@@ -2185,9 +2172,58 @@ function refreshChatReadCounts(){
   });
 }
 
+let poolPanelOpen=false,poolHistoryOpen=false;
+
 function syncPoolPanel(){
+  const btn=document.getElementById('pool-toggle-btn');
+  const chartRow=document.getElementById('pool-chart-row');
+  if(btn)btn.style.display=currentSpotSelection?'block':'none';
+  if(chartRow)chartRow.style.display=currentSpotSelection?'block':'none';
+  if(!currentSpotSelection){
+    hidePoolPanel();hidePoolHistory();
+  }
+  renderPoolChart();renderPoolButtons();
+}
+
+function togglePoolPanel(){
+  poolPanelOpen=!poolPanelOpen;
   const el=document.getElementById('pool-panel');
-  if(el)el.style.display=currentSpotSelection?'block':'none';
+  if(el)el.style.display=poolPanelOpen?'block':'none';
+  // 履歴がある場合は位置をずらす
+  syncPoolHistoryBottom();
+}
+
+function hidePoolPanel(){
+  poolPanelOpen=false;
+  const el=document.getElementById('pool-panel');
+  if(el)el.style.display='none';
+  syncPoolHistoryBottom();
+}
+
+function togglePoolHistory(){
+  poolHistoryOpen=!poolHistoryOpen;
+  const el=document.getElementById('pool-history');
+  if(el)el.style.display=poolHistoryOpen?'block':'none';
+}
+
+function hidePoolHistory(){
+  poolHistoryOpen=false;
+  const el=document.getElementById('pool-history');
+  if(el)el.style.display='none';
+}
+
+function syncPoolHistoryBottom(){
+  requestAnimationFrame(()=>{
+    const hist=document.getElementById('pool-history');
+    if(!hist)return;
+    const panel=document.getElementById('pool-panel');
+    const panelH=poolPanelOpen&&panel?panel.offsetHeight:0;
+    const nh=58;
+    hist.style.bottom=(nh+panelH)+'px';
+    // toggle btnも同様に
+    const btn=document.getElementById('pool-toggle-btn');
+    if(btn)btn.style.bottom=(nh+panelH+8)+'px';
+  });
 }
 
 function renderPoolChart(){
@@ -2205,13 +2241,13 @@ function renderPoolChart(){
       for(let i=1;i<moves.length;i++)total+=moves[i].ts-moves[i-1].ts;
       avgMin=Math.round(total/(moves.length-1)/60000);
     }
-    const barH=avgMin?Math.max(6,Math.min(40,Math.round(120/avgMin))):6;
-    const col=avgMin!=null?(avgMin<=5?'#22c55e':avgMin<=10?'#f59e0b':'#ef4444'):'#4b5563';
+    const barH=avgMin?Math.max(5,Math.min(30,Math.round(90/avgMin))):5;
+    const col=avgMin!=null?(avgMin<=5?'#22c55e':avgMin<=10?'#f59e0b':'#ef4444'):'#374151';
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-      <div style="font-size:10px;color:#fff;font-weight:700">${avgMin!=null?avgMin+'分':'−'}</div>
-      <div style="width:100%;background:${col};border-radius:4px 4px 0 0;height:${barH}px;min-height:6px;transition:height .4s"></div>
-      <div style="font-size:11px;font-weight:700;color:#fff">${spot}</div>
-      <div style="font-size:10px;color:var(--cyan)">${lane}</div>
+      <div style="font-size:9px;color:#fff;font-weight:700">${avgMin!=null?avgMin+'分':'−'}</div>
+      <div style="width:100%;background:${col};border-radius:3px 3px 0 0;height:${barH}px;min-height:5px;transition:height .4s"></div>
+      <div style="font-size:10px;font-weight:700;color:#fff">${spot}</div>
+      <div style="font-size:9px;color:var(--cyan)">${lane}</div>
     </div>`;
   }).join('');
   el.innerHTML=html;
@@ -2228,6 +2264,7 @@ function renderPoolButtons(){
     if(!btn)return;
     btn.disabled=locked;
     btn.title=locked?`${lock.name}が操作中（あと${Math.ceil((60000-(now-lock.ts))/1000)}秒）`:'';
+    btn.style.opacity=locked?'0.4':'1';
   });
 }
 
@@ -2244,25 +2281,30 @@ function recordPoolMove(spot,lane){
   const name=localStorage.getItem('taxi_name')||'自分';
   db.ref('pool_moves').push({spot,lane,ts:now,uid:myId,name});
   db.ref('pool_locks/'+key).set({ts:now,name,uid:myId});
-  showPoolHistory(spot);
-  // 1分後にロック解除
+  // 履歴を開いて更新
+  poolHistoryOpen=true;
+  const hEl=document.getElementById('pool-history');
+  if(hEl)hEl.style.display='block';
+  refreshPoolHistory(spot);
+  syncPoolHistoryBottom();
   if(poolLockTimer)clearTimeout(poolLockTimer);
   poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
 }
 
-function showPoolHistory(focusSpot){
-  const el=document.getElementById('pool-history');
-  if(!el)return;
+function refreshPoolHistory(focusSpot){
+  const body=document.getElementById('pool-history-body');
+  if(!body)return;
   const now=Date.now();
-  const recent=poolMoves.filter(m=>now-m.ts<3600000).slice(-8).reverse();
-  if(!recent.length){el.style.display='none';return;}
-  el.style.display='block';
-  el.innerHTML=recent.map(m=>{
-    const min=Math.floor((now-m.ts)/60000);
-    const timeStr=min===0?'たった今':`${min}分前`;
+  const recent=poolMoves.filter(m=>now-m.ts<=60000).reverse();
+  if(!recent.length){body.innerHTML='<span style="color:var(--muted)">直近1分の記録なし</span>';return;}
+  body.innerHTML=recent.map(m=>{
+    const sec=Math.floor((now-m.ts)/1000);
+    const timeStr=sec<60?`${sec}秒前`:'1分前';
     const hi=m.spot===focusSpot?'color:#fff;font-weight:700':'color:var(--muted)';
     return `<span style="${hi}">${timeStr}　${m.spot}${m.lane}　${esc(m.name)}</span>`;
   }).join('<br>');
+  // 1分後に自動更新
+  setTimeout(()=>refreshPoolHistory(focusSpot),5000);
 }
 
 function showImgFull(src){
@@ -2498,5 +2540,41 @@ window.addEventListener('load',()=>{
   setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},1500);
 });
 </script>
+<!-- プール8ボタンパネル（固定・全タブ表示） -->
+<div id="pool-panel" style="display:none;position:fixed;bottom:var(--nh);left:0;right:0;z-index:800;
+  background:rgba(13,13,26,.96);backdrop-filter:blur(8px);border-top:1px solid var(--border);padding:8px 10px 10px;max-width:480px;margin:0 auto">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+    <span style="font-size:12px;font-weight:700;color:var(--muted)">🚗 プール移動記録</span>
+    <button onclick="togglePoolPanel()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">✕</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
+    <button id="pool-btn-1号_2列" onclick="recordPoolMove('1号','2列')" class="pool-btn">1号 2列</button>
+    <button id="pool-btn-2号_2列" onclick="recordPoolMove('2号','2列')" class="pool-btn">2号 2列</button>
+    <button id="pool-btn-3号_2列" onclick="recordPoolMove('3号','2列')" class="pool-btn">3号 2列</button>
+    <button id="pool-btn-4号_2列" onclick="recordPoolMove('4号','2列')" class="pool-btn">4号 2列</button>
+    <button id="pool-btn-1号_1列" onclick="recordPoolMove('1号','1列')" class="pool-btn">1号 1列</button>
+    <button id="pool-btn-2号_1列" onclick="recordPoolMove('2号','1列')" class="pool-btn">2号 1列</button>
+    <button id="pool-btn-3号_1列" onclick="recordPoolMove('3号','1列')" class="pool-btn">3号 1列</button>
+    <button id="pool-btn-4号_1列" onclick="recordPoolMove('4号','1列')" class="pool-btn">4号 1列</button>
+  </div>
+</div>
+
+<!-- 履歴ポップアップ（固定・全タブ表示） -->
+<div id="pool-history" style="display:none;position:fixed;bottom:var(--nh);left:0;right:0;z-index:799;
+  background:rgba(13,13,26,.93);backdrop-filter:blur(8px);border-top:1px solid var(--border);
+  padding:8px 12px 10px;max-width:480px;margin:0 auto">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+    <span style="font-size:12px;font-weight:700;color:var(--muted)">📋 直近1分の移動履歴</span>
+    <button onclick="togglePoolHistory()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">✕</button>
+  </div>
+  <div id="pool-history-body" style="font-size:12px;line-height:2"></div>
+</div>
+
+<!-- プール開閉ボタン（固定・全タブ） -->
+<button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:fixed;z-index:801;
+  left:8px;bottom:calc(var(--nh) + 8px);
+  background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
+  border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;
+  backdrop-filter:blur(6px)">🚗 移動記録</button>
 </body>
 </html>
