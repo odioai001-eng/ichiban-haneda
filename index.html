@@ -2250,6 +2250,7 @@ function showPage(name,btn){
   btn.classList.add('active');
   syncZoomCtrlVisibility(name==='map');
   if(name==='map'){setTimeout(()=>leafletMap.invalidateSize(),80);}
+  if(name==='wait'){renderDests();renderTeamDests();renderWaitHistory();renderSpotRow();}
   if(name==='settings'){renderNotifToggle();}
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
