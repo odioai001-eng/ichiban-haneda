@@ -559,12 +559,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <div style="margin-bottom:24px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">ナンバー</div>
-      <input id="duty-car-plate" type="text" placeholder="例: 品川501あ1234" maxlength="20"
+      <input id="duty-car-plate" type="text" inputmode="numeric" placeholder="例: 1234" maxlength="4"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
     <div style="display:flex;gap:10px">
       <button onclick="skipDutyCarModal()"
-        style="flex:1;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--muted);font-size:14px;font-weight:600;cursor:pointer">
+        style="flex:1;padding:12px;border:2px solid var(--accent);border-radius:10px;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer">
         車番が同じ方はこちら
       </button>
       <button onclick="confirmDutyCarModal()"
