@@ -603,7 +603,7 @@ let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0,arrivalAutoTimer=n
 let dutyStart=null,dutyInterval=null,myLat=null,myLng=null;
 let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
-let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false;
+let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
 let chatReadMap={};
 let posHistory=[],stopState=null,bearingBeforeStop=null;
@@ -1106,6 +1106,18 @@ function connectFirebase(config){
     });
     db.ref('team_dests').on('value',snap=>{
       teamDests=snap.val()||{};
+      // 自分の送先もFirebaseから同期
+      const ownEntries=Object.values(teamDests[myId]||{});
+      if(ownEntries.length){
+        ownEntries.forEach(e=>{
+          if(e.ts&&!destinations.find(d=>d.ts===e.ts)){
+            destinations.push(e);
+          }
+        });
+        destinations.sort((a,b)=>(b.ts||0)-(a.ts||0));
+        saveDests();
+      }
+      renderDests();
       renderTeamDests();
     });
   }catch(e){toast('⚠️ Firebase: '+e.message);console.error(e);}
@@ -2250,7 +2262,12 @@ function showPage(name,btn){
   btn.classList.add('active');
   syncZoomCtrlVisibility(name==='map');
   if(name==='map'){setTimeout(()=>leafletMap.invalidateSize(),80);}
-  if(name==='wait'){renderDests();renderTeamDests();renderWaitHistory();renderSpotRow();}
+  if(name==='wait'){
+    renderDests();renderTeamDests();renderWaitHistory();renderSpotRow();
+    if(!waitTabTimer)waitTabTimer=setInterval(()=>{renderDests();renderTeamDests();},10000);
+  } else {
+    if(waitTabTimer){clearInterval(waitTabTimer);waitTabTimer=null;}
+  }
   if(name==='settings'){renderNotifToggle();}
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
