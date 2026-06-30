@@ -275,12 +275,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
         backdrop-filter:blur(6px);white-space:nowrap;flex-shrink:0">🔄 リセット</div>
     </div>
-    <!-- Row 3: 1号・2号・3号・4号 -->
-    <div id="spot-chips" style="display:flex;gap:6px;width:100%"></div>
-    <!-- Row 4: あぶれボタン -->
-    <div id="abure-row" style="display:block;width:100%;margin-top:6px">
-      <div onclick="recordAbure()"
-        style="width:100%;text-align:center;padding:8px 2px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+    <!-- Row 3: 1号・2号・3号・4号 + あぶれ -->
+    <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%">
+      <div id="spot-chips" style="display:contents"></div>
+      <div id="abure-row" onclick="recordAbure()"
+        style="grid-column:1;text-align:center;padding:8px 2px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
         backdrop-filter:blur(6px)">😔 あぶれ</div>
     </div>
@@ -1546,18 +1545,18 @@ function selectSpot(spotName){
 function renderSpotRow(){
   const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
   const el=document.getElementById('spot-chips');
-  const abureRow=document.getElementById('abure-row');
-  if(!hCp||!hCp.spots||!hCp.spots.length){el.innerHTML='';if(abureRow)abureRow.style.display='none';return;}
+  const wrap=document.getElementById('spot-chips-wrap');
+  if(!hCp||!hCp.spots||!hCp.spots.length){el.innerHTML='';if(wrap)wrap.style.display='none';return;}
+  if(wrap)wrap.style.display='grid';
   el.innerHTML=(hCp.spots||[]).map(s=>{
     const sel=currentSpotSelection===s;
     return `<div onclick="selectSpot('${s.replace(/'/g,"\\'")}') "
-      style="flex:1;text-align:center;padding:8px 2px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
+      style="text-align:center;padding:8px 2px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
       background:${sel?'var(--accent)':'rgba(79,142,247,.18)'};
       color:${sel?'#fff':'var(--accent)'};
       border:2px solid ${sel?'var(--accent)':'transparent'};
       backdrop-filter:blur(6px);transition:all .2s">${esc(s)}</div>`;
   }).join('');
-  if(abureRow)abureRow.style.display='block';
 }
 
 function recordAbure(){
