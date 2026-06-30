@@ -2573,7 +2573,11 @@ window.addEventListener('load',()=>{
   left:0;right:0;bottom:calc(var(--nh) + 1px);max-width:480px;margin:0 auto;
   background:rgba(13,13,26,.92);backdrop-filter:blur(6px);
   border-top:1px solid var(--border);padding:4px 10px 4px">
-  <div style="display:flex;gap:4px;align-items:flex-end;height:38px" id="pool-chart"></div>
+  <div style="display:flex;align-items:center;gap:4px">
+    <div style="display:flex;gap:4px;align-items:flex-end;height:38px;flex:1" id="pool-chart"></div>
+    <button onclick="currentSpotSelection=null;renderSpotRow();syncPoolPanel();"
+      style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px;line-height:1">✕</button>
+  </div>
 </div>
 </body>
 </html>
