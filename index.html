@@ -1261,10 +1261,21 @@ async function reverseGeocode(lat,lng){
       // neighbourhood > quarter > suburb > road の順で丁目を含むものを優先
       const candidates=[a.neighbourhood,a.quarter,a.suburb,a.road].filter(Boolean);
       let area=candidates.find(c=>c.includes('丁目')||c.includes('番地'))||candidates[0]||'';
-      return [pref,city,area].filter(Boolean).join('');
+      const addr=[pref,city,area].filter(Boolean).join('');
+      return kanjiToNum(addr);
     }
   }catch(e){}
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+}
+
+function kanjiToNum(s){
+  const map={'〇':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+  return s.replace(/[一二三四五六七八九〇]十?[一二三四五六七八九]?(?=[丁番町目])|十[一二三四五六七八九]?(?=[丁番町目])|[〇一二三四五六七八九](?=[丁番町目号])/g,m=>{
+    if(/^十/.test(m)){const r=m.slice(1);return r?(10+(map[r]||0)).toString():'10';}
+    if(/十$/.test(m)){return(map[m[0]]*10).toString();}
+    if(m.includes('十')){const p=m.indexOf('十');return((map[m[p-1]]||1)*10+(map[m[p+1]]||0)).toString();}
+    return (map[m]??m).toString();
+  });
 }
 
 async function createTripEntry(alightLat,alightLng){
