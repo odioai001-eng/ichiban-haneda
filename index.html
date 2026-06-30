@@ -359,13 +359,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div style="display:flex;gap:8px;padding:0 2px">
         <button onclick="document.getElementById('chat-img-input').click()" title="画像を送る"
           style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--fg);font-size:14px;cursor:pointer">🖼 画像</button>
-        <button onclick="document.getElementById('chat-vid-input').click()" title="動画を送る"
-          style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--fg);font-size:14px;cursor:pointer">🎥 動画</button>
-        <button onclick="document.getElementById('chat-file-input').click()" title="ファイルを送る"
-          style="padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--fg);font-size:14px;cursor:pointer">📎 ファイル</button>
         <input type="file" id="chat-img-input" accept="image/*" style="display:none" onchange="uploadChatMedia(this,'image')">
-        <input type="file" id="chat-vid-input" accept="video/*" style="display:none" onchange="uploadChatMedia(this,'video')">
-        <input type="file" id="chat-file-input" accept="*/*" style="display:none" onchange="uploadChatMedia(this,'file')">
       </div>
     </div>
   </div>
@@ -2026,23 +2020,26 @@ function toggleVoiceInput(){
 async function uploadChatMedia(input, mediaType){
   const file=input.files[0];
   input.value='';
-  if(!file||!storage||!db)return;
-  const maxMB=mediaType==='image'?10:mediaType==='video'?100:50;
-  if(file.size>maxMB*1024*1024){toast(`⚠️ ファイルが大きすぎます（最大${maxMB}MB）`);return;}
+  if(!file)return;
+  if(!db){toast('⚠️ Firebase未接続のため送信できません');return;}
+  if(file.size>1.5*1024*1024){toast('⚠️ 画像が大きすぎます（最大1.5MB）');return;}
+  toast('🖼 画像を送信中...');
   const name=localStorage.getItem('taxi_name')||'自分';
   const time=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-  const ext=file.name.split('.').pop();
-  const path=`chat_media/${Date.now()}_${myId}.${ext}`;
-  const toastLabel={image:'🖼 画像',video:'🎥 動画',file:'📎 ファイル'}[mediaType]||'📎 ファイル';
-  toast(`${toastLabel}をアップロード中...`);
   try{
-    const ref=storage.ref(path);
-    await ref.put(file);
-    const url=await ref.getDownloadURL();
+    const base64=await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=e=>res(e.target.result);
+      r.onerror=rej;
+      r.readAsDataURL(file);
+    });
     const m={uid:myId,name,text:'',time,ts:Date.now(),
-      mediaUrl:url,mediaType,fileName:file.name,fileSize:file.size};
+      mediaUrl:base64,mediaType:'image',fileName:file.name};
     db.ref('chat').push(m);
-  }catch(e){toast('⚠️ アップロード失敗: '+e.message);}
+  }catch(e){
+    console.error('画像送信エラー:',e);
+    toast('⚠️ 送信失敗: '+(e.message||'不明なエラー'));
+  }
 }
 
 function sendChat(){
