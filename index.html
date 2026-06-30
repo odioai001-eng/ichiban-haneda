@@ -678,7 +678,7 @@ function gpsAgeDot(ageSec){
   return '#ef4444';                  // 赤: 2分超
 }
 
-function makeDriverIcon(status,name,isMe,car,ageSec,plate){
+function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
   const cfg=statusCfg[status]||statusCfg.offline;
   const initial=(name||'?').slice(0,1);
   const ring=isMe?`box-shadow:0 0 0 3px #fff,0 0 0 6px ${cfg.color};`:'';
@@ -691,6 +691,10 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate){
   const gpsDot=`<div style="position:absolute;top:-5px;left:50%;transform:translateX(-50%);
     width:9px;height:9px;border-radius:50%;background:${dotColor};
     border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.5)"></div>`;
+  const weakBadge=gpsWeak?`<div style="position:absolute;bottom:-6px;right:-6px;
+    background:#f59e0b;border-radius:50%;width:14px;height:14px;
+    font-size:9px;display:flex;align-items:center;justify-content:center;
+    border:1px solid #fff">⚠</div>`:'';
   return L.divIcon({
     html:`<div style="background:${cfg.color};border:3px solid #fff;border-radius:50%;
       width:36px;height:36px;
@@ -698,11 +702,13 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate){
       font-size:15px;font-weight:700;color:#fff;${ring}position:relative">
       ${initial}
       ${gpsDot}
+      ${weakBadge}
       <div style="position:absolute;bottom:${labelBottom};left:50%;
         transform:translateX(-50%);
         white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
         font-size:11px;padding:2px 7px;border-radius:5px;font-weight:700;text-align:center">
         ${esc(name)}${isMe?' (自分)':''}
+        ${gpsWeak?'<div style="font-size:9px;color:#fbbf24">📶 GPS弱</div>':''}
         ${carLines}
       </div>
     </div>`,className:'',iconAnchor:[18,18]
@@ -714,7 +720,8 @@ function updateMyMarker(lat,lng){
   const car=localStorage.getItem('taxi_car')||'';
   const plate=localStorage.getItem('taxi_number')||'';
   const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
-  const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate);
+  const isWeak=ageSec!==null&&ageSec>20;
+  const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
 }
@@ -725,7 +732,7 @@ function updatePeerMarker(id,d){
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
-  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'');
+  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
   if(followPeerId===id&&d.lat&&leafletMap)leafletMap.setView([d.lat,d.lng]);
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
@@ -806,7 +813,7 @@ function toggleLayerBar(){
   btn.classList.toggle('on',!visible);
 }
 
-let gpsLastUpdate=0,gpsStaleTimer=null,gpsRetryTimer=null;
+let gpsLastUpdate=0,gpsStaleTimer=null,gpsRetryTimer=null,gpsWeakHeartbeat=null;
 
 function startGPS(){
   if(!navigator.geolocation){toast('⚠️ GPS非対応');return;}
@@ -820,7 +827,11 @@ function startGPS(){
     const age=Date.now()-gpsLastUpdate;
     if(age>20000&&gpsLastUpdate>0){
       document.getElementById('gps-dot').style.background='var(--purple)';
-      document.getElementById('gps-txt').textContent='GPS再接続中...';
+      document.getElementById('gps-txt').textContent='GPS弱 — 再接続中...';
+      if(!gpsWeakHeartbeat&&myLat!==null){
+        pushMyPosition(true);
+        gpsWeakHeartbeat=setInterval(()=>{if(isDuty&&myLat!==null)pushMyPosition(true);},5000);
+      }
       _restartGPS();
     }
   },10000);
@@ -831,22 +842,27 @@ function _attachGPSWatch(){
   gpsWatch=navigator.geolocation.watchPosition(pos=>{
     gpsLastUpdate=Date.now();
     if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
+    if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
     myLat=pos.coords.latitude; myLng=pos.coords.longitude;
     updateMyMarker(myLat,myLng);
     document.getElementById('gps-dot').style.background='';
     document.getElementById('gps-dot').classList.add('on');
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
     if(autoFollow&&!followPeerId&&leafletMap)leafletMap.setView([myLat,myLng]);
-    pushMyPosition();
+    pushMyPosition(false);
     checkGeofences(myLat,myLng);
     updatePosHistory(myLat,myLng,pos.coords.speed);
   },err=>{
     document.getElementById('gps-dot').style.background='var(--purple)';
-    document.getElementById('gps-txt').textContent='GPS失敗 — 再試行中';
-    // 3秒後に再起動
+    document.getElementById('gps-txt').textContent='GPS弱 — 再試行中';
     if(gpsRetryTimer)clearTimeout(gpsRetryTimer);
     gpsRetryTimer=setTimeout(()=>{if(isDuty)_restartGPS();},3000);
-  },{enableHighAccuracy:true,maximumAge:3000,timeout:10000});
+    // 前回位置をgpsWeak=trueで送り続ける
+    if(!gpsWeakHeartbeat&&myLat!==null){
+      pushMyPosition(true);
+      gpsWeakHeartbeat=setInterval(()=>{if(isDuty&&myLat!==null)pushMyPosition(true);},5000);
+    }
+  },{enableHighAccuracy:true,maximumAge:0,timeout:15000});
 }
 
 function _restartGPS(){
@@ -857,6 +873,7 @@ function _restartGPS(){
 function stopGPS(){
   if(gpsStaleTimer){clearInterval(gpsStaleTimer);gpsStaleTimer=null;}
   if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
+  if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
   if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
   if(myMarker){leafletMap.removeLayer(myMarker);myMarker=null;}
   document.getElementById('gps-dot').classList.remove('on');
@@ -1094,13 +1111,14 @@ function connectFirebase(config){
   }catch(e){toast('⚠️ Firebase: '+e.message);console.error(e);}
 }
 
-function pushMyPosition(){
+function pushMyPosition(gpsWeak=false){
   if(!db||!isDuty||myLat===null)return;
   const name=localStorage.getItem('taxi_name')||'自分';
   db.ref('drivers/'+myId).update({
     name,lat:myLat,lng:myLng,status:currentStatus,
     car:localStorage.getItem('taxi_car')||'',
-    plate:localStorage.getItem('taxi_number')||'',ts:Date.now()
+    plate:localStorage.getItem('taxi_number')||'',
+    ts:Date.now(),gpsWeak:gpsWeak||null
   });
 }
 setInterval(()=>{if(isDuty)pushMyPosition();},10000);
