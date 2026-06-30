@@ -277,6 +277,13 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <!-- Row 3: 1号・2号・3号・4号 -->
     <div id="spot-chips" style="display:flex;gap:6px;width:100%"></div>
+    <!-- Row 4: あぶれボタン -->
+    <div id="abure-row" style="display:none;width:100%;margin-top:6px">
+      <div onclick="recordAbure()"
+        style="width:100%;text-align:center;padding:8px 2px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+        background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
+        backdrop-filter:blur(6px)">😔 あぶれ</div>
+    </div>
   </div>
   <div class="map-zoom-ctrl" id="zoom-ctrl">
     <button onclick="if(leafletMap)leafletMap.zoomIn()">+</button>
@@ -1539,7 +1546,8 @@ function selectSpot(spotName){
 function renderSpotRow(){
   const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
   const el=document.getElementById('spot-chips');
-  if(!hCp||!hCp.spots||!hCp.spots.length){el.innerHTML='';return;}
+  const abureRow=document.getElementById('abure-row');
+  if(!hCp||!hCp.spots||!hCp.spots.length){el.innerHTML='';if(abureRow)abureRow.style.display='none';return;}
   el.innerHTML=(hCp.spots||[]).map(s=>{
     const sel=currentSpotSelection===s;
     return `<div onclick="selectSpot('${s.replace(/'/g,"\\'")}') "
@@ -1549,6 +1557,46 @@ function renderSpotRow(){
       border:2px solid ${sel?'var(--accent)':'transparent'};
       backdrop-filter:blur(6px);transition:all .2s">${esc(s)}</div>`;
   }).join('');
+  if(abureRow)abureRow.style.display=currentSpotSelection?'block':'none';
+}
+
+function recordAbure(){
+  const now=new Date();
+  const alightTime=now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const spot=currentSpotSelection||'';
+  const saved=boardInfo;
+  const boardTime=saved?saved.time:alightTime;
+  // 待機時間を計算
+  let waitMinsStr='';
+  if(waitStart){
+    const sec=Math.floor((Date.now()-waitStart)/1000);
+    const h=Math.floor(sec/3600);
+    const m=Math.floor((sec%3600)/60);
+    waitMinsStr=h>0?`${h}時間${m}分`:(m>0?`${m}分`:'');
+  }
+  const entry={
+    type:'trip',
+    boardTime,
+    boardAddr:'',
+    boardSpot:spot,
+    alightTime,
+    alightAddr:'あぶれ',
+    waitMins:null,
+    waitMinsStr,
+    dateStr,ts:now.getTime()
+  };
+  destinations.push(entry);
+  saveDests();renderDests();
+  pushDestToFirebase(entry);
+  // タイマーリセット
+  currentSpotSelection=null;
+  boardInfo=null;
+  stopWait();waitSec=0;
+  document.getElementById('wait-timer').textContent='00:00:00';
+  const m=document.getElementById('map-wait-timer');if(m)m.textContent='00:00:00';
+  renderSpotRow();
+  toast('😔 あぶれを記録しました');
 }
 
 function startWaitAt(cp,spotName,dist,timeStr){
@@ -1945,17 +1993,24 @@ function renderDests(){
     groups[date].slice().reverse().forEach(d=>{
       if(d.type==='trip'){
         const isAirport=!!d.boardSpot;
+        const isAbure=d.alightAddr==='あぶれ';
         const boardLine=isAirport
           ?`${esc(d.boardTime)}&nbsp; ${esc(d.boardSpot)}到着`
           :`${esc(d.boardTime)}&nbsp; 到着`;
-        const waitStr=d.waitMins?`(待機${d.waitMins}分)`:'';
-        const alightLine=isAirport
-          ?`${esc(d.alightTime)} ${esc(d.alightAddr)}&nbsp;&nbsp;${esc(d.boardSpot)}${waitStr}`
-          :`${esc(d.alightTime)} ${esc(d.alightAddr)}${waitStr}`;
+        let alightLine;
+        if(isAbure){
+          const wStr=d.waitMinsStr?`(待機${d.waitMinsStr})`:'';
+          alightLine=`${esc(d.alightTime)}&nbsp; あぶれ${wStr}`;
+        } else {
+          const waitStr=d.waitMins?`(待機${d.waitMins}分)`:'';
+          alightLine=isAirport
+            ?`${esc(d.alightTime)} ${esc(d.alightAddr)}&nbsp;&nbsp;${esc(d.boardSpot)}${waitStr}`
+            :`${esc(d.alightTime)} ${esc(d.alightAddr)}${waitStr}`;
+        }
         html+=`
         <div style="border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
           <div style="font-size:13px;color:var(--muted);margin-bottom:4px">${boardLine}</div>
-          <div style="font-size:13px;font-weight:600">${alightLine}</div>
+          <div style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightLine}</div>
         </div>`;
       } else if(d.type==='cp'){
         html+=`
