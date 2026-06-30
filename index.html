@@ -2230,16 +2230,21 @@ function syncPoolHistoryBottom(){
 
 function renderPoolChart(){
   const now=Date.now();
+  const LIMIT=15*60000;
+  let anyRecent=false;
   ['1号','2号','3号','4号'].forEach(spot=>{
     const el=document.getElementById('pool-info-'+spot);
     if(!el)return;
     const moves=poolMoves.filter(m=>m.spot===spot&&now-m.ts<3*3600000);
     const last=moves[moves.length-1];
-    if(!last){el.textContent='−';return;}
+    if(!last||now-last.ts>LIMIT){el.textContent='−';return;}
+    anyRecent=true;
     const min=Math.floor((now-last.ts)/60000);
     const timeStr=min===0?'たった今':`${min}分前`;
     el.innerHTML=`<span style="color:var(--cyan)">${last.lane}</span><br>${timeStr}`;
   });
+  const row=document.getElementById('pool-info-row');
+  if(row)row.style.display=anyRecent?'grid':'none';
 }
 
 function renderPoolButtons(){
