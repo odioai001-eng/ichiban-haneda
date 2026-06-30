@@ -275,13 +275,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
         backdrop-filter:blur(6px);white-space:nowrap;flex-shrink:0">🔄 リセット</div>
     </div>
-    <!-- Row 3: 1号・2号・3号・4号 + あぶれ -->
+    <!-- Row 3: 1号・2号・3号・4号 -->
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
-      <div id="abure-row" onclick="recordAbure()"
-        style="grid-column:1;text-align:center;padding:8px 2px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
-        background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
-        backdrop-filter:blur(6px)">😔 あぶれ</div>
     </div>
   </div>
   <div class="map-zoom-ctrl" id="zoom-ctrl">
@@ -296,6 +292,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
   <!-- オートフォロー -->
   <button class="map-ctrl-btn" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:104px">🎯</button>
+  <button id="abure-row" onclick="recordAbure()"
+    style="position:absolute;left:8px;bottom:8px;z-index:500;
+      padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+      background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
+      backdrop-filter:blur(6px)">😔 あぶれ</button>
   <!-- 地図種別切替 -->
   <div class="map-layer-bar" id="layer-bar" style="display:none">
     <div class="map-layer-chip sel" id="layer-osm"    onclick="setTileLayer('osm')"   >標準</div>
@@ -1548,6 +1549,7 @@ function renderSpotRow(){
   const wrap=document.getElementById('spot-chips-wrap');
   if(!hCp||!hCp.spots||!hCp.spots.length){el.innerHTML='';if(wrap)wrap.style.display='none';return;}
   if(wrap)wrap.style.display='grid';
+
   el.innerHTML=(hCp.spots||[]).map(s=>{
     const sel=currentSpotSelection===s;
     return `<div onclick="selectSpot('${s.replace(/'/g,"\\'")}') "
