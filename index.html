@@ -605,6 +605,7 @@ let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.ran
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false;
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
+let chatReadMap={};
 let posHistory=[],stopState=null,bearingBeforeStop=null;
 let wakeLock=null,wakeLockOn=false;
 let seenMsgIds=new Set();
@@ -1081,6 +1082,10 @@ function connectFirebase(config){
       if(!chatOnPage&&!isMe&&(m.ts||0)>chatInitTs){
         unreadChatCount++;updateChatBadge();
       }
+    });
+    db.ref('chat_reads').on('value',snap=>{
+      chatReadMap=snap.val()||{};
+      refreshChatReadCounts();
     });
     db.ref('team_dests').on('value',snap=>{
       teamDests=snap.val()||{};
@@ -2017,6 +2022,16 @@ function toggleVoiceInput(){
   voiceRecog.start();
 }
 
+function refreshChatReadCounts(){
+  const reads=Object.entries(chatReadMap);
+  document.querySelectorAll('.read-count').forEach(el=>{
+    const ts=parseInt(el.dataset.ts||0);
+    if(!ts)return;
+    const count=reads.filter(([uid,t])=>uid!==myId&&t>=ts).length;
+    el.textContent=count>0?` 既読${count}`:'';
+  });
+}
+
 function showImgFull(src){
   let el=document.getElementById('img-full-overlay');
   if(!el){
@@ -2113,9 +2128,10 @@ function appendChatBubble(m,isMe){
     <div>
       ${!isMe?`<div class="msg-name">${esc(m.name)}</div>`:''}
       ${bodyHtml}
-      <div class="msg-meta">${m.time}</div>
+      <div class="msg-meta">${m.time}<span class="read-count" data-ts="${m.ts||0}"></span></div>
     </div>`;
   container.appendChild(div);container.scrollTop=container.scrollHeight;
+  refreshChatReadCounts();
 }
 
 async function debugGeocode(){
@@ -2220,6 +2236,7 @@ function showPage(name,btn){
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
     setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
+    if(db){db.ref('chat_reads/'+myId).set(Date.now());}
   }else{chatOnPage=false;}
 }
 
