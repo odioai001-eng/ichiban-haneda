@@ -282,6 +282,13 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
     </div>
+    <!-- Row 4: 直近移動情報 -->
+    <div id="pool-info-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%">
+      <div id="pool-info-1号" style="text-align:center;font-size:10px;color:var(--muted);line-height:1.3">−</div>
+      <div id="pool-info-2号" style="text-align:center;font-size:10px;color:var(--muted);line-height:1.3">−</div>
+      <div id="pool-info-3号" style="text-align:center;font-size:10px;color:var(--muted);line-height:1.3">−</div>
+      <div id="pool-info-4号" style="text-align:center;font-size:10px;color:var(--muted);line-height:1.3">−</div>
+    </div>
   </div>
   <div class="map-zoom-ctrl" id="zoom-ctrl">
     <button onclick="if(leafletMap)leafletMap.zoomIn()">+</button>
@@ -2177,12 +2184,8 @@ let poolPanelOpen=false,poolHistoryOpen=false;
 
 function syncPoolPanel(){
   const btn=document.getElementById('pool-toggle-btn');
-  const chartRow=document.getElementById('pool-chart-row');
   if(btn)btn.style.display=currentSpotSelection?'block':'none';
-  if(chartRow)chartRow.style.display=currentSpotSelection?'block':'none';
-  if(!currentSpotSelection){
-    hidePoolPanel();hidePoolHistory();
-  }
+  if(!currentSpotSelection){hidePoolPanel();hidePoolHistory();}
   renderPoolChart();renderPoolButtons();
 }
 
@@ -2219,36 +2222,22 @@ function syncPoolHistoryBottom(){
     if(!hist)return;
     const panel=document.getElementById('pool-panel');
     const panelH=poolPanelOpen&&panel?panel.offsetHeight:0;
-    // 104 = nav(58) + chart(46)
-    hist.style.bottom=(104+panelH)+'px';
+    hist.style.bottom=(58+panelH)+'px';
   });
 }
 
 function renderPoolChart(){
-  const el=document.getElementById('pool-chart');
-  if(!el)return;
-  const spots=['1号','2号','3号','4号'];
   const now=Date.now();
-  const html=spots.map(spot=>{
+  ['1号','2号','3号','4号'].forEach(spot=>{
+    const el=document.getElementById('pool-info-'+spot);
+    if(!el)return;
     const moves=poolMoves.filter(m=>m.spot===spot&&now-m.ts<3*3600000);
     const last=moves[moves.length-1];
-    const lane=last?last.lane:'−';
-    let avgMin=null;
-    if(moves.length>=2){
-      let total=0;
-      for(let i=1;i<moves.length;i++)total+=moves[i].ts-moves[i-1].ts;
-      avgMin=Math.round(total/(moves.length-1)/60000);
-    }
-    const barH=avgMin?Math.max(5,Math.min(30,Math.round(90/avgMin))):5;
-    const col=avgMin!=null?(avgMin<=5?'#22c55e':avgMin<=10?'#f59e0b':'#ef4444'):'#374151';
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
-      <div style="font-size:9px;color:#fff;font-weight:700">${avgMin!=null?avgMin+'分':'−'}</div>
-      <div style="width:100%;background:${col};border-radius:3px 3px 0 0;height:${barH}px;min-height:5px;transition:height .4s"></div>
-      <div style="font-size:10px;font-weight:700;color:#fff">${spot}</div>
-      <div style="font-size:9px;color:var(--cyan)">${lane}</div>
-    </div>`;
-  }).join('');
-  el.innerHTML=html;
+    if(!last){el.textContent='−';return;}
+    const min=Math.floor((now-last.ts)/60000);
+    const timeStr=min===0?'たった今':`${min}分前`;
+    el.innerHTML=`<span style="color:var(--cyan)">${last.lane}</span><br>${timeStr}`;
+  });
 }
 
 function renderPoolButtons(){
@@ -2539,7 +2528,7 @@ window.addEventListener('load',()=>{
 });
 </script>
 <!-- プール8ボタンパネル（固定・全タブ表示） -->
-<div id="pool-panel" style="display:none;position:fixed;bottom:104px;left:0;right:0;z-index:800;
+<div id="pool-panel" style="display:none;position:fixed;bottom:58px;left:0;right:0;z-index:800;
   background:rgba(13,13,26,.96);backdrop-filter:blur(8px);border-top:1px solid var(--border);padding:8px 10px 10px;max-width:480px;margin:0 auto">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
     <span style="font-size:12px;font-weight:700;color:var(--muted)">🚗 プール移動記録</span>
@@ -2558,7 +2547,7 @@ window.addEventListener('load',()=>{
 </div>
 
 <!-- 履歴ポップアップ（固定・全タブ表示） -->
-<div id="pool-history" style="display:none;position:fixed;bottom:104px;left:0;right:0;z-index:799;
+<div id="pool-history" style="display:none;position:fixed;bottom:58px;left:0;right:0;z-index:799;
   background:rgba(13,13,26,.93);backdrop-filter:blur(8px);border-top:1px solid var(--border);
   padding:8px 12px 10px;max-width:480px;margin:0 auto">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
@@ -2568,16 +2557,5 @@ window.addEventListener('load',()=>{
   <div id="pool-history-body" style="font-size:12px;line-height:2"></div>
 </div>
 
-<!-- プールグラフ（固定・スポット選択時表示） -->
-<div id="pool-chart-row" style="display:none;position:fixed;z-index:798;
-  left:0;right:0;bottom:calc(var(--nh) + 1px);max-width:480px;margin:0 auto;
-  background:rgba(13,13,26,.92);backdrop-filter:blur(6px);
-  border-top:1px solid var(--border);padding:4px 10px 4px">
-  <div style="display:flex;align-items:center;gap:4px">
-    <div style="display:flex;gap:4px;align-items:flex-end;height:38px;flex:1" id="pool-chart"></div>
-    <button onclick="currentSpotSelection=null;renderSpotRow();syncPoolPanel();"
-      style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px;line-height:1">✕</button>
-  </div>
-</div>
 </body>
 </html>
