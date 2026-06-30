@@ -644,8 +644,9 @@ function loadCPs(){
     const ex=p.find(x=>x.id===d.id);
     if(!ex){p.push({...d});}
     else{
-      // デフォルトのspotsを常に引き継ぐ（空配列や未定義の場合）
       if(!ex.spots||!ex.spots.length) ex.spots=d.spots||[];
+      // 全角数字を半角に変換
+      ex.spots=ex.spots.map(s=>s.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)));
     }
   });
   return p;
