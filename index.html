@@ -1404,22 +1404,33 @@ function renderTeamDests(){
         <span style="font-size:11px;color:var(--muted);margin-left:auto">${entries.length}件</span>
       </div>
       <div style="padding:10px 14px">`;
+    // 通し番号用に時系列ソート
+    const teamTrips=entries.filter(e=>e.type==='trip').sort((a,b)=>(a.ts||0)-(b.ts||0));
+    const teamNumMap=new Map();
+    teamTrips.forEach((e,i)=>teamNumMap.set(e.ts,i+1));
     sortedDates.forEach(date=>{
       html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">📅 ${date}</div>`;
       groups[date].forEach((e,idx,arr)=>{
         const isLast=idx===arr.length-1;
         if(e.type==='trip'){
-          const spotLine=e.boardSpot
-            ?`<div style="font-size:12px;color:var(--cyan);margin-top:3px">✈️ ${esc(e.boardSpot)}乗り場${e.waitMins?`（${e.waitMins}分）`:''}</div>`
-            :'';
+          const isAirport=!!e.boardSpot;
+          const isAbure=e.alightAddr==='あぶれ';
+          const waitStr=e.waitMins?` (待機${e.waitMins}分)`:e.waitMinsStr?` (待機${e.waitMinsStr})`:'';
+          const boardDesc=isAirport?`${esc(e.boardSpot)}到着`:'到着';
+          let alightDesc;
+          if(isAbure){alightDesc=`あぶれ${waitStr}`;}
+          else{const addr=esc(e.alightAddr||'住所取得中');alightDesc=isAirport?`${addr}　${esc(e.boardSpot)}${waitStr}`:`${addr}${waitStr}`;}
+          const tno=teamNumMap.get(e.ts)||'';
           html+=`
-          <div style="border-bottom:${isLast?'none':'1px solid var(--border)'};padding:8px 0;margin-bottom:${isLast?'0':'4px'}">
-            <div style="font-size:13px;margin-bottom:3px">
-              <span style="color:var(--cyan);font-weight:700;margin-right:5px">${esc(e.boardTime||'')}</span>${esc(e.boardAddr||'')}
-              ${spotLine}
+          <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">#${tno}</div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+              <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(e.boardTime||'--:--')}</span>
+              <span style="font-size:12px;color:var(--muted)">${boardDesc}</span>
             </div>
-            <div style="font-size:13px">
-              <span style="color:var(--amber);font-weight:700;margin-right:5px">${esc(e.alightTime||'')}</span>${esc(e.alightAddr||'')}
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(e.alightTime||'--:--')}</span>
+              <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
             </div>
           </div>`;
         } else if(e.type==='cp'){
@@ -2001,6 +2012,11 @@ function renderDests(){
   });
   const sortedDates=Object.keys(groups).sort((a,b)=>(groups[b][0].ts||0)-(groups[a][0].ts||0));
   let html='';
+  let tripNo=1;
+  // 全体の時系列順で通し番号を付けるため先にソート
+  const allSorted=visible.filter(d=>d.type==='trip'||d.type==='cp').sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const numMap=new Map();
+  allSorted.forEach(d=>{if(d.type==='trip')numMap.set(d.ts,tripNo++);});
   sortedDates.forEach(date=>{
     html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 6px">📅 ${date}</div>`;
     groups[date].slice().reverse().forEach(d=>{
@@ -2016,8 +2032,10 @@ function renderDests(){
           const addr=esc(d.alightAddr||'住所取得中');
           alightDesc=isAirport?`${addr}　${esc(d.boardSpot)}${waitStr}`:`${addr}${waitStr}`;
         }
+        const no=numMap.get(d.ts)||'';
         html+=`
         <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">#${no}</div>
           <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
             <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
             <span style="font-size:12px;color:var(--muted)">${boardDesc}</span>
