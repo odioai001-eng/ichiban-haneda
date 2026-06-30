@@ -282,10 +282,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
     </div>
-    <!-- Row 4: プールグラフ（常時表示） -->
-    <div id="pool-chart-row" style="display:none;width:100%;margin-top:4px">
-      <div style="display:flex;gap:4px;align-items:flex-end;height:40px" id="pool-chart"></div>
-    </div>
   </div>
   <div class="map-zoom-ctrl" id="zoom-ctrl">
     <button onclick="if(leafletMap)leafletMap.zoomIn()">+</button>
@@ -319,6 +315,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
     </svg>
   </button>
+  <!-- 移動記録ボタン（仲間ボタンの左） -->
+  <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
+    right:60px;bottom:8px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
+    border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
+    backdrop-filter:blur(6px)">🚗</button>
   <button class="driver-panel-btn" onclick="toggleDriverPanel()" title="仲間リスト">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
@@ -2218,11 +2219,8 @@ function syncPoolHistoryBottom(){
     if(!hist)return;
     const panel=document.getElementById('pool-panel');
     const panelH=poolPanelOpen&&panel?panel.offsetHeight:0;
-    const nh=58;
-    hist.style.bottom=(nh+panelH)+'px';
-    // toggle btnも同様に
-    const btn=document.getElementById('pool-toggle-btn');
-    if(btn)btn.style.bottom=(nh+panelH+8)+'px';
+    // 104 = nav(58) + chart(46)
+    hist.style.bottom=(104+panelH)+'px';
   });
 }
 
@@ -2541,7 +2539,7 @@ window.addEventListener('load',()=>{
 });
 </script>
 <!-- プール8ボタンパネル（固定・全タブ表示） -->
-<div id="pool-panel" style="display:none;position:fixed;bottom:var(--nh);left:0;right:0;z-index:800;
+<div id="pool-panel" style="display:none;position:fixed;bottom:104px;left:0;right:0;z-index:800;
   background:rgba(13,13,26,.96);backdrop-filter:blur(8px);border-top:1px solid var(--border);padding:8px 10px 10px;max-width:480px;margin:0 auto">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
     <span style="font-size:12px;font-weight:700;color:var(--muted)">🚗 プール移動記録</span>
@@ -2560,7 +2558,7 @@ window.addEventListener('load',()=>{
 </div>
 
 <!-- 履歴ポップアップ（固定・全タブ表示） -->
-<div id="pool-history" style="display:none;position:fixed;bottom:var(--nh);left:0;right:0;z-index:799;
+<div id="pool-history" style="display:none;position:fixed;bottom:104px;left:0;right:0;z-index:799;
   background:rgba(13,13,26,.93);backdrop-filter:blur(8px);border-top:1px solid var(--border);
   padding:8px 12px 10px;max-width:480px;margin:0 auto">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
@@ -2570,11 +2568,12 @@ window.addEventListener('load',()=>{
   <div id="pool-history-body" style="font-size:12px;line-height:2"></div>
 </div>
 
-<!-- プール開閉ボタン（固定・全タブ） -->
-<button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:fixed;z-index:801;
-  left:8px;bottom:calc(var(--nh) + 8px);
-  background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
-  border-radius:10px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;
-  backdrop-filter:blur(6px)">🚗 移動記録</button>
+<!-- プールグラフ（固定・スポット選択時表示） -->
+<div id="pool-chart-row" style="display:none;position:fixed;z-index:798;
+  left:0;right:0;bottom:calc(var(--nh) + 1px);max-width:480px;margin:0 auto;
+  background:rgba(13,13,26,.92);backdrop-filter:blur(6px);
+  border-top:1px solid var(--border);padding:4px 10px 4px">
+  <div style="display:flex;gap:4px;align-items:flex-end;height:38px" id="pool-chart"></div>
+</div>
 </body>
 </html>
