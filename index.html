@@ -74,6 +74,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 2px 8px rgba(0,0,0,.4);transition:all .2s}
 .locate-me-btn:active{transform:scale(.92)}
+.pool-btn{padding:7px 2px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
+  background:rgba(79,142,247,.18);color:var(--accent);border:1.5px solid var(--accent);transition:all .2s}
+.pool-btn:disabled{opacity:.35;cursor:not-allowed}
 .map-ctrl-btn{position:absolute;right:8px;z-index:500;
   background:var(--surface);color:var(--text);border:1px solid var(--border);
   border-radius:50%;width:44px;height:44px;cursor:pointer;font-size:18px;
@@ -306,6 +309,25 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="map-layer-chip"     id="layer-gsat"   onclick="setTileLayer('gsat')"  >衛星</div>
   </div>
   <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替" style="bottom:50px;right:8px">🗺</button>
+  <!-- プール移動計測パネル -->
+  <div id="pool-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;z-index:550;
+    background:rgba(13,13,26,.95);backdrop-filter:blur(8px);border-top:1px solid var(--border);padding:8px 10px 10px">
+    <!-- 棒グラフ -->
+    <div style="display:flex;gap:6px;align-items:flex-end;height:54px;margin-bottom:8px" id="pool-chart"></div>
+    <!-- 8ボタン 4列×2行 -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
+      <button id="pool-btn-1号_2列" onclick="recordPoolMove('1号','2列')" class="pool-btn">1号 2列</button>
+      <button id="pool-btn-2号_2列" onclick="recordPoolMove('2号','2列')" class="pool-btn">2号 2列</button>
+      <button id="pool-btn-3号_2列" onclick="recordPoolMove('3号','2列')" class="pool-btn">3号 2列</button>
+      <button id="pool-btn-4号_2列" onclick="recordPoolMove('4号','2列')" class="pool-btn">4号 2列</button>
+      <button id="pool-btn-1号_1列" onclick="recordPoolMove('1号','1列')" class="pool-btn">1号 1列</button>
+      <button id="pool-btn-2号_1列" onclick="recordPoolMove('2号','1列')" class="pool-btn">2号 1列</button>
+      <button id="pool-btn-3号_1列" onclick="recordPoolMove('3号','1列')" class="pool-btn">3号 1列</button>
+      <button id="pool-btn-4号_1列" onclick="recordPoolMove('4号','1列')" class="pool-btn">4号 1列</button>
+    </div>
+    <!-- 履歴ポップアップ -->
+    <div id="pool-history" style="display:none;margin-top:8px;padding:8px;background:rgba(255,255,255,.07);border-radius:8px;font-size:12px;line-height:1.8"></div>
+  </div>
   <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ" style="bottom:156px">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
       <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
@@ -611,6 +633,7 @@ let dutyStart=null,dutyInterval=null,myLat=null,myLng=null;
 let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
+let poolMoves=[],poolLocks={},poolLockTimer=null;
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
 let chatReadMap={};
 let posHistory=[],stopState=null,bearingBeforeStop=null;
@@ -1108,6 +1131,16 @@ function connectFirebase(config){
         unreadChatCount++;updateChatBadge();
       }
     });
+    db.ref('pool_moves').limitToLast(100).on('child_added',snap=>{
+      const m=snap.val();if(!m)return;
+      poolMoves.push(m);poolMoves.sort((a,b)=>a.ts-b.ts);
+      if(poolMoves.length>100)poolMoves.shift();
+      renderPoolChart();
+    });
+    db.ref('pool_locks').on('value',snap=>{
+      poolLocks=snap.val()||{};
+      renderPoolButtons();
+    });
     db.ref('chat_reads').on('value',snap=>{
       chatReadMap=snap.val()||{};
       refreshChatReadCounts();
@@ -1563,6 +1596,7 @@ function selectSpot(spotName){
   }
   saveAppState();
   renderSpotRow();
+  syncPoolPanel();
   toast('📍 '+currentSpotSelection+' を選択 — タイマー計測中');
 }
 
@@ -1572,6 +1606,7 @@ function renderSpotRow(){
   const wrap=document.getElementById('spot-chips-wrap');
   if(!hCp||!hCp.spots||!hCp.spots.length){el.innerHTML='';if(wrap)wrap.style.display='none';return;}
   if(wrap)wrap.style.display='grid';
+  syncPoolPanel();renderPoolChart();renderPoolButtons();
 
   el.innerHTML=(hCp.spots||[]).map(s=>{
     const sel=currentSpotSelection===s;
@@ -2148,6 +2183,86 @@ function refreshChatReadCounts(){
     const count=reads.filter(([uid,t])=>uid!==myId&&t>=ts).length;
     el.textContent=count>0?` 既読${count}`:'';
   });
+}
+
+function syncPoolPanel(){
+  const el=document.getElementById('pool-panel');
+  if(el)el.style.display=currentSpotSelection?'block':'none';
+}
+
+function renderPoolChart(){
+  const el=document.getElementById('pool-chart');
+  if(!el)return;
+  const spots=['1号','2号','3号','4号'];
+  const now=Date.now();
+  const html=spots.map(spot=>{
+    const moves=poolMoves.filter(m=>m.spot===spot&&now-m.ts<3*3600000);
+    const last=moves[moves.length-1];
+    const lane=last?last.lane:'−';
+    let avgMin=null;
+    if(moves.length>=2){
+      let total=0;
+      for(let i=1;i<moves.length;i++)total+=moves[i].ts-moves[i-1].ts;
+      avgMin=Math.round(total/(moves.length-1)/60000);
+    }
+    const barH=avgMin?Math.max(6,Math.min(40,Math.round(120/avgMin))):6;
+    const col=avgMin!=null?(avgMin<=5?'#22c55e':avgMin<=10?'#f59e0b':'#ef4444'):'#4b5563';
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">
+      <div style="font-size:10px;color:#fff;font-weight:700">${avgMin!=null?avgMin+'分':'−'}</div>
+      <div style="width:100%;background:${col};border-radius:4px 4px 0 0;height:${barH}px;min-height:6px;transition:height .4s"></div>
+      <div style="font-size:11px;font-weight:700;color:#fff">${spot}</div>
+      <div style="font-size:10px;color:var(--cyan)">${lane}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=html;
+}
+
+function renderPoolButtons(){
+  const now=Date.now();
+  [['1号','2列'],['2号','2列'],['3号','2列'],['4号','2列'],
+   ['1号','1列'],['2号','1列'],['3号','1列'],['4号','1列']].forEach(([spot,lane])=>{
+    const key=spot+'_'+lane;
+    const lock=poolLocks[key];
+    const locked=lock&&now-lock.ts<60000;
+    const btn=document.getElementById('pool-btn-'+key);
+    if(!btn)return;
+    btn.disabled=locked;
+    btn.title=locked?`${lock.name}が操作中（あと${Math.ceil((60000-(now-lock.ts))/1000)}秒）`:'';
+  });
+}
+
+function recordPoolMove(spot,lane){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  const key=spot+'_'+lane;
+  const lock=poolLocks[key];
+  const now=Date.now();
+  if(lock&&now-lock.ts<60000){
+    const sec=Math.ceil((60000-(now-lock.ts))/1000);
+    toast(`⏳ あと${sec}秒後に押せます（${lock.name}が操作中）`);
+    return;
+  }
+  const name=localStorage.getItem('taxi_name')||'自分';
+  db.ref('pool_moves').push({spot,lane,ts:now,uid:myId,name});
+  db.ref('pool_locks/'+key).set({ts:now,name,uid:myId});
+  showPoolHistory(spot);
+  // 1分後にロック解除
+  if(poolLockTimer)clearTimeout(poolLockTimer);
+  poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
+}
+
+function showPoolHistory(focusSpot){
+  const el=document.getElementById('pool-history');
+  if(!el)return;
+  const now=Date.now();
+  const recent=poolMoves.filter(m=>now-m.ts<3600000).slice(-8).reverse();
+  if(!recent.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=recent.map(m=>{
+    const min=Math.floor((now-m.ts)/60000);
+    const timeStr=min===0?'たった今':`${min}分前`;
+    const hi=m.spot===focusSpot?'color:#fff;font-weight:700':'color:var(--muted)';
+    return `<span style="${hi}">${timeStr}　${m.spot}${m.lane}　${esc(m.name)}</span>`;
+  }).join('<br>');
 }
 
 function showImgFull(src){
