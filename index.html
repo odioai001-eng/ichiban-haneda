@@ -1944,18 +1944,18 @@ function renderDests(){
     html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 6px">📅 ${date}</div>`;
     groups[date].slice().reverse().forEach(d=>{
       if(d.type==='trip'){
-        const spotLine=d.boardSpot
-          ?`<div style="font-size:12px;color:var(--cyan);margin-top:3px">✈️ ${esc(d.boardSpot)}乗り場${d.waitMins?`（${d.waitMins}分）`:''}</div>`
-          :'';
+        const isAirport=!!d.boardSpot;
+        const boardLine=isAirport
+          ?`${esc(d.boardTime)}&nbsp; ${esc(d.boardSpot)}到着`
+          :`${esc(d.boardTime)}&nbsp; 到着`;
+        const waitStr=d.waitMins?`(待機${d.waitMins}分)`:'';
+        const alightLine=isAirport
+          ?`${esc(d.alightTime)} ${esc(d.alightAddr)}&nbsp;&nbsp;${esc(d.boardSpot)}${waitStr}`
+          :`${esc(d.alightTime)} ${esc(d.alightAddr)}${waitStr}`;
         html+=`
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:10px">
-          <div style="font-size:13px;margin-bottom:5px">
-            <span style="color:var(--cyan);font-weight:700;margin-right:6px">${esc(d.boardTime)}</span>${esc(d.boardAddr)}
-            ${spotLine}
-          </div>
-          <div style="font-size:13px">
-            <span style="color:var(--amber);font-weight:700;margin-right:6px">${esc(d.alightTime)}</span>${esc(d.alightAddr)}
-          </div>
+        <div style="border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:4px">${boardLine}</div>
+          <div style="font-size:13px;font-weight:600">${alightLine}</div>
         </div>`;
       } else if(d.type==='cp'){
         html+=`
