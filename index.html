@@ -74,6 +74,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 2px 8px rgba(0,0,0,.4);transition:all .2s}
 .locate-me-btn:active{transform:scale(.92)}
+.pool-info-cell{text-align:center;font-size:13px;font-weight:700;color:#fff;line-height:1.4;
+  background:rgba(79,142,247,.25);border-radius:8px;padding:4px 2px;border:1px solid rgba(79,142,247,.4)}
 .pool-btn{padding:7px 2px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
   background:rgba(79,142,247,.18);color:var(--accent);border:1.5px solid var(--accent);transition:all .2s}
 .pool-btn:disabled{opacity:.35;cursor:not-allowed}
@@ -284,10 +286,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <!-- Row 4: 直近移動情報 -->
     <div id="pool-info-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%">
-      <div id="pool-info-1号" style="text-align:center;font-size:10px;color:var(--muted);line-height:1.3">−</div>
-      <div id="pool-info-2号" style="text-align:center;font-size:10px;color:var(--muted);line-height:1.3">−</div>
-      <div id="pool-info-3号" style="text-align:center;font-size:10px;color:var(--muted);line-height:1.3">−</div>
-      <div id="pool-info-4号" style="text-align:center;font-size:10px;color:var(--muted);line-height:1.3">−</div>
+      <div id="pool-info-1号" class="pool-info-cell">−</div>
+      <div id="pool-info-2号" class="pool-info-cell">−</div>
+      <div id="pool-info-3号" class="pool-info-cell">−</div>
+      <div id="pool-info-4号" class="pool-info-cell">−</div>
     </div>
   </div>
   <div class="map-zoom-ctrl" id="zoom-ctrl">
