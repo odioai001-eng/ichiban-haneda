@@ -278,7 +278,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <!-- Row 3: 1号・2号・3号・4号 -->
     <div id="spot-chips" style="display:flex;gap:6px;width:100%"></div>
     <!-- Row 4: あぶれボタン -->
-    <div id="abure-row" style="display:none;width:100%;margin-top:6px">
+    <div id="abure-row" style="display:block;width:100%;margin-top:6px">
       <div onclick="recordAbure()"
         style="width:100%;text-align:center;padding:8px 2px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
@@ -1557,7 +1557,7 @@ function renderSpotRow(){
       border:2px solid ${sel?'var(--accent)':'transparent'};
       backdrop-filter:blur(6px);transition:all .2s">${esc(s)}</div>`;
   }).join('');
-  if(abureRow)abureRow.style.display=currentSpotSelection?'block':'none';
+  if(abureRow)abureRow.style.display='block';
 }
 
 function recordAbure(){
