@@ -1994,23 +1994,25 @@ function renderDests(){
       if(d.type==='trip'){
         const isAirport=!!d.boardSpot;
         const isAbure=d.alightAddr==='あぶれ';
-        const boardLine=isAirport
-          ?`${esc(d.boardTime)}&nbsp; ${esc(d.boardSpot)}到着`
-          :`${esc(d.boardTime)}&nbsp; 到着`;
-        let alightLine;
+        const waitStr=d.waitMins?` (待機${d.waitMins}分)`:d.waitMinsStr?` (待機${d.waitMinsStr})`:'';
+        const boardDesc=isAirport?`${esc(d.boardSpot)}到着`:'到着';
+        let alightDesc;
         if(isAbure){
-          const wStr=d.waitMinsStr?`(待機${d.waitMinsStr})`:'';
-          alightLine=`${esc(d.alightTime)}&nbsp; あぶれ${wStr}`;
+          alightDesc=`あぶれ${waitStr}`;
         } else {
-          const waitStr=d.waitMins?`(待機${d.waitMins}分)`:'';
-          alightLine=isAirport
-            ?`${esc(d.alightTime)} ${esc(d.alightAddr)}&nbsp;&nbsp;${esc(d.boardSpot)}${waitStr}`
-            :`${esc(d.alightTime)} ${esc(d.alightAddr)}${waitStr}`;
+          const addr=esc(d.alightAddr||'住所取得中');
+          alightDesc=isAirport?`${addr}　${esc(d.boardSpot)}${waitStr}`:`${addr}${waitStr}`;
         }
         html+=`
         <div style="border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
-          <div style="font-size:13px;color:var(--muted);margin-bottom:4px">${boardLine}</div>
-          <div style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightLine}</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+            <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
+            <span style="font-size:12px;color:var(--muted)">${boardDesc}</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
+            <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
+          </div>
         </div>`;
       } else if(d.type==='cp'){
         html+=`
