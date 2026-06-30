@@ -2017,6 +2017,19 @@ function toggleVoiceInput(){
   voiceRecog.start();
 }
 
+function showImgFull(src){
+  let el=document.getElementById('img-full-overlay');
+  if(!el){
+    el=document.createElement('div');
+    el.id='img-full-overlay';
+    el.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    el.onclick=()=>el.remove();
+    document.body.appendChild(el);
+  }
+  el.innerHTML=`<img src="${src}" style="max-width:96vw;max-height:96vh;border-radius:8px;object-fit:contain">`;
+  document.body.appendChild(el);
+}
+
 async function uploadChatMedia(input, mediaType){
   const file=input.files[0];
   input.value='';
@@ -2068,7 +2081,7 @@ function appendChatBubble(m,isMe){
   let bodyHtml='';
   if(m.mediaType==='image'&&m.mediaUrl){
     bodyHtml=`<div class="bubble" style="padding:4px;background:transparent">
-      <img src="${m.mediaUrl}" style="max-width:220px;max-height:280px;border-radius:10px;display:block;cursor:pointer" onclick="window.open('${m.mediaUrl}','_blank')">
+      <img src="${m.mediaUrl}" style="max-width:220px;max-height:280px;border-radius:10px;display:block;cursor:pointer" onclick="showImgFull(this.src)">
     </div>`;
   }else if(m.mediaType==='video'&&m.mediaUrl){
     bodyHtml=`<div class="bubble" style="padding:4px;background:transparent">
