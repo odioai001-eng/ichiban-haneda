@@ -1211,6 +1211,8 @@ function connectFirebase(config){
       // 接続後に届いた他人のメッセージのみ未読カウント
       if(!chatOnPage&&!isMe&&(m.ts||0)>chatInitTs){
         unreadChatCount++;updateChatBadge();
+        const notifBody=m.type==='image'?'📷 画像が送られました':(m.text||'');
+        sendNotif('💬 '+(m.name||'仲間'),notifBody,'chat-msg-'+snap.key);
       }
     });
     db.ref('pool_moves').limitToLast(200).on('child_added',snap=>{
