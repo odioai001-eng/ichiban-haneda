@@ -1441,8 +1441,10 @@ function renderTeamDests(){
     return;
   }
   let html='';
+  const monthAgo=Date.now()-30*24*60*60*1000;
   allDriverIds.forEach(driverId=>{
     const entries=Object.values(teamDests[driverId]||{}).filter(e=>{
+      if((e.ts||0)<monthAgo)return false;
       if(e.type==='trip'||e.type==='cp')return true;
       // 旧フォーマットの自動登録エントリ（"道路名 地名 (時刻)" 形式）を除外
       if(e.auto||(e.name&&/\(\d{2}:\d{2}\)$/.test(e.name)))return false;
@@ -1842,8 +1844,14 @@ async function autoRegisterDest(lat,lng,reason,tripMins=null){
 function pushDestToFirebase(entry){
   if(!db||!isDuty)return;
   const driverName=localStorage.getItem('taxi_name')||'自分';
-  db.ref('team_dests/'+myId).push({
-    ...entry,driverName,driverId:myId
+  db.ref('team_dests/'+myId).push({...entry,driverName,driverId:myId});
+  // 30日超の古いエントリを削除
+  const cutoff=Date.now()-30*24*60*60*1000;
+  db.ref('team_dests/'+myId).once('value',snap=>{
+    snap.forEach(child=>{
+      const v=child.val();
+      if(v&&(v.ts||0)<cutoff)child.ref.remove();
+    });
   });
 }
 
