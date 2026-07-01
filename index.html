@@ -451,6 +451,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         <button class="btn btn-d" onclick="deleteMyAccount()" style="flex-shrink:0">🗑 削除</button>
       </div>
     </div>
+    <div class="sec">🆕 参加申請の承認</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">承認待ちのユーザーを確認・承認できます。</div>
+      <button class="btn btn-g" onclick="renderPendingList()" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
+      <div id="pending-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
+    </div>
     <div class="sec">🗑 アカウント管理</div>
     <div class="card">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Firebaseに登録されているドライバーを削除できます。</div>
@@ -1127,7 +1133,7 @@ function connectFirebase(config){
       const conn=snap.val();
       const dot=document.getElementById('conn-dot');
       const txt=document.getElementById('conn-txt');
-      if(conn){dot.style.background='var(--green)';txt.textContent='接続中 ✓';toast('📡 Firebase接続成功');loadCPsFromFirebase();}
+      if(conn){dot.style.background='var(--green)';txt.textContent='接続中 ✓';toast('📡 Firebase接続成功');loadCPsFromFirebase();checkApprovalOnConnect();}
       else{dot.style.background='var(--red)';txt.textContent='切断中...';}
     });
     db.ref('drivers').on('value',snap=>{
@@ -1150,12 +1156,12 @@ function connectFirebase(config){
         unreadChatCount++;updateChatBadge();
       }
     });
-    db.ref('pool_moves').limitToLast(100).on('child_added',snap=>{
+    db.ref('pool_moves').limitToLast(200).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
       poolMoves.push(m);poolMoves.sort((a,b)=>a.ts-b.ts);
-      if(poolMoves.length>100)poolMoves.shift();
+      if(poolMoves.length>200)poolMoves.shift();
       renderPoolChart();
-      if(poolHistoryOpen)refreshPoolHistory(null);
+      if(poolPanelOpen)refreshPoolHistory(null);
     });
     db.ref('pool_locks').on('value',snap=>{
       poolLocks=snap.val()||{};
@@ -2269,8 +2275,16 @@ function togglePoolPanel(){
   poolPanelOpen=!poolPanelOpen;
   const el=document.getElementById('pool-panel');
   if(el)el.style.display=poolPanelOpen?'block':'none';
-  // 履歴がある場合は位置をずらす
+  if(poolPanelOpen){refreshPoolHistory(null);startPoolHistoryTimer();}else{stopPoolHistoryTimer();}
   syncPoolHistoryBottom();
+}
+let poolHistoryTimer=null;
+function startPoolHistoryTimer(){
+  stopPoolHistoryTimer();
+  poolHistoryTimer=setInterval(()=>refreshPoolHistory(null),30000);
+}
+function stopPoolHistoryTimer(){
+  if(poolHistoryTimer){clearInterval(poolHistoryTimer);poolHistoryTimer=null;}
 }
 
 function hidePoolPanel(){
@@ -2339,6 +2353,7 @@ function renderPoolButtons(){
 
 function recordPoolMove(spot,lane){
   if(!db){toast('⚠️ Firebase未接続');return;}
+  if(!isAdmin&&!cpInside['haneda']){toast('⚠️ 羽田プールエリア内のみ操作できます');return;}
   const key=spot+'_'+lane;
   const lock=poolLocks[key];
   const now=Date.now();
@@ -2350,12 +2365,7 @@ function recordPoolMove(spot,lane){
   const name=localStorage.getItem('taxi_name')||'自分';
   db.ref('pool_moves').push({spot,lane,ts:now,uid:myId,name});
   db.ref('pool_locks/'+key).set({ts:now,name,uid:myId});
-  // 履歴を開いて更新
-  poolHistoryOpen=true;
-  const hEl=document.getElementById('pool-history');
-  if(hEl)hEl.style.display='block';
   refreshPoolHistory(spot);
-  syncPoolHistoryBottom();
   if(poolLockTimer)clearTimeout(poolLockTimer);
   poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
 }
@@ -2364,16 +2374,99 @@ function refreshPoolHistory(focusSpot){
   const body=document.getElementById('pool-history-body');
   if(!body)return;
   const now=Date.now();
-  const recent=poolMoves.filter(m=>now-m.ts<=60000).reverse();
-  if(!recent.length){body.innerHTML='<span style="color:var(--muted)">直近1分の記録なし</span>';return;}
+  const LIMIT=90*60*1000;
+  const recent=poolMoves.filter(m=>now-m.ts<=LIMIT).slice().reverse();
+  if(!recent.length){body.innerHTML='<span style="color:var(--muted)">記録がありません</span>';return;}
   body.innerHTML=recent.map(m=>{
-    const sec=Math.floor((now-m.ts)/1000);
-    const timeStr=sec<60?`${sec}秒前`:'1分前';
+    const min=Math.floor((now-m.ts)/60000);
+    const sec=Math.floor(((now-m.ts)%60000)/1000);
+    const timeStr=min===0?`${sec}秒前`:`${min}分前`;
     const hi=m.spot===focusSpot?'color:#fff;font-weight:700':'color:var(--muted)';
     return `<span style="${hi}">${timeStr}　${m.spot}${m.lane}　${esc(m.name)}</span>`;
   }).join('<br>');
-  // 1分後に自動更新
-  setTimeout(()=>refreshPoolHistory(focusSpot),5000);
+}
+
+// ===== 承認制度 =====
+function checkApprovalOnConnect(){
+  if(!db)return;
+  const name=localStorage.getItem('taxi_name');
+  // 既存ユーザー（名前あり）は自動承認登録
+  if(name){
+    db.ref('users_approved/'+myId).once('value',snap=>{
+      if(!snap.val())db.ref('users_approved/'+myId).set({name,ts:Date.now(),auto:true});
+    });
+    return;
+  }
+  // 新規ユーザー：承認チェック
+  db.ref('users_approved/'+myId).once('value',snap=>{
+    if(snap.val()){applyApproval(snap.val());return;}
+    db.ref('users_pending/'+myId).once('value',snap2=>{
+      if(snap2.val()){showPendingScreen(snap2.val().name);listenApproval();}
+      else{showApplyScreen();}
+    });
+  });
+}
+function showApplyScreen(){
+  document.getElementById('apply-screen').style.display='flex';
+}
+function showPendingScreen(name){
+  document.getElementById('pending-screen').style.display='flex';
+  document.getElementById('pending-name-disp').textContent='申請名: '+name;
+}
+function submitApply(){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  const name=document.getElementById('apply-name').value.trim();
+  const car=document.getElementById('apply-car').value.trim();
+  if(!name){toast('⚠️ 名前を入力してください');return;}
+  db.ref('users_pending/'+myId).set({name,car,ts:Date.now(),status:'pending'});
+  document.getElementById('apply-screen').style.display='none';
+  showPendingScreen(name);
+  listenApproval();
+}
+function listenApproval(){
+  db.ref('users_approved/'+myId).on('value',snap=>{
+    if(snap.val())applyApproval(snap.val());
+  });
+}
+function applyApproval(data){
+  localStorage.setItem('taxi_name',data.name);
+  if(data.car)localStorage.setItem('taxi_car',data.car);
+  document.getElementById('pending-screen').style.display='none';
+  document.getElementById('apply-screen').style.display='none';
+  loadSettings();
+  toast('✅ 参加が承認されました！');
+}
+function renderPendingList(){
+  if(!db)return;
+  const el=document.getElementById('pending-list');
+  if(!el)return;
+  db.ref('users_pending').once('value',snap=>{
+    const all=snap.val()||{};
+    const pending=Object.entries(all).filter(([,v])=>v.status==='pending');
+    if(!pending.length){el.innerHTML='<div style="font-size:12px;color:var(--muted)">申請中のユーザーはいません</div>';return;}
+    el.innerHTML=pending.map(([uid,v])=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${esc(v.name)} ${v.car?'/ '+esc(v.car):''}</div>
+          <div style="font-size:11px;color:var(--muted)">${new Date(v.ts).toLocaleString('ja-JP')}</div>
+        </div>
+        <button class="btn btn-p" style="padding:5px 10px;font-size:12px" onclick="approveUser('${uid}','${esc(v.name)}','${esc(v.car||'')}')">承認</button>
+        <button class="btn btn-d" style="padding:5px 10px;font-size:12px" onclick="rejectUser('${uid}','${esc(v.name)}')">拒否</button>
+      </div>`).join('');
+  });
+}
+function approveUser(uid,name,car){
+  if(!confirm(name+'を承認しますか？'))return;
+  db.ref('users_approved/'+uid).set({name,car,ts:Date.now()});
+  db.ref('users_pending/'+uid+'/status').set('approved');
+  toast('✅ '+name+' を承認しました');
+  renderPendingList();
+}
+function rejectUser(uid,name){
+  if(!confirm(name+'の申請を拒否しますか？'))return;
+  db.ref('users_pending/'+uid).remove();
+  toast('🚫 '+name+' を拒否しました');
+  renderPendingList();
 }
 
 function showImgFull(src){
@@ -2614,7 +2707,7 @@ window.addEventListener('load',()=>{
     <span style="font-size:12px;font-weight:700;color:var(--muted)">🚗 プール移動記録</span>
     <button onclick="togglePoolPanel()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">✕</button>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
     <button id="pool-btn-1号_2列" onclick="recordPoolMove('1号','2列')" class="pool-btn">1号 2列</button>
     <button id="pool-btn-2号_2列" onclick="recordPoolMove('2号','2列')" class="pool-btn">2号 2列</button>
     <button id="pool-btn-3号_2列" onclick="recordPoolMove('3号','2列')" class="pool-btn">3号 2列</button>
@@ -2624,17 +2717,34 @@ window.addEventListener('load',()=>{
     <button id="pool-btn-3号_1列" onclick="recordPoolMove('3号','1列')" class="pool-btn">3号 1列</button>
     <button id="pool-btn-4号_1列" onclick="recordPoolMove('4号','1列')" class="pool-btn">4号 1列</button>
   </div>
+  <!-- 履歴（常時表示・1.5時間分） -->
+  <div style="border-top:1px solid var(--border);padding-top:7px">
+    <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">📋 移動履歴（直近1時間半）</div>
+    <div id="pool-history-body" style="font-size:12px;line-height:2;max-height:120px;overflow-y:auto"></div>
+  </div>
 </div>
 
-<!-- 履歴ポップアップ（固定・全タブ表示） -->
-<div id="pool-history" style="display:none;position:fixed;bottom:58px;left:0;right:0;z-index:799;
-  background:rgba(13,13,26,.93);backdrop-filter:blur(8px);border-top:1px solid var(--border);
-  padding:8px 12px 10px;max-width:480px;margin:0 auto">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-    <span style="font-size:12px;font-weight:700;color:var(--muted)">📋 直近1分の移動履歴</span>
-    <button onclick="togglePoolHistory()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">✕</button>
-  </div>
-  <div id="pool-history-body" style="font-size:12px;line-height:2"></div>
+<!-- 承認待ち画面 placeholder -->
+<!-- 承認待ち画面 -->
+<div id="pending-screen" style="display:none;position:fixed;inset:0;z-index:8000;background:var(--bg);
+  flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center">
+  <div style="font-size:48px">⏳</div>
+  <div style="font-size:18px;font-weight:700">承認待ちです</div>
+  <div style="font-size:14px;color:var(--muted);line-height:1.8">管理者があなたの参加を承認するまでお待ちください。<br>承認されると自動で画面が切り替わります。</div>
+  <div id="pending-name-disp" style="font-size:13px;color:var(--cyan);margin-top:8px"></div>
+</div>
+
+<!-- 新規参加申請画面 -->
+<div id="apply-screen" style="display:none;position:fixed;inset:0;z-index:8000;background:var(--bg);
+  flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px">
+  <div style="font-size:40px">✈️</div>
+  <div style="font-size:18px;font-weight:700;margin-bottom:4px">参加申請</div>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:8px;text-align:center">管理者の承認が必要です。<br>お名前と車番を入力して申請してください。</div>
+  <input id="apply-name" type="text" placeholder="ドライバー名（例: 田中）" maxlength="20"
+    style="width:100%;max-width:320px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px">
+  <input id="apply-car" type="text" placeholder="車番（例: 501）" maxlength="10"
+    style="width:100%;max-width:320px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px">
+  <button onclick="submitApply()" class="btn btn-p" style="width:100%;max-width:320px;padding:14px;font-size:15px">申請する</button>
 </div>
 
 </body>
