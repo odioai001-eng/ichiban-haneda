@@ -929,6 +929,7 @@ function _attachGPSWatch(){
     gpsLastUpdate=Date.now();
     if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
     if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
+    const isFirstFix=(myLat===null);
     myLat=pos.coords.latitude; myLng=pos.coords.longitude;
     updateMyMarker(myLat,myLng);
     document.getElementById('gps-dot').style.background='';
@@ -937,6 +938,16 @@ function _attachGPSWatch(){
     if(autoFollow&&!followPeerId&&leafletMap)leafletMap.setView([myLat,myLng]);
     pushMyPosition(false);
     checkGeofences(myLat,myLng);
+    // GPS初回フィックス時：プール内なら列選択モーダルを表示
+    if(isFirstFix){
+      const cp=checkpoints.find(c=>c.id==='haneda');
+      if(cp&&cp.lat!==null&&haversine(myLat,myLng,cp.lat,cp.lng)<=cp.radius){
+        if(document.getElementById('pool-lane-modal').style.display==='none'||
+           !document.getElementById('pool-lane-modal').style.display){
+          showPoolLaneModal();
+        }
+      }
+    }
     updatePosHistory(myLat,myLng,pos.coords.speed);
   },err=>{
     document.getElementById('gps-dot').style.background='var(--purple)';
@@ -1107,6 +1118,20 @@ function restoreAppState(){
   if(spotLblEl)spotLblEl.textContent='待機場所: '+restoredSpot;
   // スポットチップ・マーカー再描画
   renderSpotRow();
+  // Firebase から自分の waitSpot を再読み込み
+  if(db){
+    db.ref('drivers/'+myId).once('value',snap=>{
+      const d=snap.val();
+      if(!d)return;
+      if(d.waitSpot){
+        document.getElementById('wait-spot-lbl').textContent='待機場所: '+d.waitSpot;
+        // currentSpotSelection を waitSpot の末尾から復元
+        const parts=d.waitSpot.split(' ');
+        const spot=parts[parts.length-1];
+        if(['1号','2号','3号','4号'].includes(spot)){currentSpotSelection=spot;renderSpotRow();}
+      }
+    });
+  }
   // GPS再開・Firebase更新
   startGPS();
   requestNotificationPermission();
@@ -2806,6 +2831,9 @@ function showPage(name,btn){
     if(db){db.ref('chat_reads/'+myId).set(Date.now());}
   }else{chatOnPage=false;}
 }
+
+// 1分ごとにプール情報行の15分チェックを再描画
+setInterval(()=>renderPoolChart(),60000);
 
 function toHMS(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return`${pad(h)}:${pad(m)}:${pad(sec)}`;}
 function pad(n){return String(n).padStart(2,'0');}
