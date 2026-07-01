@@ -667,7 +667,31 @@ function loadCPs(){
   });
   return p;
 }
-function saveCPs(){localStorage.setItem('taxi_checkpoints',JSON.stringify(checkpoints));}
+function saveCPs(){
+  localStorage.setItem('taxi_checkpoints',JSON.stringify(checkpoints));
+  if(db)db.ref('team_config/checkpoints').set(checkpoints);
+}
+
+function loadCPsFromFirebase(){
+  if(!db)return;
+  db.ref('team_config/checkpoints').once('value',snap=>{
+    const remote=snap.val();
+    if(!remote||!Array.isArray(remote))return;
+    // ローカルにlat/lngが無い項目をFirebaseで補完
+    let updated=false;
+    checkpoints.forEach(cp=>{
+      const r=remote.find(x=>x.id===cp.id);
+      if(r&&cp.lat===null&&r.lat!==null){cp.lat=r.lat;cp.lng=r.lng;updated=true;}
+      if(r&&r.radius)cp.radius=r.radius;
+      if(r&&r.enabled!==undefined)cp.enabled=r.enabled;
+    });
+    if(updated){
+      localStorage.setItem('taxi_checkpoints',JSON.stringify(checkpoints));
+      renderCPs();
+      toast('📍 チェックポイントをサーバーから復元しました');
+    }
+  });
+}
 
 function init(){
   loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory(); renderTeamDests(); initMap(); initLocalChat(); tryFirebase();
@@ -1103,7 +1127,7 @@ function connectFirebase(config){
       const conn=snap.val();
       const dot=document.getElementById('conn-dot');
       const txt=document.getElementById('conn-txt');
-      if(conn){dot.style.background='var(--green)';txt.textContent='接続中 ✓';toast('📡 Firebase接続成功');}
+      if(conn){dot.style.background='var(--green)';txt.textContent='接続中 ✓';toast('📡 Firebase接続成功');loadCPsFromFirebase();}
       else{dot.style.background='var(--red)';txt.textContent='切断中...';}
     });
     db.ref('drivers').on('value',snap=>{
