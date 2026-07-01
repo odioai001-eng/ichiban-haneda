@@ -732,6 +732,7 @@ function loadCPsFromFirebase(){
 }
 
 function init(){
+  localStorage.setItem('taxi_admin_pin','0000'); // TEMP: PIN reset - remove after login
   loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory(); renderTeamDests(); initMap(); initLocalChat(); tryFirebase();
   restoreAppState(); // リロード後の状態復元
   if(localStorage.getItem('taxi_wakelock')==='1')toggleWakeLock(); // スリープ防止を復元
