@@ -2406,6 +2406,10 @@ function checkApprovalOnConnect(){
     });
   });
 }
+function toggleAdminPinArea(){
+  const el=document.getElementById('admin-pin-area');
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
 function applyAdminPin(){
   const input=document.getElementById('apply-admin-pin').value;
   const saved=localStorage.getItem('taxi_admin_pin')||'0000';
@@ -2758,13 +2762,16 @@ window.addEventListener('load',()=>{
   <input id="apply-car" type="text" placeholder="車番（例: 501）" maxlength="10"
     style="width:100%;max-width:320px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px">
   <button onclick="submitApply()" class="btn btn-p" style="width:100%;max-width:320px;padding:14px;font-size:15px">申請する</button>
-  <div style="margin-top:16px;width:100%;max-width:320px">
-    <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:6px">管理者の方はPINで入室できます</div>
-    <div style="display:flex;gap:8px">
-      <input id="apply-admin-pin" type="password" placeholder="管理者PIN" maxlength="8"
-        style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px;letter-spacing:4px;text-align:center">
-      <button onclick="applyAdminPin()" class="btn btn-g" style="padding:10px 14px;font-size:13px">入室</button>
-    </div>
+  <!-- 隠しリンク -->
+  <div onclick="toggleAdminPinArea()" style="position:fixed;bottom:12px;right:12px;width:28px;height:28px;cursor:pointer;opacity:0.01;user-select:none">　</div>
+  <div id="admin-pin-area" style="display:none;position:fixed;bottom:50px;right:12px;
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;
+    box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:9999;width:200px">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;text-align:center">管理者PIN</div>
+    <input id="apply-admin-pin" type="password" placeholder="••••" maxlength="8"
+      style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);
+      color:var(--text);font-size:18px;letter-spacing:6px;text-align:center;box-sizing:border-box">
+    <button onclick="applyAdminPin()" class="btn btn-g" style="width:100%;margin-top:8px;padding:8px;font-size:13px">入室</button>
   </div>
 </div>
 
