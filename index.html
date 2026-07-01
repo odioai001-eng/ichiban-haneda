@@ -632,7 +632,7 @@ let dutyStart=null,dutyInterval=null,myLat=null,myLng=null;
 let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
-let poolMoves=[],poolLocks={},poolLockTimer=null;
+let poolMoves=[],poolLocks={},poolLockTimer=null,myLastPoolMoveKey=null,myLastPoolMoveData=null;
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
 let chatReadMap={};
 let posHistory=[],stopState=null,bearingBeforeStop=null;
@@ -2374,11 +2374,36 @@ function recordPoolMove(spot,lane){
     return;
   }
   const name=localStorage.getItem('taxi_name')||'自分';
-  db.ref('pool_moves').push({spot,lane,ts:now,uid:myId,name});
+  const ref=db.ref('pool_moves').push({spot,lane,ts:now,uid:myId,name});
+  myLastPoolMoveKey=ref.key;
+  myLastPoolMoveData={spot,lane,ts:now,name};
   db.ref('pool_locks/'+key).set({ts:now,name,uid:myId});
+  renderUndoBtn();
   refreshPoolHistory(spot);
   if(poolLockTimer)clearTimeout(poolLockTimer);
   poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
+}
+
+function renderUndoBtn(){
+  const btn=document.getElementById('pool-undo-btn');
+  if(!btn)return;
+  if(myLastPoolMoveKey&&myLastPoolMoveData){
+    const d=myLastPoolMoveData;
+    btn.style.display='block';
+    btn.textContent=`↩ ${d.spot}${d.lane} を取り消す`;
+  }else{
+    btn.style.display='none';
+  }
+}
+function undoPoolMove(){
+  if(!myLastPoolMoveKey||!myLastPoolMoveData){toast('取り消せる操作がありません');return;}
+  if(!confirm(`${myLastPoolMoveData.spot}${myLastPoolMoveData.lane} の移動記録を取り消しますか？`))return;
+  db.ref('pool_moves/'+myLastPoolMoveKey).remove();
+  // poolMovesからも削除
+  poolMoves=poolMoves.filter(m=>!(m.uid===myId&&m.ts===myLastPoolMoveData.ts));
+  myLastPoolMoveKey=null;myLastPoolMoveData=null;
+  renderUndoBtn();renderPoolChart();refreshPoolHistory(null);
+  toast('↩ 取り消しました');
 }
 
 function refreshPoolHistory(focusSpot){
@@ -2745,6 +2770,10 @@ window.addEventListener('load',()=>{
     <button id="pool-btn-3号_1列" onclick="recordPoolMove('3号','1列')" class="pool-btn">3号 1列</button>
     <button id="pool-btn-4号_1列" onclick="recordPoolMove('4号','1列')" class="pool-btn">4号 1列</button>
   </div>
+  <!-- 取り消しボタン -->
+  <button id="pool-undo-btn" onclick="undoPoolMove()" style="display:none;width:100%;margin-bottom:8px;
+    padding:7px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
+    background:rgba(239,68,68,.15);color:var(--red);border:1.5px solid var(--red)"></button>
   <!-- 履歴（常時表示・1.5時間分） -->
   <div style="border-top:1px solid var(--border);padding-top:7px">
     <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">📋 移動履歴（直近1時間半）</div>
