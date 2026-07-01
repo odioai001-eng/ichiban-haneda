@@ -2568,8 +2568,6 @@ document.addEventListener('visibilitychange',async()=>{
 });
 
 function showPage(name,btn){
-  const wasSettings=document.getElementById('page-settings').classList.contains('active');
-  if(wasSettings&&name!=='settings')adminLogout();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
