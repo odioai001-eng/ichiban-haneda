@@ -2354,12 +2354,17 @@ function renderPoolButtons(){
 function isInHanedaPool(){
   if(cpInside['haneda'])return true;
   const cp=checkpoints.find(c=>c.id==='haneda');
-  if(!cp||cp.lat===null||myLat===null)return false;
+  if(!cp||cp.lat===null)return false;
+  if(myLat===null)return null; // GPS未取得
   return haversine(myLat,myLng,cp.lat,cp.lng)<=cp.radius;
 }
 function recordPoolMove(spot,lane){
   if(!db){toast('⚠️ Firebase未接続');return;}
-  if(!isAdmin&&!isInHanedaPool()){toast('⚠️ 羽田プールエリア内のみ操作できます');return;}
+  if(!isAdmin){
+    const loc=isInHanedaPool();
+    if(loc===null){toast('⚠️ GPS未取得のため位置確認できません。出勤ボタンを押してGPSを起動してください');return;}
+    if(!loc){toast('⚠️ 羽田プールエリア内のみ操作できます');return;}
+  }
   const key=spot+'_'+lane;
   const lock=poolLocks[key];
   const now=Date.now();
