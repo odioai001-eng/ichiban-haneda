@@ -2406,6 +2406,19 @@ function checkApprovalOnConnect(){
     });
   });
 }
+function applyAdminPin(){
+  const input=document.getElementById('apply-admin-pin').value;
+  const saved=localStorage.getItem('taxi_admin_pin')||'0000';
+  if(input!==saved){toast('⚠️ PINが違います');return;}
+  const name=document.getElementById('apply-name').value.trim()||localStorage.getItem('taxi_name')||'管理者';
+  const car=document.getElementById('apply-car').value.trim()||localStorage.getItem('taxi_car')||'';
+  if(db)db.ref('users_approved/'+myId).set({name,car,ts:Date.now()});
+  localStorage.setItem('taxi_name',name);
+  if(car)localStorage.setItem('taxi_car',car);
+  document.getElementById('apply-screen').style.display='none';
+  loadSettings();
+  toast('✅ 管理者として入室しました');
+}
 function showApplyScreen(){
   document.getElementById('apply-screen').style.display='flex';
 }
@@ -2745,6 +2758,14 @@ window.addEventListener('load',()=>{
   <input id="apply-car" type="text" placeholder="車番（例: 501）" maxlength="10"
     style="width:100%;max-width:320px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px">
   <button onclick="submitApply()" class="btn btn-p" style="width:100%;max-width:320px;padding:14px;font-size:15px">申請する</button>
+  <div style="margin-top:16px;width:100%;max-width:320px">
+    <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:6px">管理者の方はPINで入室できます</div>
+    <div style="display:flex;gap:8px">
+      <input id="apply-admin-pin" type="password" placeholder="管理者PIN" maxlength="8"
+        style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px;letter-spacing:4px;text-align:center">
+      <button onclick="applyAdminPin()" class="btn btn-g" style="padding:10px 14px;font-size:13px">入室</button>
+    </div>
+  </div>
 </div>
 
 </body>
