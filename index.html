@@ -558,6 +558,38 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 
 <!-- 退勤時 お疲れさまモーダル -->
+<!-- 羽田プール到着時 列選択モーダル -->
+<div id="pool-lane-modal" style="position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surface);border-radius:20px;padding:28px 20px 24px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6);text-align:center">
+    <div style="font-size:32px;margin-bottom:10px">✈️</div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">羽田プールに到着しました</div>
+    <div style="font-size:14px;color:var(--muted);margin-bottom:18px">何列目に入りましたか？</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">乗り場</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="lane-modal-spots">
+          <button onclick="selectLaneModalSpot('1号')" class="pool-btn" id="lms-1号">1号</button>
+          <button onclick="selectLaneModalSpot('2号')" class="pool-btn" id="lms-2号">2号</button>
+          <button onclick="selectLaneModalSpot('3号')" class="pool-btn" id="lms-3号">3号</button>
+          <button onclick="selectLaneModalSpot('4号')" class="pool-btn" id="lms-4号">4号</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">列</div>
+        <div style="display:grid;grid-template-columns:1fr;gap:6px">
+          <button onclick="selectLaneModalLane('2列')" class="pool-btn" id="lml-2列">2列</button>
+          <button onclick="selectLaneModalLane('1列')" class="pool-btn" id="lml-1列">1列</button>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px" id="lane-modal-sel">乗り場と列を選んでください</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="confirmPoolLaneModal()" class="btn btn-p" style="flex:1;padding:12px;font-size:14px">記録する</button>
+      <button onclick="document.getElementById('pool-lane-modal').style.display='none'" class="btn btn-g" style="padding:12px 16px;font-size:14px">スキップ</button>
+    </div>
+  </div>
+</div>
+
 <div id="duty-end-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--surface);border-radius:20px;padding:36px 24px 28px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6);text-align:center">
     <div style="font-size:40px;margin-bottom:16px">🌙</div>
@@ -1639,6 +1671,7 @@ function onArrival(cp,dist){
   }
   currentSpotSelection=null;
   cp.arrivalTimeStr=timeStr;
+  if(cp.id==='haneda')showPoolLaneModal();
   if(arrivalAutoTimer)clearTimeout(arrivalAutoTimer);
   arrivalAutoTimer=setTimeout(()=>{
     arrivalAutoTimer=null;
@@ -2382,6 +2415,46 @@ function recordPoolMove(spot,lane){
   refreshPoolHistory(spot);
   if(poolLockTimer)clearTimeout(poolLockTimer);
   poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
+}
+
+let laneModalSpot=null,laneModalLane=null;
+function showPoolLaneModal(){
+  laneModalSpot=null;laneModalLane=null;
+  ['1号','2号','3号','4号'].forEach(s=>{
+    const b=document.getElementById('lms-'+s);
+    if(b)b.style.background='rgba(79,142,247,.18)';
+  });
+  ['1列','2列'].forEach(l=>{
+    const b=document.getElementById('lml-'+l);
+    if(b)b.style.background='rgba(79,142,247,.18)';
+  });
+  document.getElementById('lane-modal-sel').textContent='乗り場と列を選んでください';
+  document.getElementById('pool-lane-modal').style.display='flex';
+}
+function selectLaneModalSpot(spot){
+  laneModalSpot=spot;
+  ['1号','2号','3号','4号'].forEach(s=>{
+    const b=document.getElementById('lms-'+s);
+    if(b)b.style.background=s===spot?'var(--accent)':'rgba(79,142,247,.18)';
+  });
+  updateLaneModalSel();
+}
+function selectLaneModalLane(lane){
+  laneModalLane=lane;
+  ['1列','2列'].forEach(l=>{
+    const b=document.getElementById('lml-'+l);
+    if(b)b.style.background=l===lane?'var(--cyan)':'rgba(79,142,247,.18)';
+  });
+  updateLaneModalSel();
+}
+function updateLaneModalSel(){
+  const el=document.getElementById('lane-modal-sel');
+  if(el)el.textContent=laneModalSpot&&laneModalLane?`→ ${laneModalSpot} ${laneModalLane} に入庫`:'乗り場と列を選んでください';
+}
+function confirmPoolLaneModal(){
+  if(!laneModalSpot||!laneModalLane){toast('⚠️ 乗り場と列を選んでください');return;}
+  document.getElementById('pool-lane-modal').style.display='none';
+  recordPoolMove(laneModalSpot,laneModalLane);
 }
 
 function renderUndoBtn(){
