@@ -957,6 +957,7 @@ function _startDuty(){
   lbl.textContent='乗務中';offline.classList.remove('show');
   dutyStart=new Date();
   document.getElementById('duty-start').textContent=fmtTime(dutyStart);
+  if(db)db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
   requestNotificationPermission();
   startGPS();
   if(dutyInterval)clearInterval(dutyInterval);
@@ -1435,7 +1436,8 @@ function renderTeamDests(){
       </div>
       <div style="padding:10px 14px">`;
     // 通し番号用に時系列ソート
-    const teamTrips=entries.filter(e=>e.type==='trip').sort((a,b)=>(a.ts||0)-(b.ts||0));
+    const driverDutyStart=(driverData[driverId]&&driverData[driverId].dutyStartTs)||0;
+    const teamTrips=entries.filter(e=>e.type==='trip'&&(e.ts||0)>=driverDutyStart).sort((a,b)=>(a.ts||0)-(b.ts||0));
     const teamNumMap=new Map();
     teamTrips.forEach((e,i)=>teamNumMap.set(e.ts,i+1));
     sortedDates.forEach(date=>{
@@ -1465,9 +1467,12 @@ function renderTeamDests(){
           </div>`;
         } else if(e.type==='cp'){
           html+=`
-          <div style="border-bottom:${isLast?'none':'1px solid var(--border)'};padding:8px 0">
-            <span style="color:var(--gold);font-weight:700;font-size:13px">${esc(e.startTime||'')}-${esc(e.endTime||'')}</span>
-            <span style="font-size:13px;margin-left:6px">${esc(e.icon||'')} ${esc(e.name||'')}（${e.durMins||0}分）</span>
+          <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+            <div style="font-size:13px;color:var(--muted)">
+              <span style="color:var(--gold);font-weight:700">${esc(e.startTime||'')}-${esc(e.endTime||'')}</span>
+              　${esc(e.icon||'')} ${esc(e.name||'')}
+              <span style="color:var(--muted)">（${e.durMins||0}分）</span>
+            </div>
           </div>`;
         } else {
           html+=`
@@ -2046,9 +2051,10 @@ function renderDests(){
   let html='';
   let tripNo=1;
   // 全体の時系列順で通し番号を付けるため先にソート
+  const dutyStartMs=dutyStart?dutyStart.getTime():0;
   const allSorted=visible.filter(d=>d.type==='trip'||d.type==='cp').sort((a,b)=>(a.ts||0)-(b.ts||0));
   const numMap=new Map();
-  allSorted.forEach(d=>{if(d.type==='trip')numMap.set(d.ts,tripNo++);});
+  allSorted.forEach(d=>{if(d.type==='trip'&&(d.ts||0)>=dutyStartMs)numMap.set(d.ts,tripNo++);});
   sortedDates.forEach(date=>{
     html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 6px">📅 ${date}</div>`;
     groups[date].slice().reverse().forEach(d=>{
@@ -2079,7 +2085,7 @@ function renderDests(){
         </div>`;
       } else if(d.type==='cp'){
         html+=`
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:10px">
+        <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
           <div style="font-size:13px;color:var(--muted)">
             <span style="color:var(--gold);font-weight:700">${esc(d.startTime)}-${esc(d.endTime)}</span>
             　${esc(d.icon||'')} ${esc(d.name)}
