@@ -995,7 +995,7 @@ function toggleDuty(){
   const offline=document.getElementById('map-offline');
   btn.textContent='出勤する';btn.className='duty-btn off';
   lbl.textContent='休み中';offline.classList.add('show');
-  stopGPS();myLat=null;myLng=null;
+  stopGPS();myLat=null;myLng=null;dutyStart=null;
   if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
   if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
   if(db)db.ref('drivers/'+myId).remove();
@@ -1029,6 +1029,7 @@ function _startDuty(){
   dutyStart=new Date();
   document.getElementById('duty-start').textContent=fmtTime(dutyStart);
   if(db)db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
+  renderDests();
   requestNotificationPermission();
   startGPS();
   if(dutyInterval)clearInterval(dutyInterval);
@@ -1193,15 +1194,17 @@ function connectFirebase(config){
       if(conn){dot.style.background='var(--green)';txt.textContent='接続中 ✓';toast('📡 Firebase接続成功');loadCPsFromFirebase();checkApprovalOnConnect();}
       else{dot.style.background='var(--red)';txt.textContent='切断中...';}
     });
-    db.ref('drivers').on('value',snap=>{
-      const all=snap.val()||{};
-      Object.keys(all).forEach(id=>{
-        if(id===myId)return;
-        driverData[id]=all[id];
-        updatePeerMarker(id,all[id]);
-      });
-      Object.keys(peerMarkers).forEach(id=>{if(!all[id])removePeerMarker(id);});
-      updateDriverList();
+    db.ref('drivers').on('child_added',snap=>{
+      const id=snap.key;if(id===myId)return;
+      driverData[id]=snap.val();updatePeerMarker(id,snap.val());updateDriverList();
+    });
+    db.ref('drivers').on('child_changed',snap=>{
+      const id=snap.key;if(id===myId)return;
+      driverData[id]=snap.val();updatePeerMarker(id,snap.val());updateDriverList();
+    });
+    db.ref('drivers').on('child_removed',snap=>{
+      const id=snap.key;if(id===myId)return;
+      delete driverData[id];removePeerMarker(id);updateDriverList();
     });
     const chatInitTs=Date.now();
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
@@ -1414,8 +1417,13 @@ async function reverseGeocode(lat,lng){
       }
       const city=a.city||a.city_district||a.town||a.village||a.county||'';
       // neighbourhood > quarter > suburb > road の順で丁目を含むものを優先
-      const candidates=[a.neighbourhood,a.quarter,a.suburb,a.road].filter(Boolean);
+      const candidates=[a.neighbourhood,a.quarter,a.hamlet,a.suburb,a.road].filter(Boolean);
       let area=candidates.find(c=>c.includes('丁目')||c.includes('番地'))||candidates[0]||'';
+      // display_name から丁目を補完
+      if(area&&!area.includes('丁目')){
+        const dm=(data.display_name||'').match(/(\S+丁目)/);
+        if(dm)area=area.replace(/([^\d]+)$/,'')+dm[1];
+      }
       const addr=[pref,city,area].filter(Boolean).join('');
       return kanjiToNum(addr);
     }
@@ -2191,18 +2199,19 @@ function renderDests(){
   allSorted.forEach(d=>{if(d.type==='trip'&&(d.ts||0)>=dutyStartMs)numMap.set(d.ts,tripNo++);});
   sortedDates.forEach(date=>{
     html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 6px">📅 ${date}</div>`;
-    groups[date].slice().reverse().forEach(d=>{
+    groups[date].slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(d=>{
       if(d.type==='trip'){
         const isAirport=!!d.boardSpot;
         const isAbure=d.alightAddr==='あぶれ';
         const waitStr=d.waitMins?` (待機${d.waitMins}分)`:d.waitMinsStr?` (待機${d.waitMinsStr})`:'';
-        const boardDesc=isAirport?`${esc(d.boardSpot)}　${esc(d.boardAddr||'')}`:esc(d.boardAddr||'乗車');
+        const spotLabel=isAirport?`${esc(d.boardSpot)}乗り場`:'';
+        const boardDesc=isAirport?`${spotLabel}　${esc(d.boardAddr||'')}`:esc(d.boardAddr||'乗車');
         let alightDesc;
         if(isAbure){
           alightDesc=`あぶれ${waitStr}`;
         } else {
           const addr=esc(d.alightAddr||'住所取得中');
-          alightDesc=isAirport?`${addr}　${esc(d.boardSpot)}${waitStr}`:`${addr}${waitStr}`;
+          alightDesc=isAirport?`${addr}　${spotLabel}${waitStr}`:`${addr}${waitStr}`;
         }
         const no=numMap.get(d.ts)||'';
         html+=`
@@ -2210,7 +2219,7 @@ function renderDests(){
           <div style="font-size:15px;font-weight:800;color:var(--accent);margin-bottom:4px">#${no}</div>
           <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
             <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
-            <span style="font-size:12px;color:var(--muted)">${boardDesc}</span>
+            <span style="font-size:12px;color:#fff">${boardDesc}</span>
           </div>
           <div style="display:flex;align-items:baseline;gap:8px">
             <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
@@ -2252,7 +2261,16 @@ function addDest(){
     time:document.getElementById('d-time').value,dist:document.getElementById('d-dist').value,done:false});
   saveDests();renderDests();closeDestModal();toast('✅ 追加しました');
 }
-function rmDest(i){destinations.splice(i,1);saveDests();renderDests();}
+function rmDest(i){
+  const d=destinations[i];
+  destinations.splice(i,1);saveDests();renderDests();
+  // Firebaseからも削除
+  if(db&&d&&d.ts){
+    db.ref('team_dests/'+myId).orderByChild('ts').equalTo(d.ts).once('value',snap=>{
+      snap.forEach(child=>child.ref.remove());
+    });
+  }
+}
 function markDone(i){destinations[i].done=!destinations[i].done;saveDests();renderDests();}
 function saveDests(){localStorage.setItem('taxi_dests',JSON.stringify(destinations));}
 
