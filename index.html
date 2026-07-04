@@ -1562,14 +1562,16 @@ function renderTeamDests(){
     const sortedDates=Object.keys(groups).sort((a,b)=>{
       return (groups[b][0].ts||0)-(groups[a][0].ts||0);
     });
+    const folderId=`team-fold-${driverId}`;
     html+=`
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden">
-      <div style="padding:10px 14px;background:var(--surface2);display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)">
-        <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${esc(driverName.slice(0,1))}</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden">
+      <div onclick="(function(el){el.style.display=el.style.display==='none'?'block':'none'})(document.getElementById('${folderId}'))" style="padding:12px 14px;background:var(--surface2);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+        <div style="width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${esc(driverName.slice(0,1))}</div>
         <span style="font-size:14px;font-weight:700">${esc(driverName)}${isMe?' (自分)':''}</span>
         <span style="font-size:11px;color:var(--muted);margin-left:auto">${entries.length}件</span>
+        <span style="font-size:12px;color:var(--muted);margin-left:6px">▶</span>
       </div>
-      <div style="padding:10px 14px">`;
+      <div id="${folderId}" style="display:none;padding:10px 14px">`;
     // 通し番号用に時系列ソート
     const driverDutyStart=(driverData[driverId]&&driverData[driverId].dutyStartTs)||0;
     const teamTrips=entries.filter(e=>e.type==='trip'&&(e.ts||0)>=driverDutyStart).sort((a,b)=>(a.ts||0)-(b.ts||0));
