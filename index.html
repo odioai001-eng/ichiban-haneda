@@ -1361,7 +1361,7 @@ function toggleDriverDests(id){
     const no=numMap.get(e.ts)||'';
     const isAbure=e.alightAddr==='あぶれ';
     const waitStr=e.waitMins?` (待機${e.waitMins}分)`:e.waitMinsStr?` (待機${e.waitMinsStr})`:'';
-    const boardDesc=e.boardSpot?`東京都大田区羽田空港${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
+    const boardDesc=e.boardSpot?`東京都大田区羽田空港　${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
     const alightDesc=isAbure?`あぶれ${waitStr}`:(esc(e.alightAddr||'住所取得中')+waitStr);
     return `<div style="border:2px solid #fff;border-radius:10px;padding:8px 12px;margin-bottom:6px;background:var(--surface)">
       ${no?`<div style="font-size:13px;font-weight:800;color:var(--accent);margin-bottom:2px">#${no}</div>`:''}
@@ -1536,6 +1536,8 @@ function renderWaitHistory(){
 function renderTeamDests(){
   const el=document.getElementById('team-dests-list');
   if(!el)return;
+  // 開いているフォルダを記憶
+  const openFolders=new Set([...el.querySelectorAll('[id^="team-fold-"]')].filter(e=>e.style.display!=='none').map(e=>e.id.replace('team-fold-','')));
   const allDriverIds=Object.keys(teamDests).filter(id=>id!==myId);
   if(!allDriverIds.length){
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
@@ -1589,7 +1591,7 @@ function renderTeamDests(){
           const isAirport=!!e.boardSpot;
           const isAbure=e.alightAddr==='あぶれ';
           const waitStr=e.waitMins?` (待機${e.waitMins}分)`:e.waitMinsStr?` (待機${e.waitMinsStr})`:'';
-          const boardDesc=isAirport?`東京都大田区羽田空港${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
+          const boardDesc=isAirport?`東京都大田区羽田空港　${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
           let alightDesc;
           if(isAbure){alightDesc=`あぶれ${waitStr}`;}
           else{const addr=esc(e.alightAddr||'住所取得中');alightDesc=isAirport?`${addr}　${esc(e.boardSpot)}${waitStr}`:`${addr}${waitStr}`;}
@@ -1634,6 +1636,8 @@ function renderTeamDests(){
     html+=`</div></div>`;
   });
   el.innerHTML=html||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
+  // 開いていたフォルダを復元
+  openFolders.forEach(id=>{const f=document.getElementById('team-fold-'+id);if(f)f.style.display='block';});
 }
 
 function clearWaitHistory(){
@@ -2210,7 +2214,7 @@ function renderDests(){
         const isAirport=!!d.boardSpot;
         const isAbure=d.alightAddr==='あぶれ';
         const waitStr=d.waitMins?` (待機${d.waitMins}分)`:d.waitMinsStr?` (待機${d.waitMinsStr})`:'';
-        const boardDesc=isAirport?`東京都大田区羽田空港${esc(d.boardSpot)}乗り場`:esc(d.boardAddr||'乗車');
+        const boardDesc=isAirport?`東京都大田区羽田空港　${esc(d.boardSpot)}乗り場`:esc(d.boardAddr||'乗車');
         let alightDesc;
         if(isAbure){
           alightDesc=`あぶれ${waitStr}`;
