@@ -1266,7 +1266,7 @@ function pushMyPosition(gpsWeak=false){
     ts:Date.now(),gpsWeak:gpsWeak||null
   });
 }
-setInterval(()=>{if(isDuty)pushMyPosition();},10000);
+setInterval(()=>{if(isDuty)pushMyPosition();},5000);
 
 function makeDriverRow(id, d, isMe){
   const age=Date.now()-(d.ts||0);
@@ -2835,8 +2835,27 @@ async function toggleWakeLock(){
   }
 }
 document.addEventListener('visibilitychange',async()=>{
-  if(wakeLockOn&&document.visibilityState==='visible'){
-    try{wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
+  if(document.visibilityState==='visible'){
+    // Wake Lock 再取得
+    if(wakeLockOn){try{wakeLock=await navigator.wakeLock.request('screen');}catch(e){}}
+    // Firebase再接続＋仲間位置を強制リフレッシュ
+    if(db){
+      db.goOnline();
+      setTimeout(()=>{
+        if(isDuty)pushMyPosition();
+        db.ref('drivers').once('value',snap=>{
+          const all=snap.val()||{};
+          Object.keys(all).forEach(id=>{
+            if(id===myId)return;
+            driverData[id]=all[id];
+            updatePeerMarker(id,all[id]);
+          });
+          // 消えたドライバーを削除
+          Object.keys(peerMarkers).forEach(id=>{if(!all[id])removePeerMarker(id);});
+          updateDriverList();
+        });
+      },800);
+    }
   }
 });
 
