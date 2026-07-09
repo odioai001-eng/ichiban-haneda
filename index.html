@@ -2914,6 +2914,8 @@ async function debugGeocode(){
 function loadSettings(){
   document.getElementById('s-name').value=localStorage.getItem('taxi_name')||'';
   document.getElementById('s-car').value=localStorage.getItem('taxi_car')||'';
+  document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
+ renderWorkStats();renderSalesStats();
 }
 function saveSettings(){
   localStorage.setItem('taxi_name',document.getElementById('s-name').value.trim()||'自分');
