@@ -482,6 +482,18 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="btn btn-p" onclick="debugGeocode()" style="width:100%">📍 現在地の住所をテスト</button>
     <div id="debug-geo-out" style="margin-top:10px;font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;display:none"></div>
   </div>
+  <div class="sec">📅 勤務時間管理</div>
+<div class="card">
+ <label>今月の出勤予定日数</label>
+ <input type="number" id="s-target-days" placeholder="例: 12">
+ <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
+ <div id="work-stats-out" style="margin-top:10px"></div>
+</div>
+<div class="sec">💰 売上管理</div>
+<div class="card">
+ <div id="sales-stats-out"></div>
+</div>
+
   <div class="sec">📊 本日の記録</div>
   <div class="card">
     <div class="row2"><span class="rl">乗務開始</span><span class="rv" id="duty-start">-</span></div>
@@ -638,6 +650,15 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="arrival-title" id="arrival-title">📍 到着</div>
   <div class="arrival-sub" id="arrival-sub"></div>
 </div>
+<div id="fare-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
+ <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px">
+  <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:20px">🚕 お疲れさまでした</div>
+  <div style="margin-bottom:14px">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円）</div>
+   <input id="fare-input" type="number" inputmode="numeric" placeholder="例: 3200">
+  </div>
+  <div style="margin-bottom:24px">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">自腹高速代（円・任意）</div>
 
 <div class="toast" id="toast"></div>
 
@@ -999,6 +1020,17 @@ function toggleDuty(){
   const offline=document.getElementById('map-offline');
   btn.textContent='出勤する';btn.className='duty-btn off';
   lbl.textContent='休み中';offline.classList.add('show');
+  if(dutyStart){
+  const endTs=Date.now();
+  const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  shiftLog.push({
+   dateStr:new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}),
+   startTs:dutyStart.getTime(),endTs,
+   durationSec:Math.floor((endTs-dutyStart.getTime())/1000)
+  });
+  localStorage.setItem('taxi_shift_log',JSON.stringify(shiftLog));
+ }
+
   stopGPS();myLat=null;myLng=null;dutyStart=null;
   if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
   if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
