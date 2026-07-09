@@ -1869,6 +1869,99 @@ function closeBanner(){
 function isNotifEnabled(){
   return localStorage.getItem('taxi_notif_enabled')!=='false';
 }
+  // ===== 勤務時間管理 =====
+const MONTHLY_TARGET_HOURS=288;
+
+function saveTargetDays(){
+ const v=document.getElementById('s-target-days').value;
+ localStorage.setItem('taxi_target_days',v);
+ toast('✅ 出勤予定日数を保存しました');
+ renderWorkStats();
+}
+
+function getMonthShifts(){
+ const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+ const now=new Date();
+ const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+ return log.filter(s=>s.startTs>=monthStart);
+}
+
+function renderWorkStats(){
+ const out=document.getElementById('work-stats-out');
+ if(!out)return;
+ const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
+ const shifts=getMonthShifts();
+ const workedDays=shifts.length;
+ const workedSec=shifts.reduce((a,s)=>a+(s.durationSec||0),0);
+ const workedHours=workedSec/3600;
+ const remainDays=Math.max(targetDays-workedDays,0);
+ const remainHours=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
+ let perDayStr='-';
+ if(remainDays>0){
+  const perDayHours=(remainHours/remainDays)+0.5;
+  const h=Math.floor(perDayHours);
+  const m=Math.round((perDayHours-h)*60);
+  perDayStr=`${h}時間${m}分`;
+ }
+ out.innerHTML=`
+  <div class="row2"><span class="rl">今月の実績</span><span class="rv">${workedDays}日 / ${workedHours.toFixed(1)}時間</span></div>
+  <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${remainDays}日</span></div>
+  <div class="row2"><span class="rl">残り必要時間</span><span class="rv">${remainHours.toFixed(1)}時間</span></div>
+  <div class="row2"><span class="rl">1日あたり目安</span><span class="rv" style="color:var(--gold);font-weight:800">${perDayStr}</span></div>
+ `;
+}
+
+// ===== 運賃・売上管理 =====
+let pendingFareTripInfo=null;
+
+function showFareModal(){
+ document.getElementById('fare-input').value='';
+ document.getElementById('toll-input').value='';
+ document.getElementById('fare-modal').style.display='flex';
+ setTimeout(()=>document.getElementById('fare-input').focus(),200);
+}
+
+function confirmFareModal(){
+ const fare=parseInt(document.getElementById('fare-input').value)||0;
+ const toll=parseInt(document.getElementById('toll-input').value)||0;
+ saveFareEntry(fare,toll);
+ document.getElementById('fare-modal').style.display='none';
+}
+
+function skipFareModal(){
+ document.getElementById('fare-modal').style.display='none';
+}
+
+function saveFareEntry(fare,toll){
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const now=new Date();
+ log.push({
+  dateStr:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
+  fare,toll,ts:now.getTime()
+ });
+ localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ toast(`💰 運賃 ¥${fare.toLocaleString()} を記録しました`);
+ renderSalesStats();
+}
+
+function renderSalesStats(){
+ const out=document.getElementById('sales-stats-out');
+ if(!out)return;
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const now=new Date();
+ const todayStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+ const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+ const todayEntries=log.filter(e=>e.dateStr===todayStr);
+ const monthEntries=log.filter(e=>e.ts>=monthStart);
+ const sum=(arr,key)=>arr.reduce((a,e)=>a+(e[key]||0),0);
+ out.innerHTML=`
+  <div class="row2"><span class="rl">本日の売上</span><span class="rv" style="color:var(--green)">¥${sum(todayEntries,'fare').toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">本日の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(todayEntries,'toll').toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">今月の売上</span><span class="rv" style="color:var(--green)">¥${sum(monthEntries,'fare').toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">今月の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(monthEntries,'toll').toLocaleString()}</span></div>
+ `;
+}
+
 function toggleNotifSetting(){
   const cur=isNotifEnabled();
   localStorage.setItem('taxi_notif_enabled',cur?'false':'true');
