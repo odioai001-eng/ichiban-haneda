@@ -1211,6 +1211,7 @@ function setStatus(s){
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
     jitsushaStart=null;
     if(myLat!==null&&boardInfo)createTripEntry(myLat,myLng);
+    showFareModal();
     boardInfo=null;
   }
 }
