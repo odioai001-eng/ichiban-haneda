@@ -296,6 +296,18 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div id="pool-info-4号" class="pool-info-cell">−</div>
     </div>
   </div>
+  <div id="daily-bar" style="position:absolute;left:0;right:0;bottom:0;z-index:480;
+   background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border);
+   padding:6px 10px;display:flex;justify-content:space-around;gap:8px;pointer-events:none">
+   <div style="text-align:center">
+    <div style="font-size:10px;color:var(--muted)">本日の残り時間</div>
+    <div id="daily-time-left" style="font-size:16px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums">--:--:--</div>
+   </div>
+   <div style="text-align:center">
+    <div style="font-size:10px;color:var(--muted)">目標まであと</div>
+    <div id="daily-amount-left" style="font-size:16px;font-weight:800;color:var(--cyan)">-</div>
+   </div>
+  </div>
   <div class="map-zoom-ctrl" id="zoom-ctrl">
     <button onclick="if(leafletMap)leafletMap.zoomIn()">+</button>
     <button onclick="if(leafletMap)leafletMap.zoomOut()">−</button>
@@ -486,12 +498,30 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <div class="card">
  <label>今月の出勤予定日数</label>
  <input type="number" id="s-target-days" placeholder="例: 12">
+ <label>今月の目標金額（円）</label>
+ <input type="number" id="s-target-amount" placeholder="例: 900000">
  <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
  <div id="work-stats-out" style="margin-top:10px"></div>
+ <div id="shift-entries-list" style="margin-top:10px"></div>
 </div>
 <div class="sec">💰 売上管理</div>
 <div class="card">
  <div id="sales-stats-out"></div>
+ <div id="fare-entries-list" style="margin-top:10px"></div>
+</div>
+<div class="sec">🛣 自腹高速代（いつでも記録）</div>
+<div class="card">
+ <label>金額（円）</label>
+ <input type="number" id="toll-only-input" placeholder="例: 500">
+ <button class="btn btn-p" onclick="saveTollEntry()" style="width:100%">記録する</button>
+</div>
+<div class="sec">🏆 本日の売上ランキング</div>
+<div class="card">
+ <div id="team-sales-ranking-today"></div>
+</div>
+<div class="sec">🏆 今月の売上ランキング（平均付き）</div>
+<div class="card">
+ <div id="team-sales-ranking-month"></div>
 </div>
 
   <div class="sec">📊 本日の記録</div>
@@ -653,13 +683,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <div id="fare-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
  <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px">
   <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:20px">🚕 お疲れさまでした</div>
-  <div style="margin-bottom:14px">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円）</div>
-   <input id="fare-input" type="number" inputmode="numeric" placeholder="例: 3200">
-  </div>
   <div style="margin-bottom:24px">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">自腹高速代（円・任意）</div>
-   <input id="toll-input" type="number" inputmode="numeric" placeholder="例: 500">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円）（運賃のみ・税抜）</div>
+   <input id="fare-input" type="number" inputmode="numeric" placeholder="例: 3200">
   </div>
   <div style="display:flex;gap:10px">
    <button onclick="skipFareModal()" style="flex:1;padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:13px;font-weight:700">スキップ</button>
@@ -1034,7 +1060,7 @@ function toggleDuty(){
   shiftLog.push({
    dateStr:new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}),
    startTs:dutyStart.getTime(),endTs,
-   durationSec:Math.floor((endTs-dutyStart.getTime())/1000)
+   durationSec:Math.floor((endTs-dutyStart.getTime())/1000)+1800
   });
   localStorage.setItem('taxi_shift_log',JSON.stringify(shiftLog));
  }
@@ -1250,6 +1276,10 @@ function connectFirebase(config){
     db.ref('drivers').on('child_removed',snap=>{
       const id=snap.key;if(id===myId)return;
       delete driverData[id];removePeerMarker(id);updateDriverList();
+    });
+    db.ref('team_sales').on('value',snap=>{
+      teamSales=snap.val()||{};
+      renderTeamSalesRanking();
     });
     const chatInitTs=Date.now();
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
@@ -1883,10 +1913,61 @@ const MONTHLY_TARGET_HOURS=288;
 
 function saveTargetDays(){
  const v=document.getElementById('s-target-days').value;
+ const amt=document.getElementById('s-target-amount').value;
  localStorage.setItem('taxi_target_days',v);
- toast('✅ 出勤予定日数を保存しました');
+ localStorage.setItem('taxi_target_amount',amt);
+ toast('✅ 目標を保存しました');
  renderWorkStats();
+ updateDailyBar();
 }
+
+function calcPerDayHours(){
+ const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
+ const shifts=getMonthShifts();
+ const workedDays=shifts.length;
+ const workedSec=shifts.reduce((a,s)=>a+(s.durationSec||0),0);
+ const workedHours=workedSec/3600;
+ const remainDays=Math.max(targetDays-workedDays,0);
+ const remainHours=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
+ if(remainDays<=0)return null;
+ if(remainDays===1)return Math.max(remainHours-0.5,0);
+ return remainHours/remainDays;
+}
+
+function updateDailyBar(){
+ const timeEl=document.getElementById('daily-time-left');
+ const amtEl=document.getElementById('daily-amount-left');
+ if(!timeEl||!amtEl)return;
+ if(!isDuty||!dutyStart){
+  timeEl.textContent='--:--:--';
+  timeEl.style.color='var(--gold)';
+  amtEl.textContent='-';
+  return;
+ }
+ const perDayHours=calcPerDayHours();
+ if(perDayHours===null){
+  timeEl.textContent='--:--:--';
+ }else{
+  const elapsedSec=Math.floor((Date.now()-dutyStart.getTime())/1000);
+  const remainSec=Math.round(perDayHours*3600)-elapsedSec;
+  timeEl.textContent=(remainSec<0?'-':'')+toHMS(Math.abs(remainSec));
+  timeEl.style.color=remainSec<0?'var(--red)':'var(--gold)';
+ }
+ const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
+ const targetAmount=parseInt(localStorage.getItem('taxi_target_amount')||'0');
+ const dailyTarget=targetDays>0?targetAmount/targetDays:0;
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const todayStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+ const todaySales=log.filter(e=>e.dateStr===todayStr).reduce((a,e)=>a+(e.fare||0),0);
+ if(dailyTarget>0){
+  const remainAmt=dailyTarget-todaySales;
+  amtEl.textContent=remainAmt>0?`¥${Math.round(remainAmt).toLocaleString()}`:'達成 🎉';
+  amtEl.style.color=remainAmt>0?'var(--cyan)':'var(--green)';
+ }else{
+  amtEl.textContent='¥'+todaySales.toLocaleString();
+ }
+}
+setInterval(updateDailyBar,1000);
 
 function getMonthShifts(){
  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
@@ -1907,7 +1988,7 @@ function renderWorkStats(){
  const remainHours=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
  let perDayStr='-';
  if(remainDays>0){
-  const perDayHours=(remainHours/remainDays)+0.5;
+  const perDayHours=remainDays===1?Math.max(remainHours-0.5,0):remainHours/remainDays;
   const h=Math.floor(perDayHours);
   const m=Math.round((perDayHours-h)*60);
   perDayStr=`${h}時間${m}分`;
@@ -1915,9 +1996,53 @@ function renderWorkStats(){
  out.innerHTML=`
   <div class="row2"><span class="rl">今月の実績</span><span class="rv">${workedDays}日 / ${workedHours.toFixed(1)}時間</span></div>
   <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${remainDays}日</span></div>
-  <div class="row2"><span class="rl">残り必要時間</span><span class="rv">${remainHours.toFixed(1)}時間</span></div>
+  <div class="row2"><span class="rl">残り営業時間</span><span class="rv">${remainHours.toFixed(1)}時間</span></div>
   <div class="row2"><span class="rl">1日あたり目安</span><span class="rv" style="color:var(--gold);font-weight:800">${perDayStr}</span></div>
  `;
+ renderShiftEntries();
+}
+
+function renderShiftEntries(){
+ const el=document.getElementById('shift-entries-list');
+ if(!el)return;
+ const shifts=getMonthShifts().slice().sort((a,b)=>b.startTs-a.startTs);
+ if(!shifts.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">今月の記録はありません</div>';return;}
+ el.innerHTML=shifts.map(s=>{
+  const h=(s.durationSec/3600).toFixed(1);
+  return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+   <div style="flex:1;font-size:12px">
+    <span style="color:var(--muted)">${s.dateStr}</span>
+    <span style="font-weight:700;color:var(--gold);margin-left:6px">${h}時間</span>
+   </div>
+   <button onclick="editShiftEntry(${s.startTs})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
+   <button onclick="deleteShiftEntry(${s.startTs})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
+  </div>`;
+ }).join('');
+}
+
+function editShiftEntry(startTs){
+ const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+ const idx=log.findIndex(s=>s.startTs===startTs);
+ if(idx<0)return;
+ const curHours=(log[idx].durationSec/3600).toFixed(1);
+ const newHours=prompt('勤務時間（時間、小数で入力可）',curHours);
+ if(newHours===null)return;
+ const h=parseFloat(newHours);
+ if(isNaN(h)||h<0){toast('⚠️ 数値を入力してください');return;}
+ log[idx].durationSec=Math.round(h*3600);
+ log[idx].endTs=log[idx].startTs+log[idx].durationSec*1000;
+ localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+ toast('✅ 記録を更新しました');
+ renderWorkStats();
+}
+
+function deleteShiftEntry(startTs){
+ if(!confirm('この勤務記録を削除しますか？'))return;
+ let log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+ log=log.filter(s=>s.startTs!==startTs);
+ localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+ toast('🗑 記録を削除しました');
+ renderWorkStats();
 }
 
 // ===== 運賃・売上管理 =====
@@ -1925,16 +2050,21 @@ let pendingFareTripInfo=null;
 
 function showFareModal(){
  document.getElementById('fare-input').value='';
- document.getElementById('toll-input').value='';
  document.getElementById('fare-modal').style.display='flex';
  setTimeout(()=>document.getElementById('fare-input').focus(),200);
 }
 
 function confirmFareModal(){
  const fare=parseInt(document.getElementById('fare-input').value)||0;
- const toll=parseInt(document.getElementById('toll-input').value)||0;
- saveFareEntry(fare,toll);
+ saveFareEntry(fare,0);
  document.getElementById('fare-modal').style.display='none';
+}
+
+function saveTollEntry(){
+ const toll=parseInt(document.getElementById('toll-only-input').value)||0;
+ if(toll<=0){toast('⚠️ 金額を入力してください');return;}
+ saveFareEntry(0,toll);
+ document.getElementById('toll-only-input').value='';
 }
 
 function skipFareModal(){
@@ -1951,6 +2081,61 @@ function saveFareEntry(fare,toll){
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast(`💰 運賃 ¥${fare.toLocaleString()} を記録しました`);
  renderSalesStats();
+ updateDailyBar();
+ pushTeamSales();
+}
+
+let teamSales={};
+
+function pushTeamSales(){
+ if(!db)return;
+ const name=localStorage.getItem('taxi_name')||'自分';
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const now=new Date();
+ const todayStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+ const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+ const todayFare=log.filter(e=>e.dateStr===todayStr).reduce((a,e)=>a+(e.fare||0),0);
+ const monthFare=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+(e.fare||0),0);
+ const monthDays=getMonthShifts().length;
+ db.ref('team_sales/'+myId).set({name,todayFare,todayDateStr:todayStr,monthFare,monthDays,ts:Date.now()});
+}
+
+function renderTeamSalesRanking(){
+ const todayEl=document.getElementById('team-sales-ranking-today');
+ const monthEl=document.getElementById('team-sales-ranking-month');
+ if(!todayEl||!monthEl)return;
+ const now=new Date();
+ const todayStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+ const list=Object.values(teamSales||{});
+ const todayList=list.filter(d=>d.todayDateStr===todayStr).slice().sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
+ const monthList=list.slice().sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
+ if(!todayList.length){
+  todayEl.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">まだ記録がありません</div>';
+ }else{
+  todayEl.innerHTML=todayList.map((d,i)=>{
+   const isMe=false;
+   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+    <div style="width:22px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'}">${i+1}</div>
+    <div style="flex:1;font-size:13px;font-weight:600">${esc(d.name||'不明')}</div>
+    <div style="font-size:14px;font-weight:800;color:var(--green)">¥${(d.todayFare||0).toLocaleString()}</div>
+   </div>`;
+  }).join('');
+ }
+ if(!monthList.length){
+  monthEl.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">まだ記録がありません</div>';
+ }else{
+  monthEl.innerHTML=monthList.map((d,i)=>{
+   const avg=d.monthDays>0?Math.round((d.monthFare||0)/d.monthDays):0;
+   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+    <div style="width:22px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'}">${i+1}</div>
+    <div style="flex:1;font-size:13px">
+     <div style="font-weight:600">${esc(d.name||'不明')}</div>
+     <div style="font-size:11px;color:var(--muted)">1日平均 ¥${avg.toLocaleString()}（${d.monthDays||0}日出勤）</div>
+    </div>
+    <div style="font-size:14px;font-weight:800;color:var(--green)">¥${(d.monthFare||0).toLocaleString()}</div>
+   </div>`;
+  }).join('');
+ }
 }
 
 function renderSalesStats(){
@@ -1969,6 +2154,55 @@ function renderSalesStats(){
   <div class="row2"><span class="rl">今月の売上</span><span class="rv" style="color:var(--green)">¥${sum(monthEntries,'fare').toLocaleString()}</span></div>
   <div class="row2"><span class="rl">今月の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(monthEntries,'toll').toLocaleString()}</span></div>
  `;
+ renderFareEntries();
+}
+
+function renderFareEntries(){
+ const el=document.getElementById('fare-entries-list');
+ if(!el)return;
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const now=new Date();
+ const todayStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+ const todayEntries=log.filter(e=>e.dateStr===todayStr).sort((a,b)=>b.ts-a.ts);
+ if(!todayEntries.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">本日の記録はありません</div>';return;}
+ el.innerHTML=todayEntries.map(e=>{
+  const timeStr=new Date(e.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+   <div style="flex:1;font-size:12px">
+    <span style="color:var(--muted)">${timeStr}</span>
+    ${e.fare?`<span style="font-weight:700;color:var(--green);margin-left:6px">¥${e.fare.toLocaleString()}</span>`:''}
+    ${e.toll?`<span style="color:var(--red);margin-left:6px">高速¥${e.toll.toLocaleString()}</span>`:''}
+   </div>
+   <button onclick="editFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
+   <button onclick="deleteFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
+  </div>`;
+ }).join('');
+}
+
+function editFareEntry(ts){
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const idx=log.findIndex(e=>e.ts===ts);
+ if(idx<0)return;
+ const newFare=prompt('運賃（円）',log[idx].fare);
+ if(newFare===null)return;
+ const newToll=prompt('自腹高速代（円）',log[idx].toll||0);
+ if(newToll===null)return;
+ log[idx].fare=parseInt(newFare)||0;
+ log[idx].toll=parseInt(newToll)||0;
+ localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ toast('✅ 記録を更新しました');
+ renderSalesStats();
+ pushTeamSales();
+}
+
+function deleteFareEntry(ts){
+ if(!confirm('この記録を削除しますか？'))return;
+ let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ log=log.filter(e=>e.ts!==ts);
+ localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ toast('🗑 記録を削除しました');
+ renderSalesStats();
+ pushTeamSales();
 }
 
 function toggleNotifSetting(){
@@ -2923,7 +3157,10 @@ function loadSettings(){
   document.getElementById('s-name').value=localStorage.getItem('taxi_name')||'';
   document.getElementById('s-car').value=localStorage.getItem('taxi_car')||'';
   document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
+  document.getElementById('s-target-amount').value=localStorage.getItem('taxi_target_amount')||'';
  renderWorkStats();renderSalesStats();
+ updateDailyBar();
+ renderTeamSalesRanking();
 }
 function saveSettings(){
   localStorage.setItem('taxi_name',document.getElementById('s-name').value.trim()||'自分');
