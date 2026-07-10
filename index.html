@@ -54,8 +54,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch{flex:1;text-align:center;padding:8px 2px;border-radius:10px;font-size:12px;
   font-weight:700;cursor:pointer;border:2px solid transparent;
   backdrop-filter:blur(6px);transition:all .2s}
-.sch.kuusha{background:rgba(34,197,94,.18);color:var(--green)}
-.sch.jitsusha{background:rgba(239,68,68,.18);color:var(--red)}
+.sch.kuusha{background:rgba(239,68,68,.18);color:var(--red)}
+.sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
 .gps-pill{position:absolute;bottom:8px;left:8px;z-index:500;
@@ -119,8 +119,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .driver-name{font-size:14px;font-weight:600}
 .driver-sub{font-size:11px;color:var(--muted);margin-top:1px}
 .driver-status{font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap}
-.driver-status.kuusha{background:rgba(34,197,94,.15);color:var(--green)}
-.driver-status.jitsusha{background:rgba(239,68,68,.15);color:var(--red)}
+.driver-status.kuusha{background:rgba(239,68,68,.15);color:var(--red)}
+.driver-status.jitsusha{background:rgba(34,197,94,.15);color:var(--green)}
 .driver-status.kaisou{background:rgba(245,158,11,.15);color:var(--amber)}
 .driver-status.offline{background:rgba(120,120,160,.15);color:var(--muted)}
 .pc{padding:12px}
@@ -265,8 +265,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="map-status-bar" id="status-bar" style="flex-direction:column;gap:5px">
     <!-- Row 1: 空車・実車・回送 -->
     <div style="display:flex;gap:6px;width:100%">
-      <div class="sch kuusha sel" id="sch-kuusha" onclick="setStatus('kuusha')">🟢 空車</div>
-      <div class="sch jitsusha" id="sch-jitsusha" onclick="setStatus('jitsusha')">🔴 実車</div>
+      <div class="sch kuusha sel" id="sch-kuusha" onclick="setStatus('kuusha')">🔴 空車</div>
+      <div class="sch jitsusha" id="sch-jitsusha" onclick="setStatus('jitsusha')">🟢 実車</div>
       <div class="sch kaisou" id="sch-kaisou" onclick="setStatus('kaisou')">🟡 回送</div>
     </div>
     <!-- Row 2: 待機開始・タイマー・リセット -->
@@ -369,6 +369,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div id="dest-list"></div>
   <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
   <div id="team-dests-list"></div>
+  <div class="sec" style="margin-top:18px">🏆 運賃ランキング（個人）</div>
+  <div id="fare-ranking-personal"></div>
+  <div class="sec" style="margin-top:18px">🏆 運賃ランキング（仲間）</div>
+  <div id="fare-ranking-team"></div>
 </div>
 </div>
 
@@ -494,7 +498,22 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="btn btn-p" onclick="debugGeocode()" style="width:100%">📍 現在地の住所をテスト</button>
     <div id="debug-geo-out" style="margin-top:10px;font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;display:none"></div>
   </div>
-  <div class="sec">📅 勤務時間管理</div>
+  <div class="sec">🔄 月途中から利用する方向け</div>
+<div class="card">
+ <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">月の途中からこのアプリを使い始める場合、前日までの実績をここで入力しておくと、以降の集計・ランキングに自動で反映されます。</div>
+ <label>前日までの累計売上（円）</label>
+ <input type="number" id="s-carry-fare" placeholder="例: 250000">
+ <label>前日までの累計時間（時間）</label>
+ <input type="number" id="s-carry-hours" placeholder="例: 120">
+ <label>前日までの勤務日数（日）</label>
+ <input type="number" id="s-carry-days" placeholder="例: 10">
+ <div class="btn-row">
+  <button class="btn btn-p" onclick="saveCarryover()" style="flex:1">保存する</button>
+  <button class="btn btn-d" onclick="deleteCarryover()" style="flex-shrink:0">🗑 リセット</button>
+ </div>
+ <div id="carryover-status" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
+</div>
+<div class="sec">📅 勤務時間管理</div>
 <div class="card">
  <label>今月の出勤予定日数</label>
  <input type="number" id="s-target-days" placeholder="例: 12">
@@ -684,7 +703,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
  <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px">
   <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:20px">🚕 お疲れさまでした</div>
   <div style="margin-bottom:24px">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円）（運賃のみ・税抜）</div>
+   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円）（運賃のみ・税抜、割引あれば割引後）</div>
    <input id="fare-input" type="number" inputmode="numeric" placeholder="例: 3200">
   </div>
   <div style="display:flex;gap:10px">
@@ -733,8 +752,8 @@ let seenMsgIds=new Set();
 localStorage.setItem('taxi_my_id',myId);
 
 const statusCfg={
-  kuusha: {label:'🟢 空車', color:'#22c55e'},
-  jitsusha:{label:'🔴 実車', color:'#ef4444'},
+  kuusha: {label:'🔴 空車', color:'#ef4444'},
+  jitsusha:{label:'🟢 実車', color:'#22c55e'},
   kaisou:  {label:'🟡 回送', color:'#f59e0b'},
   offline: {label:'⚫ 休み', color:'#7878a0'}
 };
@@ -1244,8 +1263,11 @@ function setStatus(s){
   }
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
     jitsushaStart=null;
-    if(myLat!==null&&boardInfo)createTripEntry(myLat,myLng);
-    showFareModal();
+    if(myLat!==null&&boardInfo){
+      const tripTs=Date.now();
+      createTripEntry(myLat,myLng,tripTs);
+      showFareModal(tripTs);
+    }
     boardInfo=null;
   }
 }
@@ -1516,7 +1538,7 @@ function kanjiToNum(s){
   });
 }
 
-async function createTripEntry(alightLat,alightLng){
+async function createTripEntry(alightLat,alightLng,presetTs){
   const saved=boardInfo; // capture before async
   const alightTime=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   const now=new Date();
@@ -1534,7 +1556,7 @@ async function createTripEntry(alightLat,alightLng){
     alightAddr:alightAddr||'',
     waitMins:saved?saved.waitMins:null,
     waitAddr:saved?saved.waitAddr:null,
-    dateStr,ts:now.getTime()
+    dateStr,ts:presetTs||now.getTime()
   };
   destinations.push(entry);
   saveDests();renderDests();
@@ -1709,6 +1731,55 @@ function renderTeamDests(){
   el.innerHTML=html||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
   // 開いていたフォルダを復元
   openFolders.forEach(id=>{const f=document.getElementById('team-fold-'+id);if(f)f.style.display='block';});
+  renderFareRanking();
+}
+
+function buildFareTripHtml(d,driverLabel){
+  const isAirport=!!d.boardSpot;
+  const isAbure=d.alightAddr==='あぶれ';
+  const waitStr=d.waitMins?` (待機${d.waitMins}分)`:d.waitMinsStr?` (待機${d.waitMinsStr})`:'';
+  const boardDesc=isAirport?`東京都大田区羽田空港　${esc(d.boardSpot)}乗り場`:esc(d.boardAddr||'乗車');
+  let alightDesc;
+  if(isAbure){
+    alightDesc=`あぶれ${waitStr}`;
+  } else {
+    const addr=esc(d.alightAddr||'住所取得中');
+    alightDesc=isAirport?`${addr}　東京都大田区羽田空港${esc(d.boardSpot)}乗り場${waitStr}`:`${addr}${waitStr}`;
+  }
+  return `
+  <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+    ${driverLabel?`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px">${esc(driverLabel)}</div>`:''}
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+      <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
+      <span style="font-size:12px;color:#fff">${boardDesc}</span>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
+      <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
+    </div>
+    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
+  </div>`;
+}
+
+function renderFareRanking(){
+  const pEl=document.getElementById('fare-ranking-personal');
+  const tEl=document.getElementById('fare-ranking-team');
+  if(!pEl||!tEl)return;
+  // 個人ランキング
+  const myTrips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0));
+  pEl.innerHTML=myTrips.length
+    ?myTrips.map((d,i)=>`<div style="font-size:12px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'};margin-bottom:2px">${i+1}位</div>${buildFareTripHtml(d,null)}`).join('')
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
+  // 仲間ランキング（全ドライバー横断）
+  let allTrips=[];
+  Object.keys(teamDests).forEach(driverId=>{
+    const entries=Object.values(teamDests[driverId]||{}).filter(e=>e.type==='trip'&&e.fare>0);
+    entries.forEach(e=>allTrips.push(e));
+  });
+  allTrips.sort((a,b)=>(b.fare||0)-(a.fare||0));
+  tEl.innerHTML=allTrips.length
+    ?allTrips.slice(0,30).map((d,i)=>`<div style="font-size:12px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'};margin-bottom:2px">${i+1}位</div>${buildFareTripHtml(d,d.driverName||'不明')}`).join('')
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
 }
 
 function clearWaitHistory(){
@@ -1921,12 +1992,54 @@ function saveTargetDays(){
  updateDailyBar();
 }
 
+function getCarryover(){
+ return {
+  fare:parseInt(localStorage.getItem('taxi_carry_fare')||'0')||0,
+  hours:parseFloat(localStorage.getItem('taxi_carry_hours')||'0')||0,
+  days:parseInt(localStorage.getItem('taxi_carry_days')||'0')||0
+ };
+}
+
+function saveCarryover(){
+ const fare=parseInt(document.getElementById('s-carry-fare').value)||0;
+ const hours=parseFloat(document.getElementById('s-carry-hours').value)||0;
+ const days=parseInt(document.getElementById('s-carry-days').value)||0;
+ localStorage.setItem('taxi_carry_fare',fare);
+ localStorage.setItem('taxi_carry_hours',hours);
+ localStorage.setItem('taxi_carry_days',days);
+ toast('✅ 前日までの実績を保存しました');
+ renderCarryoverStatus();
+ renderWorkStats();renderSalesStats();updateDailyBar();pushTeamSales();
+}
+
+function deleteCarryover(){
+ if(!confirm('前日までの実績をリセットしますか？'))return;
+ localStorage.removeItem('taxi_carry_fare');
+ localStorage.removeItem('taxi_carry_hours');
+ localStorage.removeItem('taxi_carry_days');
+ document.getElementById('s-carry-fare').value='';
+ document.getElementById('s-carry-hours').value='';
+ document.getElementById('s-carry-days').value='';
+ toast('🗑 リセットしました');
+ renderCarryoverStatus();
+ renderWorkStats();renderSalesStats();updateDailyBar();pushTeamSales();
+}
+
+function renderCarryoverStatus(){
+ const el=document.getElementById('carryover-status');
+ if(!el)return;
+ const c=getCarryover();
+ if(!c.fare&&!c.hours&&!c.days){el.textContent='現在、繰越実績はありません。';return;}
+ el.textContent=`現在の繰越: ¥${c.fare.toLocaleString()} / ${c.hours}時間 / ${c.days}日`;
+}
+
 function calcPerDayHours(){
  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
+ const carry=getCarryover();
  const shifts=getMonthShifts();
- const workedDays=shifts.length;
+ const workedDays=shifts.length+carry.days;
  const workedSec=shifts.reduce((a,s)=>a+(s.durationSec||0),0);
- const workedHours=workedSec/3600;
+ const workedHours=workedSec/3600+carry.hours;
  const remainDays=Math.max(targetDays-workedDays,0);
  const remainHours=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
  if(remainDays<=0)return null;
@@ -1980,10 +2093,11 @@ function renderWorkStats(){
  const out=document.getElementById('work-stats-out');
  if(!out)return;
  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
+ const carry=getCarryover();
  const shifts=getMonthShifts();
- const workedDays=shifts.length;
+ const workedDays=shifts.length+carry.days;
  const workedSec=shifts.reduce((a,s)=>a+(s.durationSec||0),0);
- const workedHours=workedSec/3600;
+ const workedHours=workedSec/3600+carry.hours;
  const remainDays=Math.max(targetDays-workedDays,0);
  const remainHours=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
  let perDayStr='-';
@@ -2046,9 +2160,10 @@ function deleteShiftEntry(startTs){
 }
 
 // ===== 運賃・売上管理 =====
-let pendingFareTripInfo=null;
+let pendingFareTripTs=null;
 
-function showFareModal(){
+function showFareModal(tripTs){
+ pendingFareTripTs=tripTs||null;
  document.getElementById('fare-input').value='';
  document.getElementById('fare-modal').style.display='flex';
  setTimeout(()=>document.getElementById('fare-input').focus(),200);
@@ -2056,8 +2171,76 @@ function showFareModal(){
 
 function confirmFareModal(){
  const fare=parseInt(document.getElementById('fare-input').value)||0;
- saveFareEntry(fare,0);
+ saveFareEntry(fare,0,pendingFareTripTs);
+ attachFareToTrip(pendingFareTripTs,fare,0);
  document.getElementById('fare-modal').style.display='none';
+}
+
+function attachFareToTrip(tripTs,fare,retryCount){
+ if(!tripTs)return;
+ retryCount=retryCount||0;
+ const idx=destinations.findIndex(d=>d.ts===tripTs);
+ if(idx>=0){
+  destinations[idx].fare=fare;
+  saveDests();renderDests();
+  if(db){
+   db.ref('team_dests/'+myId).orderByChild('ts').equalTo(tripTs).once('value',snap=>{
+    snap.forEach(child=>child.ref.update({fare}));
+   });
+  }
+ }else if(retryCount<8){
+  // 住所取得の非同期処理がまだ終わっていない場合は少し待って再試行
+  setTimeout(()=>attachFareToTrip(tripTs,fare,retryCount+1),500);
+ }
+}
+
+function editTripFare(ts){
+ const idx=destinations.findIndex(d=>d.ts===ts);
+ if(idx<0)return;
+ const cur=destinations[idx].fare||0;
+ const val=prompt('運賃（円）（運賃のみ・税抜、割引あれば割引後）',cur);
+ if(val===null)return;
+ const fare=parseInt(val)||0;
+ destinations[idx].fare=fare;
+ saveDests();renderDests();
+ syncFareLogByTripTs(ts,fare);
+ if(db){
+  db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
+   snap.forEach(child=>child.ref.update({fare}));
+  });
+ }
+}
+
+function deleteTripFare(ts){
+ if(!confirm('この運賃を削除しますか？'))return;
+ const idx=destinations.findIndex(d=>d.ts===ts);
+ if(idx>=0){
+  delete destinations[idx].fare;
+  saveDests();renderDests();
+ }
+ syncFareLogByTripTs(ts,null);
+ if(db){
+  db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
+   snap.forEach(child=>child.ref.update({fare:0}));
+  });
+ }
+}
+
+function syncFareLogByTripTs(tripTs,fareOrNull){
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const idx=log.findIndex(e=>e.tripTs===tripTs);
+ if(idx<0)return;
+ if(fareOrNull===null){
+  log.splice(idx,1);
+  toast('🗑 運賃記録を削除しました');
+ }else{
+  log[idx].fare=fareOrNull;
+  toast('✅ 運賃記録を更新しました');
+ }
+ localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ renderSalesStats();
+ updateDailyBar();
+ pushTeamSales();
 }
 
 function saveTollEntry(){
@@ -2071,12 +2254,12 @@ function skipFareModal(){
  document.getElementById('fare-modal').style.display='none';
 }
 
-function saveFareEntry(fare,toll){
+function saveFareEntry(fare,toll,tripTs){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const now=new Date();
  log.push({
   dateStr:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
-  fare,toll,ts:now.getTime()
+  fare,toll,ts:now.getTime(),tripTs:tripTs||null
  });
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast(`💰 運賃 ¥${fare.toLocaleString()} を記録しました`);
@@ -2091,12 +2274,13 @@ function pushTeamSales(){
  if(!db)return;
  const name=localStorage.getItem('taxi_name')||'自分';
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const carry=getCarryover();
  const now=new Date();
  const todayStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
  const todayFare=log.filter(e=>e.dateStr===todayStr).reduce((a,e)=>a+(e.fare||0),0);
- const monthFare=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+(e.fare||0),0);
- const monthDays=getMonthShifts().length;
+ const monthFare=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+(e.fare||0),0)+carry.fare;
+ const monthDays=getMonthShifts().length+carry.days;
  db.ref('team_sales/'+myId).set({name,todayFare,todayDateStr:todayStr,monthFare,monthDays,ts:Date.now()});
 }
 
@@ -2142,6 +2326,7 @@ function renderSalesStats(){
  const out=document.getElementById('sales-stats-out');
  if(!out)return;
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const carry=getCarryover();
  const now=new Date();
  const todayStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
@@ -2151,7 +2336,7 @@ function renderSalesStats(){
  out.innerHTML=`
   <div class="row2"><span class="rl">本日の売上</span><span class="rv" style="color:var(--green)">¥${sum(todayEntries,'fare').toLocaleString()}</span></div>
   <div class="row2"><span class="rl">本日の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(todayEntries,'toll').toLocaleString()}</span></div>
-  <div class="row2"><span class="rl">今月の売上</span><span class="rv" style="color:var(--green)">¥${sum(monthEntries,'fare').toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">今月の売上（繰越込み）</span><span class="rv" style="color:var(--green)">¥${(sum(monthEntries,'fare')+carry.fare).toLocaleString()}</span></div>
   <div class="row2"><span class="rl">今月の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(monthEntries,'toll').toLocaleString()}</span></div>
  `;
  renderFareEntries();
@@ -2602,6 +2787,11 @@ function renderDests(){
             <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
             <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
           </div>
+          ${d.fare?`<div style="margin-top:5px;display:flex;align-items:center;gap:8px">
+            <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${d.fare.toLocaleString()}</div>
+            <button onclick="editTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
+            <button onclick="deleteTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer">削除</button>
+          </div>`:''}
         </div>`;
       } else if(d.type==='cp'){
         html+=`
@@ -2625,6 +2815,7 @@ function renderDests(){
   });
   el.innerHTML=html;
   document.getElementById('done-count').textContent=visible.length+'件';
+  renderFareRanking();
 }
 function openDestModal(){document.getElementById('dest-overlay').classList.add('open');}
 function closeDestModal(){
@@ -3080,6 +3271,13 @@ function sendChat(){
   }
 }
 
+function userColorFromId(str){
+ let hash=0;
+ for(let i=0;i<str.length;i++){hash=str.charCodeAt(i)+((hash<<5)-hash);}
+ const hue=Math.abs(hash)%360;
+ return `hsl(${hue},65%,50%)`;
+}
+
 function appendChatBubble(m,isMe){
   const key=m.ts+'_'+(m.uid||'');
   if(seenMsgIds.has(key))return;seenMsgIds.add(key);
@@ -3108,8 +3306,9 @@ function appendChatBubble(m,isMe){
   }else{
     bodyHtml=`<div class="bubble">${esc(m.text)}</div>`;
   }
+  const avColor=isMe?'var(--accent)':userColorFromId(m.uid||m.name||'?');
   div.innerHTML=`
-    <div class="av ${isMe?'me-av':'other'}">${esc(init)}</div>
+    <div class="av ${isMe?'me-av':'other'}" style="background:${avColor}">${esc(init)}</div>
     <div>
       ${!isMe?`<div class="msg-name">${esc(m.name)}</div>`:''}
       ${bodyHtml}
@@ -3158,6 +3357,10 @@ function loadSettings(){
   document.getElementById('s-car').value=localStorage.getItem('taxi_car')||'';
   document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
   document.getElementById('s-target-amount').value=localStorage.getItem('taxi_target_amount')||'';
+  document.getElementById('s-carry-fare').value=localStorage.getItem('taxi_carry_fare')||'';
+  document.getElementById('s-carry-hours').value=localStorage.getItem('taxi_carry_hours')||'';
+  document.getElementById('s-carry-days').value=localStorage.getItem('taxi_carry_days')||'';
+ renderCarryoverStatus();
  renderWorkStats();renderSalesStats();
  updateDailyBar();
  renderTeamSalesRanking();
