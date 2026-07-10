@@ -659,6 +659,14 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
   <div style="margin-bottom:24px">
    <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">自腹高速代（円・任意）</div>
+   <input id="toll-input" type="number" inputmode="numeric" placeholder="例: 500">
+  </div>
+  <div style="display:flex;gap:10px">
+   <button onclick="skipFareModal()" style="flex:1;padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:13px;font-weight:700">スキップ</button>
+   <button onclick="confirmFareModal()" style="flex:2;padding:12px;border:none;border-radius:10px;background:var(--green);color:#fff;font-size:15px;font-weight:700">✅ 記録する</button>
+  </div>
+ </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
