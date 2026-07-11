@@ -428,6 +428,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       🔔 OS通知を許可する（初回）
     </button>
     <div id="notif-status" style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center"></div>
+    <button class="btn btn-g" onclick="openLocationSettings()" style="width:100%;font-size:12px;margin-top:8px">
+      📍 位置情報の設定を開く（「常に許可」にしてください）
+    </button>
   </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
@@ -747,6 +750,60 @@ let chatReadMap={};
 let posHistory=[],stopState=null,bearingBeforeStop=null;
 let wakeLock=null,wakeLockOn=false;
 let seenMsgIds=new Set();
+let chatMsgCache={};
+const HAND_ICON_KEY='hand_icon';
+const HAND_ICON_B64='data:image/png;base64,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';
+const TEXT_REACTIONS=['ドンマイ','あるある','やったね','さすが','モテ期','残念'];
+const REACTION_EMOJIS=['👍','❤️','😂','😮','😢'];
+const REACTION_PICKER_EMOJIS=[HAND_ICON_KEY,'ドンマイ','あるある','やったね','さすが','モテ期','残念','👍','❤️','😂','😮','😢','🙏','🔥','🎉','👏','😴','☕','🚕','⏰','💦','😭','😅','🤔','👀','💪','✅','❌','⚠️','🌙','☀️'];
+
+function reactionDisplay(e){
+  if(e===HAND_ICON_KEY)return `<img src="${HAND_ICON_B64}" style="height:16px;vertical-align:middle;display:inline-block">`;
+  return e;
+}
+
+function buildReactionBarHtml(fbKey,reactions){
+  if(!fbKey)return '';
+  reactions=reactions||{};
+  const usedEmojis=Object.keys(reactions).filter(e=>reactions[e]&&Object.keys(reactions[e]).length>0);
+  const allEmojis=[...new Set([HAND_ICON_KEY,...TEXT_REACTIONS,...REACTION_EMOJIS,...usedEmojis])];
+  const chips=allEmojis.map(e=>{
+    const users=reactions[e]?Object.keys(reactions[e]):[];
+    const mine=users.includes(myId);
+    const countStr=users.length?` ${users.length}`:'';
+    const isText=TEXT_REACTIONS.includes(e);
+    return `<span onclick="toggleReaction('${fbKey}','${e}')" style="cursor:pointer;font-size:11px;font-weight:${isText?'700':'400'};white-space:nowrap;background:${mine?'rgba(79,142,247,.25)':'var(--surface2)'};border:1px solid ${mine?'var(--accent)':'var(--border)'};border-radius:10px;padding:2px 7px;margin-right:4px;margin-bottom:4px;display:inline-block">${reactionDisplay(e)}${countStr}</span>`;
+  }).join('');
+  const addBtn=`<span onclick="openReactionPicker('${fbKey}')" style="cursor:pointer;font-size:12px;color:var(--muted);border:1px dashed var(--border);border-radius:10px;padding:1px 7px;margin-bottom:4px;display:inline-block">➕</span>`;
+  return `<div class="reaction-bar" data-reactkey="${fbKey}" style="margin-top:4px;display:flex;flex-wrap:wrap;align-items:center">${chips}${addBtn}</div>`;
+}
+
+function openReactionPicker(fbKey){
+  let el=document.getElementById('reaction-picker-overlay');
+  if(!el){
+    el=document.createElement('div');
+    el.id='reaction-picker-overlay';
+    el.style.cssText='position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center';
+    el.onclick=e=>{if(e.target===el)el.remove();};
+    document.body.appendChild(el);
+  }
+  el.innerHTML=`<div style="background:var(--surface);border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:480px">
+    <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px">リアクションを選択</div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
+      ${REACTION_PICKER_EMOJIS.map(e=>`<button onclick="toggleReaction('${fbKey}','${e}');document.getElementById('reaction-picker-overlay').remove()" style="font-size:${TEXT_REACTIONS.includes(e)?'13px':'22px'};font-weight:${TEXT_REACTIONS.includes(e)?'700':'400'};background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 4px;cursor:pointer;color:var(--text);display:flex;align-items:center;justify-content:center;min-height:38px">${reactionDisplay(e)}</button>`).join('')}
+    </div>
+  </div>`;
+}
+
+function toggleReaction(fbKey,emoji){
+  if(!db)return;
+  const cur=chatMsgCache[fbKey]||{};
+  const reactions=cur.reactions||{};
+  const users=reactions[emoji]?Object.keys(reactions[emoji]):[];
+  const mine=users.includes(myId);
+  const ref=db.ref('chat/'+fbKey+'/reactions/'+emoji+'/'+myId);
+  if(mine){ref.remove();}else{ref.set(true);}
+}
 
 localStorage.setItem('taxi_my_id',myId);
 
@@ -866,7 +923,7 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
       ${initial}
       ${gpsDot}
       ${weakBadge}
-      <div style="position:absolute;bottom:${labelBottom};left:50%;
+        <div style="position:absolute;bottom:${labelBottom};left:50%;
         transform:translateX(-50%);
         white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
         font-size:11px;padding:2px 7px;border-radius:5px;font-weight:700;text-align:center">
@@ -902,7 +959,7 @@ function updatePeerMarker(id,d){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
     m.bindPopup(`<b>${esc(d.name||'不明')}</b><br>${statusCfg[status].label}<br>${d.car||''}`);
     m.on('click',()=>{
-            followPeerId=null;autoFollow=false;
+      followPeerId=null;autoFollow=false;
       const fb=document.getElementById('follow-btn');
       if(fb){fb.classList.remove('on');fb.title='オートフォロー';}
       leafletMap.setView([d.lat,d.lng],16);
@@ -1306,13 +1363,23 @@ function connectFirebase(config){
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
       const isMe=m.uid===myId;
-      appendChatBubble(m,isMe);
+      appendChatBubble(m,isMe,snap.key);
       // 接続後に届いた他人のメッセージのみ未読カウント
       if(!chatOnPage&&!isMe&&(m.ts||0)>chatInitTs){
         unreadChatCount++;updateChatBadge();
         const notifBody=m.type==='image'?'📷 画像が送られました':(m.text||'');
         sendNotif('💬 '+(m.name||'仲間'),notifBody,'chat-msg-'+snap.key);
       }
+    });
+    db.ref('chat').on('child_removed',snap=>{
+      const el=document.querySelector(`[data-msgkey="${snap.key}"]`);
+      if(el)el.remove();
+    });
+    db.ref('chat').on('child_changed',snap=>{
+      const m=snap.val();if(!m)return;
+      chatMsgCache[snap.key]=m;
+      const bar=document.querySelector(`.reaction-bar[data-reactkey="${snap.key}"]`);
+      if(bar)bar.outerHTML=buildReactionBarHtml(snap.key,m.reactions||{});
     });
     db.ref('pool_moves').limitToLast(200).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
@@ -1781,7 +1848,7 @@ function renderFareRanking(){
     entries.forEach(e=>allTrips.push(e));
   });
   allTrips.sort((a,b)=>(b.fare||0)-(a.fare||0));
-  tEl.innerHTML=(allTrips.length
+    tEl.innerHTML=(allTrips.length
     ?allTrips.slice(0,30).map((d,i)=>`<div style="font-size:12px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'};margin-bottom:2px">${i+1}位</div>${buildFareTripHtml(d,d.driverName||'不明')}`).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>')
     +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
@@ -1805,6 +1872,7 @@ function checkGeofences(lat,lng){
     cpInside[cp.id]=nowInside;
   });
 }
+
 function onDeparture(cp){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
@@ -2451,8 +2519,19 @@ function renderNotifToggle(){
 }
 function sendNotif(title,body,tag){
   if(!isNotifEnabled())return;
+  if(window.AndroidBridge&&window.AndroidBridge.showNotification){
+    window.AndroidBridge.showNotification(title,body,tag);
+    return;
+  }
   if('Notification'in window&&Notification.permission==='granted'){
     new Notification(title,{body,tag,renotify:true});
+  }
+}
+function openLocationSettings(){
+  if(window.AndroidBridge&&window.AndroidBridge.openLocationSettings){
+    window.AndroidBridge.openLocationSettings();
+  }else{
+    toast('⚠️ この機能はアプリ版のみ対応です');
   }
 }
 function requestNotificationPermission(){
@@ -2694,7 +2773,7 @@ function deleteMyAccount(){
   if(!confirm(name+'のアカウントを削除しますか？\nFirebaseからも削除されます。'))return;
   if(db){
     db.ref('drivers/'+myId).remove();
-    db.ref('team_dests/'+myId).remove();
+      db.ref('team_dests/'+myId).remove();
   }
   localStorage.removeItem('taxi_name');
   localStorage.removeItem('taxi_car');
@@ -2709,7 +2788,7 @@ function deleteMyAccount(){
   document.getElementById('admin-car').value='';
   document.getElementById('s-name').value='';
   document.getElementById('s-car').value='';
-    toast('🗑 アカウントを削除しました');
+  toast('🗑 アカウントを削除しました');
 }
 function adminLogout(){
   isAdmin=false;
@@ -3334,7 +3413,7 @@ function userColorFromId(str){
 
 let lastChatDateStr=null;
 
-function appendChatBubble(m,isMe){
+function appendChatBubble(m,isMe,fbKey){
   const key=m.ts+'_'+(m.uid||'');
   if(seenMsgIds.has(key))return;seenMsgIds.add(key);
   const container=document.getElementById('chat-msgs');
@@ -3374,15 +3453,22 @@ function appendChatBubble(m,isMe){
     bodyHtml=`<div class="bubble">${esc(m.text)}</div>`;
   }
   const avColor=isMe?'var(--accent)':userColorFromId(m.uid||m.name||'?');
+  if(fbKey){div.dataset.msgkey=fbKey;chatMsgCache[fbKey]=m;}
+  const delBtn=(isMe&&fbKey)?`<button onclick="deleteChatMessage('${fbKey}')" style="background:none;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:0 4px">🗑削除</button>`:'';
   div.innerHTML=`
     <div class="av ${isMe?'me-av':'other'}" style="background:${avColor}">${esc(init)}</div>
     <div>
-      ${!isMe?`<div class="msg-name">${esc(m.name)}</div>`:''}
       ${bodyHtml}
-      <div class="msg-meta">${m.time}<span class="read-count" data-ts="${m.ts||0}"></span></div>
+      <div class="msg-meta">${m.time}<span class="read-count" data-ts="${m.ts||0}"></span>${delBtn}</div>
+      ${buildReactionBarHtml(fbKey,m.reactions)}
     </div>`;
   container.appendChild(div);container.scrollTop=container.scrollHeight;
   refreshChatReadCounts();
+}
+
+function deleteChatMessage(fbKey){
+  if(!confirm('このメッセージを削除しますか？'))return;
+  if(db)db.ref('chat/'+fbKey).remove();
 }
 
 async function debugGeocode(){
