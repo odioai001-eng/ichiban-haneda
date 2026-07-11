@@ -902,7 +902,7 @@ function updatePeerMarker(id,d){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
     m.bindPopup(`<b>${esc(d.name||'不明')}</b><br>${statusCfg[status].label}<br>${d.car||''}`);
     m.on('click',()=>{
-      followPeerId=null;autoFollow=false;
+            followPeerId=null;autoFollow=false;
       const fb=document.getElementById('follow-btn');
       if(fb){fb.classList.remove('on');fb.title='オートフォロー';}
       leafletMap.setView([d.lat,d.lng],16);
@@ -1805,7 +1805,6 @@ function checkGeofences(lat,lng){
     cpInside[cp.id]=nowInside;
   });
 }
-
 function onDeparture(cp){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
@@ -2710,7 +2709,7 @@ function deleteMyAccount(){
   document.getElementById('admin-car').value='';
   document.getElementById('s-name').value='';
   document.getElementById('s-car').value='';
-  toast('🗑 アカウントを削除しました');
+    toast('🗑 アカウントを削除しました');
 }
 function adminLogout(){
   isAdmin=false;
