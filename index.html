@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <!-- v20260704-1 -->
-<title>イチバン羽田チームアプリ</title>
+<title>イチバン羽田アプリ</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
@@ -340,6 +340,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
     </svg>
   </button>
+  <button class="map-ctrl-btn" onclick="window.open('https://odioai001-eng.github.io/ichiban-haneda/traffic_hub.html','_blank')" title="交通情報" style="bottom:200px;right:8px">🚦</button>
   <!-- 移動記録ボタン（仲間ボタンの左） -->
   <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
     left:255px;bottom:52px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
@@ -494,6 +495,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       </div>
       <button class="btn btn-g" onclick="showSetup()" style="margin-top:8px;width:100%">Firebase設定を変更する</button>
     </div>
+  </div>
+  <div class="sec">🚦 交通情報</div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">高速・一般道の通行止め・事故・渋滞情報をまとめて確認できます</div>
+    <button class="btn btn-p" onclick="window.open('https://odioai001-eng.github.io/ichiban-haneda/traffic_hub.html','_blank')" style="width:100%">🚦 交通情報を見る</button>
   </div>
   <div class="sec">🔍 住所デバッグ</div>
   <div class="card">
@@ -775,7 +781,25 @@ function buildReactionBarHtml(fbKey,reactions){
     return `<span onclick="toggleReaction('${fbKey}','${e}')" style="cursor:pointer;font-size:11px;font-weight:${isText?'700':'400'};white-space:nowrap;background:${mine?'rgba(79,142,247,.25)':'var(--surface2)'};border:1px solid ${mine?'var(--accent)':'var(--border)'};border-radius:10px;padding:2px 7px;margin-right:4px;margin-bottom:4px;display:inline-block">${reactionDisplay(e)}${countStr}</span>`;
   }).join('');
   const addBtn=`<span onclick="openReactionPicker('${fbKey}')" style="cursor:pointer;font-size:12px;color:var(--muted);border:1px dashed var(--border);border-radius:10px;padding:1px 7px;margin-bottom:4px;display:inline-block">➕</span>`;
-  return `<div class="reaction-bar" data-reactkey="${fbKey}" style="margin-top:4px;display:flex;flex-wrap:wrap;align-items:center">${chips}${addBtn}</div>`;
+  return `<div class="reaction-bar" data-reactkey="${fbKey}" style="margin-top:4px;display:none;flex-wrap:wrap;align-items:center">${chips}${addBtn}</div>`;
+}
+
+function toggleReactionBarVisibility(fbKey){
+  const bar=document.querySelector(`.reaction-bar[data-reactkey="${fbKey}"]`);
+  if(bar)bar.style.display=(bar.style.display==='none')?'flex':'none';
+}
+
+function attachLongPress(el,fbKey){
+  if(!fbKey)return;
+  let timer=null;
+  const start=()=>{timer=setTimeout(()=>{toggleReactionBarVisibility(fbKey);},450);};
+  const cancel=()=>{if(timer){clearTimeout(timer);timer=null;}};
+  el.addEventListener('touchstart',start,{passive:true});
+  el.addEventListener('touchend',cancel);
+  el.addEventListener('touchmove',cancel);
+  el.addEventListener('mousedown',start);
+  el.addEventListener('mouseup',cancel);
+  el.addEventListener('mouseleave',cancel);
 }
 
 function openReactionPicker(fbKey){
@@ -918,12 +942,12 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
   return L.divIcon({
     html:`<div style="background:${cfg.color};border:3px solid #fff;border-radius:50%;
       width:36px;height:36px;
-      display:flex;align-items:center;justify-content:center;
+            display:flex;align-items:center;justify-content:center;
       font-size:15px;font-weight:700;color:#fff;${ring}position:relative">
       ${initial}
       ${gpsDot}
       ${weakBadge}
-        <div style="position:absolute;bottom:${labelBottom};left:50%;
+      <div style="position:absolute;bottom:${labelBottom};left:50%;
         transform:translateX(-50%);
         white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
         font-size:11px;padding:2px 7px;border-radius:5px;font-weight:700;text-align:center">
@@ -1271,10 +1295,9 @@ function restoreAppState(){
       if(!d)return;
       if(d.waitSpot){
         document.getElementById('wait-spot-lbl').textContent='待機場所: '+d.waitSpot;
-        // currentSpotSelection を waitSpot の末尾から復元
-        const parts=d.waitSpot.split(' ');
-        const spot=parts[parts.length-1];
-        if(['1号','2号','3号','4号'].includes(spot)){currentSpotSelection=spot;renderSpotRow();}
+        // currentSpotSelection を waitSpot から正規表現で抽出
+        const mSpot=d.waitSpot.match(/([1-4]号)/);
+        if(mSpot){currentSpotSelection=mSpot[1];renderSpotRow();}
       }
     });
   }
@@ -1379,7 +1402,14 @@ function connectFirebase(config){
       const m=snap.val();if(!m)return;
       chatMsgCache[snap.key]=m;
       const bar=document.querySelector(`.reaction-bar[data-reactkey="${snap.key}"]`);
-      if(bar)bar.outerHTML=buildReactionBarHtml(snap.key,m.reactions||{});
+      if(bar){
+        const wasVisible=bar.style.display!=='none';
+        const temp=document.createElement('div');
+        temp.innerHTML=buildReactionBarHtml(snap.key,m.reactions||{});
+        const newBar=temp.firstElementChild;
+        if(wasVisible)newBar.style.display='flex';
+        bar.replaceWith(newBar);
+      }
     });
     db.ref('pool_moves').limitToLast(200).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
@@ -1439,7 +1469,7 @@ function makeDriverRow(id, d, isMe){
   const waitSpot=isMe?(document.getElementById('wait-spot-lbl').textContent.replace('待機場所: ','').replace('（終了）','').replace('未設定','').trim()||null):d.waitSpot;
   const isWaiting=waitSince&&alive&&(isMe?waitInterval!==null:true);
   const waitMins=isWaiting?Math.floor((Date.now()-waitSince)/60000):null;
-  const spotIcon=waitSpot?({'出庫事務所':'🏢','納金事務所':'💴','羽田空港 国内線プール':'✈️'}[waitSpot.split(' ')[0]]||'📍'):'';
+  const spotIcon=waitSpot?(waitSpot.startsWith('羽田空港')?'✈️':waitSpot.startsWith('出庫事務所')?'🏢':waitSpot.startsWith('納金事務所')?'💴':'📍'):'';
   const rowClick=isMe?'':`onclick="focusDriverFromList('${id}')" style="cursor:pointer"`;
   return `<div class="driver-row" ${rowClick}>
     <div class="driver-avatar" style="background:${cfg.color}${isMe?';box-shadow:0 0 0 2px #fff,0 0 0 4px '+cfg.color:''}">${esc(initial)}</div>
@@ -1515,7 +1545,7 @@ function toggleDriverDests(id){
   const driverDutyStart=(driverData[id]&&driverData[id].dutyStartTs)||0;
   const tripsSorted=entries.filter(e=>(e.ts||0)>=driverDutyStart).sort((a,b)=>(a.ts||0)-(b.ts||0));
   const numMap=new Map();tripsSorted.forEach((e,i)=>numMap.set(e.ts,i+1));
-  const shown=entries.slice(0,10);
+  const shown=entries;
   el.innerHTML=shown.map(e=>{
     const no=numMap.get(e.ts)||'';
     const isAbure=e.alightAddr==='あぶれ';
@@ -1692,6 +1722,16 @@ function renderWaitHistory(){
   }).join('');
 }
 
+function adminDeleteTeamDest(driverId,fbKey){
+  if(!confirm('この履歴を削除しますか？'))return;
+  if(db)db.ref('team_dests/'+driverId+'/'+fbKey).remove();
+}
+
+function adminDeleteAllTeamDests(driverId,driverName){
+  if(!confirm(driverName+'の全履歴を削除しますか？\nこの操作は取り消せません。'))return;
+  if(db)db.ref('team_dests/'+driverId).remove();
+}
+
 function renderTeamDests(){
   const el=document.getElementById('team-dests-list');
   if(!el)return;
@@ -1706,7 +1746,7 @@ function renderTeamDests(){
   const now=new Date();
   const prevMonthStart=new Date(now.getFullYear(),now.getMonth()-1,1).getTime();
   allDriverIds.forEach(driverId=>{
-    const entries=Object.values(teamDests[driverId]||{}).filter(e=>{
+    const entries=Object.entries(teamDests[driverId]||{}).map(([k,v])=>({...v,_fbKey:k})).filter(e=>{
       if((e.ts||0)<prevMonthStart)return false;
       if(e.type==='trip'||e.type==='cp')return true;
       // 旧フォーマットの自動登録エントリ（"道路名 地名 (時刻)" 形式）を除外
@@ -1734,6 +1774,7 @@ function renderTeamDests(){
         <div style="width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${esc(driverName.slice(0,1))}</div>
         <span style="font-size:14px;font-weight:700">${esc(driverName)}${isMe?' (自分)':''}</span>
         <span style="font-size:11px;color:var(--muted);margin-left:auto">${entries.length}件</span>
+        ${isAdmin&&!isMe?`<button onclick="event.stopPropagation();adminDeleteAllTeamDests('${driverId}','${esc(driverName)}')" style="background:none;border:none;color:var(--red);font-size:11px;cursor:pointer;margin-left:6px">🗑全削除</button>`:''}
         <span style="font-size:12px;color:var(--muted);margin-left:6px">▶</span>
       </div>
       <div id="${folderId}" style="display:none;padding:10px 14px">`;
@@ -1743,7 +1784,7 @@ function renderTeamDests(){
     const teamNumMap=new Map();
     teamTrips.forEach((e,i)=>teamNumMap.set(e.ts,i+1));
     sortedDates.forEach(date=>{
-      html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:6px">📅 ${date}</div>`;
+      html+=`<div style="font-size:16px;color:var(--text);font-weight:800;margin-bottom:8px">📅 ${date}</div>`;
       groups[date].forEach((e,idx,arr)=>{
         const isLast=idx===arr.length-1;
         if(e.type==='trip'){
@@ -1755,8 +1796,10 @@ function renderTeamDests(){
           if(isAbure){alightDesc=`あぶれ${waitStr}`;}
           else{const addr=esc(e.alightAddr||'住所取得中');alightDesc=isAirport?`${addr}　${esc(e.boardSpot)}${waitStr}`:`${addr}${waitStr}`;}
           const tno=teamNumMap.get(e.ts)||'';
+          const adminDelBtn=(isAdmin&&!isMe)?`<button onclick="adminDeleteTeamDest('${driverId}','${e._fbKey}')" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--red);font-size:11px;cursor:pointer">🗑</button>`:'';
           html+=`
-          <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+          <div style="position:relative;border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+            ${adminDelBtn}
             <div style="font-size:15px;font-weight:800;color:var(--accent);margin-bottom:4px">#${tno}</div>
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
               <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(e.boardTime||'--:--')}</span>
@@ -1768,8 +1811,10 @@ function renderTeamDests(){
             </div>
           </div>`;
         } else if(e.type==='cp'){
+          const adminDelBtnCp=(isAdmin&&!isMe)?`<button onclick="adminDeleteTeamDest('${driverId}','${e._fbKey}')" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--red);font-size:11px;cursor:pointer">🗑</button>`:'';
           html+=`
-          <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+          <div style="position:relative;border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+            ${adminDelBtnCp}
             <div style="font-size:13px;color:var(--muted)">
               <span style="color:var(--gold);font-weight:700">${esc(e.startTime||'')}-${esc(e.endTime||'')}</span>
               　<span style="color:var(--amber);font-weight:600">${esc(e.icon||'')} ${esc(e.name||'')}</span>
@@ -1815,7 +1860,7 @@ function buildFareTripHtml(d,driverLabel){
   return `
   <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
     ${driverLabel?`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px">${esc(driverLabel)}</div>`:''}
-    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">📅 ${esc(d.dateStr||'-')}</div>
+    <div style="font-size:14px;color:var(--text);font-weight:700;margin-bottom:5px">📅 ${esc(d.dateStr||'-')}</div>
     <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
       <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
       <span style="font-size:12px;color:#fff">${boardDesc}</span>
@@ -1841,14 +1886,14 @@ function renderFareRanking(){
   if(!isRankingOptedIn()){
     tEl.innerHTML=rankingLockHtml();
     return;
-  }
+      }
   let allTrips=[];
   Object.keys(teamDests).forEach(driverId=>{
     const entries=Object.values(teamDests[driverId]||{}).filter(e=>e.type==='trip'&&e.fare>0);
     entries.forEach(e=>allTrips.push(e));
   });
   allTrips.sort((a,b)=>(b.fare||0)-(a.fare||0));
-    tEl.innerHTML=(allTrips.length
+  tEl.innerHTML=(allTrips.length
     ?allTrips.slice(0,30).map((d,i)=>`<div style="font-size:12px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'};margin-bottom:2px">${i+1}位</div>${buildFareTripHtml(d,d.driverName||'不明')}`).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>')
     +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
@@ -1943,7 +1988,7 @@ function selectSpot(spotName){
   const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
   if(!hCp)return;
   currentSpotSelection=spotName;
-  const fullSpot=hCp.name+' '+currentSpotSelection;
+  const fullSpot='羽田空港'+currentSpotSelection+'乗り場';
   hCp.currentSpot=fullSpot;
   document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
   if(db)db.ref('drivers/'+myId).update({waitSpot:fullSpot});
@@ -2135,8 +2180,15 @@ function updateDailyBar(){
  }else{
   const elapsedSec=Math.floor((Date.now()-dutyStart.getTime())/1000);
   const remainSec=Math.round(perDayHours*3600)-elapsedSec;
-  timeEl.textContent=(remainSec<0?'-':'')+toHMS(Math.abs(remainSec));
-  timeEl.style.color=remainSec<0?'var(--red)':'var(--gold)';
+  if(remainSec<0){
+   const overH=Math.floor(Math.abs(remainSec)/3600);
+   const overM=Math.floor((Math.abs(remainSec)%3600)/60);
+   timeEl.textContent=`${pad(overH)}:${pad(overM)}オーバー`;
+   timeEl.style.color='var(--red)';
+  }else{
+   timeEl.textContent=toHMS(remainSec);
+   timeEl.style.color='var(--gold)';
+  }
  }
  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
  const targetAmount=parseInt(localStorage.getItem('taxi_target_amount')||'0');
@@ -2146,8 +2198,14 @@ function updateDailyBar(){
  const todaySales=log.filter(e=>e.dateStr===todayStr).reduce((a,e)=>a+(e.fare||0),0);
  if(dailyTarget>0){
   const remainAmt=dailyTarget-todaySales;
-  amtEl.textContent=remainAmt>0?`¥${Math.round(remainAmt).toLocaleString()}`:'達成 🎉';
-  amtEl.style.color=remainAmt>0?'var(--cyan)':'var(--green)';
+  if(remainAmt>0){
+   amtEl.textContent=`¥${Math.round(remainAmt).toLocaleString()}`;
+   amtEl.style.color='var(--cyan)';
+  }else{
+   const overAmt=Math.round(Math.abs(remainAmt));
+   amtEl.textContent=`¥+${overAmt.toLocaleString()}`;
+   amtEl.style.color='var(--gold)';
+  }
  }else{
   amtEl.textContent='¥'+todaySales.toLocaleString();
  }
@@ -2773,7 +2831,7 @@ function deleteMyAccount(){
   if(!confirm(name+'のアカウントを削除しますか？\nFirebaseからも削除されます。'))return;
   if(db){
     db.ref('drivers/'+myId).remove();
-      db.ref('team_dests/'+myId).remove();
+    db.ref('team_dests/'+myId).remove();
   }
   localStorage.removeItem('taxi_name');
   localStorage.removeItem('taxi_car');
@@ -2848,6 +2906,26 @@ function changePin(){
   toast('✅ PIN変更完了');
 }
 
+function getShiftBoundaries(){
+  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  const shifts=log.map(s=>({start:s.startTs,end:s.endTs}));
+  if(isDuty&&dutyStart)shifts.push({start:dutyStart.getTime(),end:Infinity});
+  return shifts.sort((a,b)=>a.start-b.start);
+}
+
+function computeTripNumbers(tripsAscByTs){
+  const shifts=getShiftBoundaries();
+  const numMap=new Map();
+  const counters={};
+  tripsAscByTs.forEach(t=>{
+    const idx=shifts.findIndex(s=>(t.ts||0)>=s.start&&(t.ts||0)<(s.end||Infinity));
+    const key=idx>=0?idx:'unknown';
+    counters[key]=(counters[key]||0)+1;
+    numMap.set(t.ts,counters[key]);
+  });
+  return numMap;
+}
+
 function renderDests(){
   const el=document.getElementById('dest-list');
   // 不要エントリをフィルタ（旧フォーマットの自動エントリは除外）
@@ -2876,14 +2954,11 @@ function renderDests(){
   });
   const sortedDates=Object.keys(groups).sort((a,b)=>(groups[b][0].ts||0)-(groups[a][0].ts||0));
   let html='';
-  let tripNo=1;
-  // 全体の時系列順で通し番号を付けるため先にソート
-  const dutyStartMs=dutyStart?dutyStart.getTime():0;
+  // 出勤〜退勤のシフト単位で番号をリセットする
   const allSorted=visible.filter(d=>d.type==='trip'||d.type==='cp').sort((a,b)=>(a.ts||0)-(b.ts||0));
-  const numMap=new Map();
-  allSorted.forEach(d=>{if(d.type==='trip'&&(d.ts||0)>=dutyStartMs)numMap.set(d.ts,tripNo++);});
+  const numMap=computeTripNumbers(allSorted.filter(d=>d.type==='trip'));
   sortedDates.forEach(date=>{
-    html+=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 6px">📅 ${date}</div>`;
+    html+=`<div style="font-size:16px;color:var(--text);font-weight:800;padding:10px 2px 8px">📅 ${date}</div>`;
     groups[date].slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(d=>{
       if(d.type==='trip'){
         const isAirport=!!d.boardSpot;
@@ -3423,8 +3498,8 @@ function appendChatBubble(m,isMe,fbKey){
     if(dStr!==lastChatDateStr){
       lastChatDateStr=dStr;
       const sep=document.createElement('div');
-      sep.style.cssText='text-align:center;margin:14px 0 10px';
-      sep.innerHTML=`<span style="display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:4px 14px;font-size:11px;color:var(--muted);font-weight:600">${dStr}</span>`;
+      sep.style.cssText='text-align:center;margin:14px 0 10px;position:sticky;top:0;z-index:15;background:var(--bg);padding:6px 0';
+      sep.innerHTML=`<span style="display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:6px 16px;font-size:14px;color:var(--text);font-weight:700">${dStr}</span>`;
       container.appendChild(sep);
     }
   }
@@ -3463,6 +3538,7 @@ function appendChatBubble(m,isMe,fbKey){
       ${buildReactionBarHtml(fbKey,m.reactions)}
     </div>`;
   container.appendChild(div);container.scrollTop=container.scrollHeight;
+  attachLongPress(div,fbKey);
   refreshChatReadCounts();
 }
 
@@ -3694,4 +3770,4 @@ window.addEventListener('load',()=>{
 </div>
 
 </body>
-</html>
+</html>    
