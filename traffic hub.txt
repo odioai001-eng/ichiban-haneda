@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>交通情報ハブ</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:#0d0d1a;color:#e8e8f4;min-height:100vh;padding:20px 16px 40px;max-width:480px;margin:0 auto}
+h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:#7878a0;margin-bottom:22px}
+.cat{font-size:11px;font-weight:700;color:#7878a0;text-transform:uppercase;letter-spacing:.8px;
+  margin:22px 0 10px}
+.card{display:block;background:#161628;border:1px solid #2a2a4a;border-radius:14px;
+  padding:16px;margin-bottom:12px;text-decoration:none;color:inherit;transition:transform .15s}
+.card:active{transform:scale(.97)}
+.card-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font-size:20px;flex-shrink:0}
+.icon.jartic{background:rgba(239,68,68,.18)}
+.icon.nexco{background:rgba(79,142,247,.18)}
+.icon.shutoko{background:rgba(245,158,11,.18)}
+.icon.yahoo{background:rgba(34,197,94,.18)}
+.title{font-size:15px;font-weight:700}
+.desc{font-size:12px;color:#9999b8;line-height:1.6;margin-left:54px}
+.badges{display:flex;gap:6px;margin-left:54px;margin-top:8px;flex-wrap:wrap}
+.badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;
+  background:rgba(255,255,255,.06);color:#c0c0d8;border:1px solid #2a2a4a}
+.badge.red{color:#f87171;border-color:rgba(239,68,68,.3)}
+.badge.amber{color:#fbbf24;border-color:rgba(245,158,11,.3)}
+.badge.cyan{color:#67e8f9;border-color:rgba(6,182,212,.3)}
+.arrow{margin-left:auto;color:#7878a0;font-size:18px}
+.note{background:#161628;border:1px solid #2a2a4a;border-radius:12px;padding:14px 16px;
+  font-size:12px;color:#9999b8;line-height:1.7;margin-top:24px}
+.note b{color:#e8e8f4}
+</style>
+</head>
+<body>
+
+<h1>🚦 交通情報ハブ</h1>
+<div class="sub">入口閉鎖・事故・渋滞をすぐ確認</div>
+
+<div class="cat">📍 高速道路の交通情報</div>
+
+<a class="card" href="https://www.jartic.or.jp/map/?p=R04" target="_blank">
+  <div class="card-top">
+    <div class="icon jartic">🚧</div>
+    <div class="title">JARTIC（関東エリア地図）</div>
+    <div class="arrow">›</div>
+  </div>
+  <div class="desc">国が運営する道路交通情報の本家。1つの地図上で全部確認できます。</div>
+  <div class="badges">
+    <span class="badge red">通行止め</span>
+    <span class="badge amber">事故等</span>
+    <span class="badge cyan">渋滞・混雑</span>
+    <span class="badge">入口閉鎖(青アイコン)</span>
+  </div>
+</a>
+
+<a class="card" href="https://www.driveplaza.com/traffic/roadinfo/" target="_blank">
+  <div class="card-top">
+    <div class="icon nexco">🛣</div>
+    <div class="title">ドラぷら（NEXCO東日本）</div>
+    <div class="arrow">›</div>
+  </div>
+  <div class="desc">東日本の高速道路に特化。渋滞予測やETCレーン閉鎖情報も。</div>
+  <div class="badges">
+    <span class="badge red">通行止め・規制</span>
+    <span class="badge cyan">渋滞予測</span>
+  </div>
+</a>
+
+<a class="card" href="https://www.shutoko.jp/traffic/" target="_blank">
+  <div class="card-top">
+    <div class="icon shutoko">🏙</div>
+    <div class="title">首都高速</div>
+    <div class="arrow">›</div>
+  </div>
+  <div class="desc">首都高だけの規制・工事予定を日別・時間別に確認できます。</div>
+  <div class="badges">
+    <span class="badge red">出入口閉鎖</span>
+    <span class="badge amber">工事規制</span>
+  </div>
+</a>
+
+<div class="cat">🗺 一般道もまとめて見る</div>
+
+<a class="card" href="https://roadway.yahoo.co.jp/" target="_blank">
+  <div class="card-top">
+    <div class="icon yahoo">📶</div>
+    <div class="title">Yahoo!道路交通情報</div>
+    <div class="arrow">›</div>
+  </div>
+  <div class="desc">高速道路＋一般道を1枚の地図で。線にタップで詳細がポップアップ表示されます。</div>
+  <div class="badges">
+    <span class="badge red">事故・通行止め</span>
+    <span class="badge cyan">渋滞・混雑</span>
+  </div>
+</a>
+
+<div class="note">
+  <b>見方のコツ：</b>JARTICの地図では、色分けされた線と「赤＝出口／青＝入口」のアイコンで通行止め箇所が一目で分かります。渋滞・事故・規制はすべて同じ地図上の凡例（チェックボックス）で表示のON/OFFを切り替えられます。
+</div>
+
+</body>
+</html>
