@@ -340,10 +340,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
     </svg>
   </button>
-  <button class="map-ctrl-btn" onclick="window.open('https://odioai001-eng.github.io/ichiban-haneda/traffic_hub.html','_blank')" title="交通情報" style="bottom:200px;right:8px">🚦</button>
+  <button class="map-ctrl-btn" onclick="window.open('https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html','_blank')" title="首都高 工事・規制情報" style="bottom:200px;right:8px">🚦</button>
+  <button class="map-ctrl-btn" onclick="window.open('https://go.goinc.jp/charge-search','_blank')" title="タクシー料金検索" style="bottom:250px;right:8px">💴</button>
   <!-- 移動記録ボタン（仲間ボタンの左） -->
   <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
-    left:255px;bottom:52px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
+    right:8px;bottom:300px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
     border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
     backdrop-filter:blur(6px)">🚗</button>
   <button class="driver-panel-btn" onclick="toggleDriverPanel()" title="仲間リスト">
@@ -495,11 +496,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       </div>
       <button class="btn btn-g" onclick="showSetup()" style="margin-top:8px;width:100%">Firebase設定を変更する</button>
     </div>
-  </div>
-  <div class="sec">🚦 交通情報</div>
-  <div class="card">
-    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">高速・一般道の通行止め・事故・渋滞情報をまとめて確認できます</div>
-    <button class="btn btn-p" onclick="window.open('https://odioai001-eng.github.io/ichiban-haneda/traffic_hub.html','_blank')" style="width:100%">🚦 交通情報を見る</button>
   </div>
   <div class="sec">🔍 住所デバッグ</div>
   <div class="card">
@@ -684,10 +680,17 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <input id="duty-car-num" type="text" inputmode="numeric" placeholder="例: 5" maxlength="6"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
-    <div style="margin-bottom:24px">
+    <div style="margin-bottom:20px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">ナンバー</div>
       <input id="duty-car-plate" type="text" inputmode="numeric" placeholder="例: 1234" maxlength="4"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
+    </div>
+    <div style="margin-bottom:24px;background:rgba(245,158,11,.1);border:1.5px solid rgba(245,158,11,.4);border-radius:12px;padding:12px">
+      <div style="font-size:13px;color:var(--text);margin-bottom:10px;text-align:center;font-weight:700">💳 決済端末は持ちましたか？</div>
+      <button type="button" id="duty-payment-yes-btn" onclick="togglePaymentConfirm()"
+        style="width:100%;padding:11px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:700;cursor:pointer">
+        はい
+      </button>
     </div>
     <div style="display:flex;gap:10px">
       <button onclick="skipDutyCarModal()"
@@ -751,6 +754,7 @@ let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.ran
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
 let poolMoves=[],poolLocks={},poolLockTimer=null,myLastPoolMoveKey=null,myLastPoolMoveData=null;
+let poolProgress={};
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
 let chatReadMap={};
 let posHistory=[],stopState=null,bearingBeforeStop=null;
@@ -942,7 +946,7 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
   return L.divIcon({
     html:`<div style="background:${cfg.color};border:3px solid #fff;border-radius:50%;
       width:36px;height:36px;
-            display:flex;align-items:center;justify-content:center;
+      display:flex;align-items:center;justify-content:center;
       font-size:15px;font-weight:700;color:#fff;${ring}position:relative">
       ${initial}
       ${gpsDot}
@@ -963,7 +967,7 @@ function updateMyMarker(lat,lng){
   const name=localStorage.getItem('taxi_name')||'自分';
   const car=localStorage.getItem('taxi_car')||'';
   const plate=localStorage.getItem('taxi_number')||'';
-  const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
+    const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
   const isWeak=ageSec!==null&&ageSec>20;
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
@@ -983,9 +987,9 @@ function updatePeerMarker(id,d){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
     m.bindPopup(`<b>${esc(d.name||'不明')}</b><br>${statusCfg[status].label}<br>${d.car||''}`);
     m.on('click',()=>{
-      followPeerId=null;autoFollow=false;
+      followPeerId=id;autoFollow=false;
       const fb=document.getElementById('follow-btn');
-      if(fb){fb.classList.remove('on');fb.title='オートフォロー';}
+      if(fb){fb.classList.add('on');fb.title='フォロー中: '+(d.name||'仲間');}
       leafletMap.setView([d.lat,d.lng],16);
     });
     peerMarkers[id]=m;
@@ -1142,6 +1146,7 @@ function toggleDuty(){
     document.getElementById('duty-car-greeting').textContent=`${name}さん おはようございます。`;
     document.getElementById('duty-car-num').value=localStorage.getItem('taxi_car')||'';
     document.getElementById('duty-car-plate').value=localStorage.getItem('taxi_number')||'';
+    resetPaymentConfirm();
     document.getElementById('duty-car-modal').style.display='flex';
     setTimeout(()=>document.getElementById('duty-car-num').focus(),200);
     return;
@@ -1174,7 +1179,32 @@ function toggleDuty(){
   document.getElementById('duty-end-modal').style.display='flex';
 }
 
+let paymentConfirmed=false;
+
+function togglePaymentConfirm(){
+  paymentConfirmed=!paymentConfirmed;
+  const btn=document.getElementById('duty-payment-yes-btn');
+  if(!btn)return;
+  if(paymentConfirmed){
+    btn.style.background='var(--green)';btn.style.borderColor='var(--green)';btn.style.color='#fff';
+    btn.textContent='✅ はい（確認済み）';
+  }else{
+    btn.style.background='var(--surface2)';btn.style.borderColor='var(--border)';btn.style.color='var(--text)';
+    btn.textContent='はい';
+  }
+}
+
+function resetPaymentConfirm(){
+  paymentConfirmed=false;
+  const btn=document.getElementById('duty-payment-yes-btn');
+  if(btn){
+    btn.style.background='var(--surface2)';btn.style.borderColor='var(--border)';btn.style.color='var(--text)';
+    btn.textContent='はい';
+  }
+}
+
 function confirmDutyCarModal(){
+  if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
   const carNum=document.getElementById('duty-car-num').value.trim();
   const plate=document.getElementById('duty-car-plate').value.trim();
   if(carNum)localStorage.setItem('taxi_car',carNum);
@@ -1184,6 +1214,7 @@ function confirmDutyCarModal(){
 }
 
 function skipDutyCarModal(){
+  if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
   document.getElementById('duty-car-modal').style.display='none';
   _startDuty();
 }
@@ -1422,20 +1453,36 @@ function connectFirebase(config){
       poolLocks=snap.val()||{};
       renderPoolButtons();
     });
+    db.ref('pool_progress').on('value',snap=>{
+      poolProgress=snap.val()||{};
+      renderPoolChart();
+    });
     db.ref('chat_reads').on('value',snap=>{
       chatReadMap=snap.val()||{};
       refreshChatReadCounts();
     });
     db.ref('team_dests').on('value',snap=>{
       teamDests=snap.val()||{};
-      // 自分の送先もFirebaseから同期
+      // 自分の送先もFirebaseから同期（追加）
       const ownEntries=Object.values(teamDests[myId]||{});
-      if(ownEntries.length){
-        ownEntries.forEach(e=>{
-          if(e.ts&&!destinations.find(d=>d.ts===e.ts)){
-            destinations.push(e);
-          }
-        });
+      const fbTsSet=new Set(ownEntries.map(e=>e.ts).filter(Boolean));
+      let changed=false;
+      ownEntries.forEach(e=>{
+        if(e.ts&&!destinations.find(d=>d.ts===e.ts)){
+          destinations.push(e);
+          changed=true;
+        }
+      });
+      // Firebase側で削除された記録を、ローカルからも除去（15秒以上前のtrip/cpのみ対象）
+      const graceMs=15000;
+      const before=destinations.length;
+      destinations=destinations.filter(d=>{
+        if(d.type!=='trip'&&d.type!=='cp')return true;
+        if((Date.now()-(d.ts||0))<graceMs)return true;
+        return fbTsSet.has(d.ts);
+      });
+      if(destinations.length!==before)changed=true;
+      if(changed){
         destinations.sort((a,b)=>(b.ts||0)-(a.ts||0));
         saveDests();
       }
@@ -1886,7 +1933,7 @@ function renderFareRanking(){
   if(!isRankingOptedIn()){
     tEl.innerHTML=rankingLockHtml();
     return;
-      }
+  }
   let allTrips=[];
   Object.keys(teamDests).forEach(driverId=>{
     const entries=Object.values(teamDests[driverId]||{}).filter(e=>e.type==='trip'&&e.fare>0);
@@ -2153,15 +2200,16 @@ function renderCarryoverStatus(){
 function calcPerDayHours(){
  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
  const carry=getCarryover();
+ const carryHoursWithBonus=carry.hours+carry.days*0.5;
  const shifts=getMonthShifts();
  const workedDays=shifts.length+carry.days;
  const workedSec=shifts.reduce((a,s)=>a+(s.durationSec||0),0);
- const workedHours=workedSec/3600+carry.hours;
+ const workedHours=workedSec/3600+carryHoursWithBonus;
  const remainDays=Math.max(targetDays-workedDays,0);
- const remainHours=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
+ const remainHoursGap=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
  if(remainDays<=0)return null;
- if(remainDays===1)return Math.max(remainHours-0.5,0);
- return remainHours/remainDays;
+ const remainHoursRaw=Math.max(remainHoursGap-remainDays*0.5,0);
+ return remainHoursRaw/remainDays;
 }
 
 function updateDailyBar(){
@@ -2224,15 +2272,18 @@ function renderWorkStats(){
  if(!out)return;
  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
  const carry=getCarryover();
+ const carryHoursWithBonus=carry.hours+carry.days*0.5;
  const shifts=getMonthShifts();
  const workedDays=shifts.length+carry.days;
  const workedSec=shifts.reduce((a,s)=>a+(s.durationSec||0),0);
- const workedHours=workedSec/3600+carry.hours;
+ const workedHours=workedSec/3600+carryHoursWithBonus;
  const remainDays=Math.max(targetDays-workedDays,0);
- const remainHours=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
+ const remainHoursGap=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
  let perDayStr='-';
+ let remainHoursRaw=remainHoursGap;
  if(remainDays>0){
-  const perDayHours=remainDays===1?Math.max(remainHours-0.5,0):remainHours/remainDays;
+  remainHoursRaw=Math.max(remainHoursGap-remainDays*0.5,0);
+  const perDayHours=remainHoursRaw/remainDays;
   const h=Math.floor(perDayHours);
   const m=Math.round((perDayHours-h)*60);
   perDayStr=`${h}時間${m}分`;
@@ -2240,7 +2291,7 @@ function renderWorkStats(){
  out.innerHTML=`
   <div class="row2"><span class="rl">今月の実績</span><span class="rv">${workedDays}日 / ${workedHours.toFixed(1)}時間</span></div>
   <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${remainDays}日</span></div>
-  <div class="row2"><span class="rl">残り営業時間</span><span class="rv">${remainHours.toFixed(1)}時間</span></div>
+  <div class="row2"><span class="rl">残り営業時間</span><span class="rv">${remainHoursRaw.toFixed(1)}時間</span></div>
   <div class="row2"><span class="rl">1日あたり目安</span><span class="rv" style="color:var(--gold);font-weight:800">${perDayStr}</span></div>
  `;
  renderShiftEntries();
@@ -2414,7 +2465,7 @@ function rankingLockHtml(){
 function enterGroupRanking(){
  const pw=prompt('グループランキングのパスワードを入力してください');
  if(pw===null)return;
- const correctPw=localStorage.getItem('taxi_admin_pin')||'0000';
+ const correctPw=localStorage.getItem('taxi_ranking_pin')||'1862';
  if(pw!==correctPw){toast('⚠️ パスワードが違います');return;}
  if(!confirm('グループランキングに売上を公開してもよろしいですか？'))return;
  localStorage.setItem('taxi_ranking_optin','1');
@@ -2802,7 +2853,7 @@ function previewCP(i){
 
 function adminLogin(){
   const input=document.getElementById('pin-input').value;
-  const saved=localStorage.getItem('taxi_admin_pin')||'0000';
+  const saved=localStorage.getItem('taxi_admin_pin')||'4923';
   if(input===saved){
     isAdmin=true;
     document.getElementById('admin-lock-area').style.display='none';
@@ -2830,7 +2881,7 @@ function deleteMyAccount(){
   const name=localStorage.getItem('taxi_name')||'自分';
   if(!confirm(name+'のアカウントを削除しますか？\nFirebaseからも削除されます。'))return;
   if(db){
-        db.ref('drivers/'+myId).remove();
+    db.ref('drivers/'+myId).remove();
     db.ref('team_dests/'+myId).remove();
   }
   localStorage.removeItem('taxi_name');
@@ -2854,7 +2905,7 @@ function adminLogout(){
   document.getElementById('admin-area').style.display='none';
   document.getElementById('pin-input').value='';
   toast('🔒 ロック');
-}
+  }
 
 function loadAccountList(){
   const el=document.getElementById('account-list');
@@ -3118,7 +3169,7 @@ function togglePoolPanel(){
   poolPanelOpen=!poolPanelOpen;
   const el=document.getElementById('pool-panel');
   if(el)el.style.display=poolPanelOpen?'block':'none';
-  if(poolPanelOpen){refreshPoolHistory(null);startPoolHistoryTimer();}else{stopPoolHistoryTimer();}
+  if(poolPanelOpen){renderPoolSelectOptions();refreshPoolHistory(null);startPoolHistoryTimer();}else{stopPoolHistoryTimer();}
   syncPoolHistoryBottom();
 }
 let poolHistoryTimer=null;
@@ -3163,7 +3214,8 @@ function renderPoolChart(){
   const now=Date.now();
   const LIMIT=15*60000;
   const lastAll=poolMoves.length?poolMoves[poolMoves.length-1].ts:0;
-  const show=lastAll&&now-lastAll<=LIMIT;
+  const progressAll=Object.values(poolProgress).some(p=>p&&now-(p.ts||0)<=LIMIT);
+  const show=(lastAll&&now-lastAll<=LIMIT)||progressAll;
   const row=document.getElementById('pool-info-row');
   if(row)row.style.display=show?'grid':'none';
   if(!show)return;
@@ -3172,25 +3224,35 @@ function renderPoolChart(){
     if(!el)return;
     const moves=poolMoves.filter(m=>m.spot===spot&&now-m.ts<3*3600000);
     const last=moves[moves.length-1];
-    if(!last){el.textContent='−';return;}
-    const min=Math.floor((now-last.ts)/60000);
-    const timeStr=min===0?'たった今':`${min}分前`;
-    el.innerHTML=`<span style="color:var(--cyan)">${last.lane}</span><br>${timeStr}`;
+    const prog=poolProgress[spot];
+    const progExpired=!prog||(now-(prog.ts||0))>PROGRESS_TIMEOUT_MS;
+    const progCount=progExpired?0:(prog.count||0);
+    const dots=progCount>0?`<div style="letter-spacing:2px;font-size:15px;color:var(--gold);margin-top:2px">${'●'.repeat(Math.min(progCount,15))}</div>`:'';
+    let countLabel='';
+    if(!progExpired&&prog&&prog.startTs){
+      const startStr=new Date(prog.startTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+      countLabel=`<div style="font-size:9px;color:var(--muted);margin-top:1px">【${startStr}〜】</div>`;
+    }
+    if(!last&&progCount===0){el.textContent='−';return;}
+    const laneText=last?last.lane:'';
+    const min=last?Math.floor((now-last.ts)/60000):null;
+    const timeStr=min===null?'':(min===0?'たった今':`${min}分前`);
+    el.innerHTML=`<span style="color:var(--cyan)">${laneText}</span>${dots}${countLabel}<br>${timeStr}`;
   });
 }
 
 function renderPoolButtons(){
   const now=Date.now();
-  [['1号','2列'],['2号','2列'],['3号','2列'],['4号','2列'],
-   ['1号','1列'],['2号','1列'],['3号','1列'],['4号','1列']].forEach(([spot,lane])=>{
-    const key=spot+'_'+lane;
-    const lock=poolLocks[key];
+  ['1号','2号','3号','4号'].forEach(spot=>{
+    const lock=poolLocks[spot];
     const locked=lock&&now-lock.ts<60000;
-    const btn=document.getElementById('pool-btn-'+key);
-    if(!btn)return;
-    btn.disabled=locked;
-    btn.title=locked?`${lock.name}が操作中（あと${Math.ceil((60000-(now-lock.ts))/1000)}秒）`:'';
-    btn.style.opacity=locked?'0.4':'1';
+    [1,2].forEach(n=>{
+      const btn=document.getElementById('pool-btn-'+spot+'_'+n);
+      if(!btn)return;
+      btn.disabled=locked;
+      btn.title=locked?`${lock.name}が操作中（あと${Math.ceil((60000-(now-lock.ts))/1000)}秒）`:'';
+      btn.style.opacity=locked?'0.4':'1';
+    });
   });
 }
 
@@ -3208,7 +3270,7 @@ function recordPoolMove(spot,lane){
     if(loc===null){toast('⚠️ GPS未取得のため位置確認できません。出勤ボタンを押してGPSを起動してください');return;}
     if(!loc){toast('⚠️ 羽田プールエリア内のみ操作できます');return;}
   }
-  const key=spot+'_'+lane;
+  const key=spot;
   const lock=poolLocks[key];
   const now=Date.now();
   if(lock&&now-lock.ts<60000){
@@ -3225,6 +3287,40 @@ function recordPoolMove(spot,lane){
   refreshPoolHistory(spot);
   if(poolLockTimer)clearTimeout(poolLockTimer);
   poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
+}
+
+const PROGRESS_TIMEOUT_MS=5*60*1000; // 5分間操作がなければリセット
+
+function recordProgress(spot,amount){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  if(!isAdmin){
+    const loc=isInHanedaPool();
+    if(loc===null){toast('⚠️ GPS未取得のため位置確認できません。出勤ボタンを押してGPSを起動してください');return;}
+    if(!loc){toast('⚠️ 羽田プールエリア内のみ操作できます');return;}
+  }
+  const lock=poolLocks[spot];
+  const now=Date.now();
+  if(lock&&now-lock.ts<60000){
+    const sec=Math.ceil((60000-(now-lock.ts))/1000);
+    toast(`⏳ あと${sec}秒後に押せます（${lock.name}が操作中）`);
+    return;
+  }
+  const name=localStorage.getItem('taxi_name')||'自分';
+  const ref=db.ref('pool_progress/'+spot);
+  ref.transaction(cur=>{
+    const expired=!cur||(now-(cur.ts||0))>PROGRESS_TIMEOUT_MS;
+    if(expired){
+      return {count:amount,ts:now,startTs:now,lastBy:name};
+    }
+    return {count:(cur.count||0)+amount,ts:now,startTs:cur.startTs||now,lastBy:name};
+  });
+  // 履歴にも「+1」「+2」として記録
+  db.ref('pool_moves').push({spot,lane:'+'+amount,ts:now,uid:myId,name});
+  db.ref('pool_locks/'+spot).set({ts:now,name,uid:myId});
+  refreshPoolHistory(spot);
+  if(poolLockTimer)clearTimeout(poolLockTimer);
+  poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
+  toast(`✅ ${spot} +${amount} を記録しました`);
 }
 
 const LANE_MODAL_COUNTS={'1号':8,'2号':11,'3号':10,'4号':9};
@@ -3275,6 +3371,7 @@ function updateLaneModalSel(){
 function confirmPoolLaneModal(){
   if(!laneModalSpot||!laneModalLane){toast('⚠️ 乗り場と列を選んでください');return;}
   document.getElementById('pool-lane-modal').style.display='none';
+  selectSpot(laneModalSpot); // 号の選択を、待機記録（スポット選択）にも同時に反映
   recordPoolMove(laneModalSpot,laneModalLane);
 }
 
@@ -3304,7 +3401,11 @@ function refreshPoolHistory(focusSpot){
   const body=document.getElementById('pool-history-body');
   if(!body)return;
   const now=Date.now();
-  const LIMIT=90*60*1000;
+  // 現在自分が待機中なら、その待機時間に合わせて表示範囲を変える（待機中でなければ90分固定）
+  const currentWaitMin=waitInterval?Math.max(Math.ceil(waitSec/60),1):90;
+  const LIMIT=currentWaitMin*60*1000;
+  const titleEl=document.getElementById('pool-history-title');
+  if(titleEl)titleEl.textContent=`📋 直近${currentWaitMin}分の履歴`;
   const recent=poolMoves.filter(m=>now-m.ts<=LIMIT).slice().reverse();
   if(!recent.length){body.innerHTML='<span style="color:var(--muted)">記録がありません</span>';return;}
   body.innerHTML=recent.map(m=>{
@@ -3342,7 +3443,7 @@ function toggleAdminPinArea(){
 }
 function applyAdminPin(){
   const input=document.getElementById('apply-admin-pin').value;
-  const saved=localStorage.getItem('taxi_admin_pin')||'0000';
+  const saved=localStorage.getItem('taxi_admin_pin')||'4923';
   if(input!==saved){toast('⚠️ PINが違います');return;}
   const name=document.getElementById('apply-name').value.trim()||localStorage.getItem('taxi_name')||'管理者';
   const car=document.getElementById('apply-car').value.trim()||localStorage.getItem('taxi_car')||'';
@@ -3715,14 +3816,14 @@ window.addEventListener('load',()=>{
     <button onclick="togglePoolPanel()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1">✕</button>
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
-    <button id="pool-btn-1号_2列" onclick="recordPoolMove('1号','2列')" class="pool-btn">1号 2列</button>
-    <button id="pool-btn-2号_2列" onclick="recordPoolMove('2号','2列')" class="pool-btn">2号 2列</button>
-    <button id="pool-btn-3号_2列" onclick="recordPoolMove('3号','2列')" class="pool-btn">3号 2列</button>
-    <button id="pool-btn-4号_2列" onclick="recordPoolMove('4号','2列')" class="pool-btn">4号 2列</button>
-    <button id="pool-btn-1号_1列" onclick="recordPoolMove('1号','1列')" class="pool-btn">1号 1列</button>
-    <button id="pool-btn-2号_1列" onclick="recordPoolMove('2号','1列')" class="pool-btn">2号 1列</button>
-    <button id="pool-btn-3号_1列" onclick="recordPoolMove('3号','1列')" class="pool-btn">3号 1列</button>
-    <button id="pool-btn-4号_1列" onclick="recordPoolMove('4号','1列')" class="pool-btn">4号 1列</button>
+    <button id="pool-btn-1号_1" onclick="recordProgress('1号',1)" class="pool-btn">1号 +1</button>
+    <button id="pool-btn-2号_1" onclick="recordProgress('2号',1)" class="pool-btn">2号 +1</button>
+    <button id="pool-btn-3号_1" onclick="recordProgress('3号',1)" class="pool-btn">3号 +1</button>
+    <button id="pool-btn-4号_1" onclick="recordProgress('4号',1)" class="pool-btn">4号 +1</button>
+    <button id="pool-btn-1号_2" onclick="recordProgress('1号',2)" class="pool-btn">1号 +2</button>
+    <button id="pool-btn-2号_2" onclick="recordProgress('2号',2)" class="pool-btn">2号 +2</button>
+    <button id="pool-btn-3号_2" onclick="recordProgress('3号',2)" class="pool-btn">3号 +2</button>
+    <button id="pool-btn-4号_2" onclick="recordProgress('4号',2)" class="pool-btn">4号 +2</button>
   </div>
   <!-- 取り消しボタン -->
   <button id="pool-undo-btn" onclick="undoPoolMove()" style="display:none;width:100%;margin-bottom:8px;
@@ -3730,7 +3831,7 @@ window.addEventListener('load',()=>{
     background:rgba(239,68,68,.15);color:var(--red);border:1.5px solid var(--red)"></button>
   <!-- 履歴（常時表示・1.5時間分） -->
   <div style="border-top:1px solid var(--border);padding-top:7px">
-    <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">📋 移動履歴（直近1時間半）</div>
+    <div id="pool-history-title" style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">📋 移動履歴</div>
     <div id="pool-history-body" style="font-size:12px;line-height:2;max-height:120px;overflow-y:auto"></div>
   </div>
 </div>
