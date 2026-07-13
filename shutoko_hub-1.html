@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>首都高 工事・規制情報</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:#0d0d1a;color:#e8e8f4;min-height:100vh;padding:20px 16px 40px;max-width:520px;margin:0 auto}
+h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:#7878a0;margin-bottom:8px}
+.updated{font-size:11px;color:#fbbf24;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);
+  border-radius:8px;padding:8px 12px;margin-bottom:14px;line-height:1.6}
+.filter-row{display:flex;gap:8px;margin-bottom:20px}
+.filter-btn{flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+  border:2px solid #2a2a4a;background:#161628;color:#9999b8}
+.filter-btn.active{border-color:#4f8ef7;background:rgba(79,142,247,.15);color:#e8e8f4}
+.linkbtn{display:block;background:#161628;border:2px solid #4f8ef7;border-radius:12px;
+  padding:13px 16px;margin-bottom:20px;text-decoration:none;color:#e8e8f4;text-align:center;
+  font-size:14px;font-weight:700}
+.linkbtn .small{display:block;font-size:11px;font-weight:400;color:#9999b8;margin-top:3px}
+.date-head{font-size:16px;font-weight:800;color:#e8e8f4;margin:22px 0 10px;
+  display:flex;align-items:center;gap:6px;position:sticky;top:0;background:#0d0d1a;padding:8px 0;z-index:5}
+.item{background:#161628;border:1px solid #2a2a4a;border-left:4px solid #ef4444;border-radius:10px;
+  padding:13px 14px;margin-bottom:10px}
+.item.iriguchi{border-left-color:#f59e0b}
+.route{font-size:14px;font-weight:700;margin-bottom:6px}
+.time{font-size:12px;color:#67e8f9;font-weight:600;margin-bottom:5px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+.tag.honsen{background:rgba(239,68,68,.18);color:#f87171}
+.tag.iri{background:rgba(245,158,11,.18);color:#fbbf24}
+.note{font-size:12px;color:#9999b8;line-height:1.5}
+.footer-note{background:#161628;border:1px solid #2a2a4a;border-radius:12px;padding:14px 16px;
+  font-size:11px;color:#7878a0;line-height:1.7;margin-top:24px}
+.empty-msg{text-align:center;color:#7878a0;font-size:13px;padding:30px 10px}
+</style>
+</head>
+<body>
+
+<button onclick="history.back()" style="display:block;width:100%;background:#161628;border:1px solid #2a2a4a;
+  border-radius:10px;padding:11px;margin-bottom:14px;color:#e8e8f4;font-size:14px;font-weight:700;cursor:pointer">
+  ← アプリに戻る
+</button>
+
+<h1>🚧 首都高 工事・規制情報</h1>
+<div class="sub">大規模・長期規制の一覧＋日別工事マップへのリンク</div>
+<div class="updated">🔄 自動更新：2026年7月13日 22:30 時点（1日3回・11時/17時/21時ごろに自動更新されます）</div>
+
+
+<div class="filter-row">
+  <button class="filter-btn active" id="filter-today" onclick="setFilter('today')">📍 本日・夜勤帯のみ</button>
+  <button class="filter-btn" id="filter-all" onclick="setFilter('all')">📋 全期間表示</button>
+</div>
+
+<a class="linkbtn" href="https://www.shutoko-construction.jp/" target="_blank">
+  📅 日別・時間帯別の工事マップを見る
+  <span class="small">今日・明日など、特定の日時の工事箇所をピンポイントで確認</span>
+</a>
+
+<div id="items-container">
+<div class="date-head">📅 4月5日(土)</div>
+<div class="item" data-start="2025-04-05" data-end="2036-03-31">
+  <div class="route">八重洲線　神田橋JCT ⇔ 西銀座JCT</div>
+  <div class="time">2025年4月5日(土) 20:00 〜 2036年3月31日(月)（終了時期未定）</div>
+  <div class="tags"><span class="tag honsen">本線・JCT通行止め</span></div>
+  <div class="note">八重洲線全線通行止め（長期）</div>
+</div>
+
+<div class="date-head">📅 5月11日(月)</div>
+<div class="item iriguchi" data-start="2026-05-11" data-end="2027-03-31">
+  <div class="route">1号横羽線　大師PA（下り）</div>
+  <div class="time">2026年5月11日(月) 22:00 〜 2027年3月31日(水)</div>
+  <div class="tags"><span class="tag iri">出入口通行止め</span></div>
+  <div class="note">料金所改良工事のため長期閉鎖</div>
+</div>
+
+<div class="date-head">📅 5月30日(土)</div>
+<div class="item iriguchi" data-start="2026-05-30" data-end="2026-07-15">
+  <div class="route">1号羽田線　羽田入口（上り）</div>
+  <div class="time">2026年5月30日(土) 20:00 〜 2026年7月15日(水) 1:00</div>
+  <div class="tags"><span class="tag iri">出入口通行止め</span></div>
+  <div class="note">料金所改良工事・昼夜連続通行止め</div>
+</div>
+
+<div class="date-head">📅 7月13日(月)</div>
+<div class="item iriguchi" data-start="2026-07-13" data-end="2026-08-28">
+  <div class="route">1号上野線　本町入口（上り・下り）</div>
+  <div class="time">2026年7月13日(月) 20:00 〜 2026年8月28日(金) 1:00</div>
+  <div class="tags"><span class="tag iri">出入口通行止め</span></div>
+  <div class="note">料金所改良工事・昼夜連続通行止め</div>
+</div>
+
+<div class="date-head">📅 7月14日(火)</div>
+<div class="item" data-start="2026-07-14" data-end="2026-07-15">
+  <div class="route">中央環状線→4号新宿線（西新宿JCT／外回り）</div>
+  <div class="time">2026年7月14日(火) 22:00 〜 2026年7月15日(水) 5:00</div>
+  <div class="tags"><span class="tag honsen">本線・JCT通行止め</span></div>
+  <div class="note">道路構造物補修工事</div>
+</div>
+
+<div class="date-head">📅 7月15日(水)</div>
+<div class="item" data-start="2026-07-15" data-end="2026-07-16">
+  <div class="route">6号三郷線→外環自動車道（三郷JCT／下り）</div>
+  <div class="time">2026年7月15日(水) 19:00 〜 2026年7月16日(木) 5:00</div>
+  <div class="tags"><span class="tag honsen">本線・JCT通行止め</span></div>
+  <div class="note">路面補修工事</div>
+</div>
+</div>
+<div class="empty-msg" id="empty-msg" style="display:none">本日に関係する規制はありません</div>
+
+<a class="linkbtn" href="https://www.shutoko.jp/traffic/control/largeScale/list/?sType=1" target="_blank" style="margin-top:20px">
+  📋 最新の一覧をサイトで直接見る
+</a>
+
+<div class="footer-note">
+  出典：首都高ドライバーズサイト・首都高工事情報マップ（首都高速道路株式会社）。緊急工事等により予告なく変更される場合があります。おでかけ前に必ずリンク先で最新情報をご確認ください。<br>
+  このページは自動更新スクリプトにより生成されています。
+</div>
+
+<script>
+function shiftDayWindow(){
+  // 深夜0時〜午前5時は「まだ前日の勤務中」とみなし、前日〜当日の2日間を対象にする
+  const now=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Tokyo'}));
+  if(now.getHours()<5) now.setDate(now.getDate()-1);
+  const toISO=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+dd;};
+  const day1=toISO(now);
+  const tomorrow=new Date(now);tomorrow.setDate(tomorrow.getDate()+1);
+  const day2=toISO(tomorrow);
+  return [day1,day2];
+}
+function setFilter(mode){
+  const [day1,day2]=shiftDayWindow();
+  const items=document.querySelectorAll('#items-container .item');
+  let visibleCount=0;
+  items.forEach(el=>{
+    const start=el.getAttribute('data-start');
+    const end=el.getAttribute('data-end');
+    let show=true;
+    if(mode==='today'){
+      if(start&&end){
+        show=!(end<day1||start>day2); // [day1,day2]の範囲と少しでも重なればtrue（夜勤の2日またぎに対応）
+      }else{
+        show=false; // 日付が読み取れないものは「本日分」からは除外
+      }
+    }
+    el.style.display=show?'block':'none';
+    if(show)visibleCount++;
+  });
+  document.querySelectorAll('#items-container .date-head').forEach(head=>{
+    let sib=head.nextElementSibling,anyVisible=false;
+    while(sib&&!sib.classList.contains('date-head')){
+      if(sib.classList.contains('item')&&sib.style.display!=='none')anyVisible=true;
+      sib=sib.nextElementSibling;
+    }
+    head.style.display=(mode==='today'&&!anyVisible)?'none':'flex';
+  });
+  document.getElementById('empty-msg').style.display=(mode==='today'&&visibleCount===0)?'block':'none';
+  document.getElementById('filter-today').classList.toggle('active',mode==='today');
+  document.getElementById('filter-all').classList.toggle('active',mode==='all');
+}
+setFilter('today');
+</script>
+
+</body>
+</html>
