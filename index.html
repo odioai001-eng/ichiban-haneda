@@ -984,8 +984,8 @@ function updateMyMarker(lat,lng){
 }
 
 function updatePeerMarker(id,d){
-    if(id===myId)return;
-  const age=Date.now()-(d.ts||0);
+  if(id===myId)return;
+    const age=Date.now()-(d.ts||0);
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
@@ -1970,9 +1970,9 @@ function buildFareTripHtml(d,driverLabel){
       <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
     </div>
     <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
-      </div>`;
+  </div>`;
 }
-
+  
 function renderFareRanking(){
   const pEl=document.getElementById('fare-ranking-personal');
   const tEl=document.getElementById('fare-ranking-team');
@@ -2956,10 +2956,10 @@ function deleteMyAccount(){
   document.getElementById('duty-label').textContent='休み中';
   document.getElementById('map-offline').classList.add('show');
   document.getElementById('admin-name').value='';
-    document.getElementById('admin-car').value='';
+  document.getElementById('admin-car').value='';
   document.getElementById('s-name').value='';
   document.getElementById('s-car').value='';
-  toast('🗑 アカウントを削除しました');
+    toast('🗑 アカウントを削除しました');
 }
 function adminLogout(){
   isAdmin=false;
@@ -3281,6 +3281,10 @@ function renderPoolChart(){
   const row=document.getElementById('pool-info-row');
   if(row)row.style.display=show?'grid':'none';
   if(!show)return;
+  // 4つの乗り場のうち、一番新しい最終入力時刻から10分以上経過していたら、まとめてリセットする
+  const allSpotTs=['1号','2号','3号','4号'].map(s=>(poolProgress[s]&&poolProgress[s].ts)||0);
+  const globalLastActivity=Math.max(0,...allSpotTs);
+  const allExpired=(now-globalLastActivity)>PROGRESS_TIMEOUT_MS;
   ['1号','2号','3号','4号'].forEach(spot=>{
     const el=document.getElementById('pool-info-'+spot);
     if(!el)return;
@@ -3290,8 +3294,7 @@ function renderPoolChart(){
     const arrivalMoves=moves.filter(m=>/^\d+列$/.test(m.lane));
     const lastArrival=arrivalMoves[arrivalMoves.length-1];
     const prog=poolProgress[spot];
-    const progExpired=!prog||(now-(prog.ts||0))>PROGRESS_TIMEOUT_MS;
-    const progCount=progExpired?0:(prog.count||0);
+    const progCount=allExpired?0:(prog&&prog.count?prog.count:0);
     const dots=progCount>0?`<div style="letter-spacing:2px;font-size:15px;color:var(--gold);margin-top:2px">${'●'.repeat(Math.min(progCount,15))}</div>`:'';
     let countLabel='';
     if(lastArrival){
