@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>タクシー料金検索</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:#0d0d1a;color:#e8e8f4;min-height:100vh;padding:20px 16px 40px;max-width:480px;margin:0 auto}
+h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:#7878a0;margin-bottom:20px}
+.backbtn{display:block;width:100%;background:#161628;border:1px solid #2a2a4a;
+  border-radius:10px;padding:11px;margin-bottom:20px;color:#e8e8f4;font-size:14px;font-weight:700;cursor:pointer}
+.card{display:block;background:#161628;border:2px solid #4f8ef7;border-radius:14px;
+  padding:18px;margin-bottom:14px;text-decoration:none;color:inherit;text-align:center}
+.card:active{transform:scale(.98)}
+.card .icon{font-size:32px;margin-bottom:8px}
+.card .title{font-size:16px;font-weight:800;margin-bottom:4px}
+.card .desc{font-size:12px;color:#9999b8;line-height:1.6}
+</style>
+</head>
+<body>
+
+<button class="backbtn" onclick="goBackSmart()">← アプリに戻る</button>
+<script>
+function goBackSmart(){
+  if(window.AndroidBridge&&window.AndroidBridge.goBackInApp){
+    window.AndroidBridge.goBackInApp();
+  }else{
+    history.back();
+  }
+}
+</script>
+
+<h1>💴 タクシー料金検索</h1>
+<div class="sub">出発地・到着地を入力して概算料金を調べる</div>
+
+<a class="card" href="https://go.goinc.jp/charge-search" target="_blank">
+  <div class="icon">🚕</div>
+  <div class="title">GO タクシー料金検索</div>
+  <div class="desc">配車アプリ「GO」のサービス。有料道路使用や深夜割増の条件を指定して計算できます。</div>
+</a>
+
+</body>
+</html>
