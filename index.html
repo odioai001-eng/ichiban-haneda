@@ -340,8 +340,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
     </svg>
   </button>
-  <button class="map-ctrl-btn" onclick="window.open('https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html','_blank')" title="首都高 工事・規制情報" style="bottom:200px;right:8px">🚦</button>
-  <button class="map-ctrl-btn" onclick="window.open('https://go.goinc.jp/charge-search','_blank')" title="タクシー料金検索" style="bottom:250px;right:8px">💴</button>
+  <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報" style="bottom:200px;right:8px">🚦</button>
+  <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索" style="bottom:250px;right:8px">💴</button>
   <!-- 移動記録ボタン（仲間ボタンの左） -->
   <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
     right:8px;bottom:300px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
@@ -674,6 +674,15 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <!-- 出勤時 車番入力モーダル -->
 <div id="duty-car-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
+    <div style="margin-bottom:16px;background:rgba(79,142,247,.1);border:1.5px solid rgba(79,142,247,.4);border-radius:12px;padding:12px">
+      <div id="duty-planned-hours-label" style="font-size:13px;color:var(--text);margin-bottom:10px;text-align:center;font-weight:700">📅 本日の予定時間: --時間--分</div>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="duty-plan-use-btn" onclick="selectDutyPlan('use')"
+          style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">日割り時間で勤務する</button>
+        <button type="button" id="duty-plan-skip-btn" onclick="selectDutyPlan('skip')"
+          style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">スキップする</button>
+      </div>
+    </div>
     <div id="duty-car-greeting" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:22px;line-height:1.5"></div>
     <div style="margin-bottom:14px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">車番</div>
@@ -967,7 +976,7 @@ function updateMyMarker(lat,lng){
   const name=localStorage.getItem('taxi_name')||'自分';
   const car=localStorage.getItem('taxi_car')||'';
   const plate=localStorage.getItem('taxi_number')||'';
-    const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
+  const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
   const isWeak=ageSec!==null&&ageSec>20;
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
@@ -975,7 +984,7 @@ function updateMyMarker(lat,lng){
 }
 
 function updatePeerMarker(id,d){
-  if(id===myId)return;
+    if(id===myId)return;
   const age=Date.now()-(d.ts||0);
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
@@ -1147,6 +1156,7 @@ function toggleDuty(){
     document.getElementById('duty-car-num').value=localStorage.getItem('taxi_car')||'';
     document.getElementById('duty-car-plate').value=localStorage.getItem('taxi_number')||'';
     resetPaymentConfirm();
+    resetDutyPlan();
     document.getElementById('duty-car-modal').style.display='flex';
     setTimeout(()=>document.getElementById('duty-car-num').focus(),200);
     return;
@@ -1203,18 +1213,61 @@ function resetPaymentConfirm(){
   }
 }
 
+let dutyPlanChoice=null,dutyPlanHours=null;
+
+function resetDutyPlan(){
+  dutyPlanChoice=null;
+  const perDayHours=calcPerDayHours();
+  const label=document.getElementById('duty-planned-hours-label');
+  if(perDayHours===null){
+    dutyPlanHours=null;
+    if(label)label.textContent='📅 本日の予定時間: 算出できません';
+  }else{
+    dutyPlanHours=perDayHours;
+    const h=Math.floor(perDayHours);
+    const m=Math.round((perDayHours-h)*60);
+    if(label)label.textContent=`📅 本日の予定時間: ${h}時間${m}分`;
+  }
+  ['duty-plan-use-btn','duty-plan-skip-btn'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(b){b.style.background='var(--surface2)';b.style.borderColor='var(--border)';b.style.color='var(--text)';}
+  });
+}
+
+function selectDutyPlan(choice){
+  dutyPlanChoice=choice;
+  const useBtn=document.getElementById('duty-plan-use-btn');
+  const skipBtn=document.getElementById('duty-plan-skip-btn');
+  [useBtn,skipBtn].forEach(b=>{if(b){b.style.background='var(--surface2)';b.style.borderColor='var(--border)';b.style.color='var(--text)';}});
+  const activeBtn=choice==='use'?useBtn:skipBtn;
+  if(activeBtn){activeBtn.style.background='var(--green)';activeBtn.style.borderColor='var(--green)';activeBtn.style.color='#fff';}
+}
+
+function applyDutyPlanChoice(){
+  const todayStr=new Date().toLocaleDateString('ja-JP');
+  if(dutyPlanChoice==='use'&&dutyPlanHours!==null){
+    localStorage.setItem('taxi_today_target_hours',JSON.stringify({hours:dutyPlanHours,dateStr:todayStr}));
+  }else{
+    localStorage.removeItem('taxi_today_target_hours');
+  }
+}
+
 function confirmDutyCarModal(){
   if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
+  if(!dutyPlanChoice){toast('⚠️ 本日の勤務時間プランを選んでください');return;}
   const carNum=document.getElementById('duty-car-num').value.trim();
   const plate=document.getElementById('duty-car-plate').value.trim();
   if(carNum)localStorage.setItem('taxi_car',carNum);
   if(plate)localStorage.setItem('taxi_number',plate);
+  applyDutyPlanChoice();
   document.getElementById('duty-car-modal').style.display='none';
   _startDuty();
 }
 
 function skipDutyCarModal(){
   if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
+  if(!dutyPlanChoice){toast('⚠️ 本日の勤務時間プランを選んでください');return;}
+  applyDutyPlanChoice();
   document.getElementById('duty-car-modal').style.display='none';
   _startDuty();
 }
@@ -1516,7 +1569,7 @@ function makeDriverRow(id, d, isMe){
   const waitSpot=isMe?(document.getElementById('wait-spot-lbl').textContent.replace('待機場所: ','').replace('（終了）','').replace('未設定','').trim()||null):d.waitSpot;
   const isWaiting=waitSince&&alive&&(isMe?waitInterval!==null:true);
   const waitMins=isWaiting?Math.floor((Date.now()-waitSince)/60000):null;
-  const spotIcon=waitSpot?(waitSpot.startsWith('羽田空港')?'✈️':waitSpot.startsWith('出庫事務所')?'🏢':waitSpot.startsWith('納金事務所')?'💴':'📍'):'';
+  const spotIcon=waitSpot?(waitSpot.includes('羽田空港')?'✈️':waitSpot.startsWith('出庫事務所')?'🏢':waitSpot.startsWith('納金事務所')?'💴':'📍'):'';
   const rowClick=isMe?'':`onclick="focusDriverFromList('${id}')" style="cursor:pointer"`;
   return `<div class="driver-row" ${rowClick}>
     <div class="driver-avatar" style="background:${cfg.color}${isMe?';box-shadow:0 0 0 2px #fff,0 0 0 4px '+cfg.color:''}">${esc(initial)}</div>
@@ -1597,7 +1650,7 @@ function toggleDriverDests(id){
     const no=numMap.get(e.ts)||'';
     const isAbure=e.alightAddr==='あぶれ';
     const waitStr=e.waitMins?` (待機${e.waitMins}分)`:e.waitMinsStr?` (待機${e.waitMinsStr})`:'';
-    const boardDesc=e.boardSpot?`東京都大田区羽田空港　${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
+    const boardDesc=e.boardSpot?`東京都大田区羽田空港${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
     const alightDesc=isAbure?`あぶれ${waitStr}`:(esc(e.alightAddr||'住所取得中')+waitStr);
     return `<div style="border:2px solid #fff;border-radius:10px;padding:8px 12px;margin-bottom:6px;background:var(--surface)">
       ${no?`<div style="font-size:13px;font-weight:800;color:var(--accent);margin-bottom:2px">#${no}</div>`:''}
@@ -1838,7 +1891,7 @@ function renderTeamDests(){
           const isAirport=!!e.boardSpot;
           const isAbure=e.alightAddr==='あぶれ';
           const waitStr=e.waitMins?` (待機${e.waitMins}分)`:e.waitMinsStr?` (待機${e.waitMinsStr})`:'';
-          const boardDesc=isAirport?`東京都大田区羽田空港　${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
+          const boardDesc=isAirport?`東京都大田区羽田空港${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
           let alightDesc;
           if(isAbure){alightDesc=`あぶれ${waitStr}`;}
           else{const addr=esc(e.alightAddr||'住所取得中');alightDesc=isAirport?`${addr}　${esc(e.boardSpot)}${waitStr}`:`${addr}${waitStr}`;}
@@ -1896,13 +1949,13 @@ function buildFareTripHtml(d,driverLabel){
   const isAirport=!!d.boardSpot;
   const isAbure=d.alightAddr==='あぶれ';
   const waitStr=d.waitMins?` (待機${d.waitMins}分)`:d.waitMinsStr?` (待機${d.waitMinsStr})`:'';
-  const boardDesc=isAirport?`東京都大田区羽田空港　${esc(d.boardSpot)}乗り場`:esc(d.boardAddr||'乗車');
+  const boardDesc=isAirport?`東京都大田区羽田空港${esc(d.boardSpot)}乗り場`:esc(d.boardAddr||'乗車');
   let alightDesc;
   if(isAbure){
     alightDesc=`あぶれ${waitStr}`;
   } else {
     const addr=esc(d.alightAddr||'住所取得中');
-    alightDesc=isAirport?`${addr}　東京都大田区羽田空港${esc(d.boardSpot)}乗り場${waitStr}`:`${addr}${waitStr}`;
+    alightDesc=isAirport?`${addr}東京都大田区羽田空港${esc(d.boardSpot)}乗り場${waitStr}`:`${addr}${waitStr}`;
   }
   return `
   <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
@@ -1917,7 +1970,7 @@ function buildFareTripHtml(d,driverLabel){
       <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
     </div>
     <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
-  </div>`;
+      </div>`;
 }
 
 function renderFareRanking(){
@@ -1968,6 +2021,7 @@ function checkGeofences(lat,lng){
 function onDeparture(cp){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
+  if(cp.stopNotifyTimer){clearTimeout(cp.stopNotifyTimer);cp.stopNotifyTimer=null;}
   const hadTimer=waitInterval!==null||waitSec>0;
   stopWait();
   const elapsed=toHMS(waitSec);
@@ -2010,16 +2064,6 @@ function onDeparture(cp){
 
 function onArrival(cp,dist){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-  sendNotif(cp.icon+' '+cp.name+' に到着',`到着時刻 ${timeStr}`,'taxi-'+cp.id);
-  if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
-  toast(cp.icon+' '+cp.name+' 到着！');
-  // 到着をチャットに即時通知
-  if(db&&isDuty){
-    const name=localStorage.getItem('taxi_name')||'自分';
-    db.ref('chat').push({uid:myId,name,
-      text:`${cp.icon}【自動】${cp.name} に到着（${timeStr}）`,
-      time:timeStr,ts:Date.now(),isAuto:true});
-  }
   currentSpotSelection=null;
   cp.arrivalTimeStr=timeStr;
   if(cp.id==='haneda')showPoolLaneModal();
@@ -2028,6 +2072,21 @@ function onArrival(cp,dist){
     arrivalAutoTimer=null;
     if(cpInside[cp.id]&&isDuty&&!waitInterval)startWaitAt(cp,cp.name,dist,timeStr);
   },120000);
+  // 1分以上その場に停止した場合のみ通知（通過した場合は通知しない）
+  if(cp.stopNotifyTimer)clearTimeout(cp.stopNotifyTimer);
+  cp.stopNotifyTimer=setTimeout(()=>{
+    cp.stopNotifyTimer=null;
+    if(!cpInside[cp.id]||!isDuty)return;
+    sendNotif(cp.icon+' '+cp.name+' に到着',`到着時刻 ${timeStr}`,'taxi-'+cp.id);
+    if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
+    toast(cp.icon+' '+cp.name+' 到着！');
+    if(db){
+      const name=localStorage.getItem('taxi_name')||'自分';
+      db.ref('chat').push({uid:myId,name,
+        text:`${cp.icon}【自動】${cp.name} に到着（${timeStr}）`,
+        time:timeStr,ts:Date.now(),isAuto:true});
+    }
+  },60000);
   renderSpotRow();
 }
 
@@ -2035,7 +2094,7 @@ function selectSpot(spotName){
   const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
   if(!hCp)return;
   currentSpotSelection=spotName;
-  const fullSpot='羽田空港'+currentSpotSelection+'乗り場';
+  const fullSpot='東京都大田区羽田空港'+currentSpotSelection+'乗り場';
   hCp.currentSpot=fullSpot;
   document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
   if(db)db.ref('drivers/'+myId).update({waitSpot:fullSpot});
@@ -2222,7 +2281,10 @@ function updateDailyBar(){
   amtEl.textContent='-';
   return;
  }
- const perDayHours=calcPerDayHours();
+ // 出勤時に選んだ「本日の予定時間」があればそれを使い、なければ従来通り動的計算
+ const storedPlan=JSON.parse(localStorage.getItem('taxi_today_target_hours')||'null');
+ const todayStrForPlan=new Date().toLocaleDateString('ja-JP');
+ const perDayHours=(storedPlan&&storedPlan.dateStr===todayStrForPlan)?storedPlan.hours:null;
  if(perDayHours===null){
   timeEl.textContent='--:--:--';
  }else{
@@ -2894,7 +2956,7 @@ function deleteMyAccount(){
   document.getElementById('duty-label').textContent='休み中';
   document.getElementById('map-offline').classList.add('show');
   document.getElementById('admin-name').value='';
-  document.getElementById('admin-car').value='';
+    document.getElementById('admin-car').value='';
   document.getElementById('s-name').value='';
   document.getElementById('s-car').value='';
   toast('🗑 アカウントを削除しました');
@@ -2905,7 +2967,7 @@ function adminLogout(){
   document.getElementById('admin-area').style.display='none';
   document.getElementById('pin-input').value='';
   toast('🔒 ロック');
-  }
+}
 
 function loadAccountList(){
   const el=document.getElementById('account-list');
@@ -3015,13 +3077,13 @@ function renderDests(){
         const isAirport=!!d.boardSpot;
         const isAbure=d.alightAddr==='あぶれ';
         const waitStr=d.waitMins?` (待機${d.waitMins}分)`:d.waitMinsStr?` (待機${d.waitMinsStr})`:'';
-        const boardDesc=isAirport?`東京都大田区羽田空港　${esc(d.boardSpot)}乗り場`:esc(d.boardAddr||'乗車');
+        const boardDesc=isAirport?`東京都大田区羽田空港${esc(d.boardSpot)}乗り場`:esc(d.boardAddr||'乗車');
         let alightDesc;
         if(isAbure){
           alightDesc=`あぶれ${waitStr}`;
         } else {
           const addr=esc(d.alightAddr||'住所取得中');
-          alightDesc=isAirport?`${addr}　東京都大田区羽田空港${esc(d.boardSpot)}乗り場${waitStr}`:`${addr}${waitStr}`;
+          alightDesc=isAirport?`${addr}東京都大田区羽田空港${esc(d.boardSpot)}乗り場${waitStr}`:`${addr}${waitStr}`;
         }
         const no=numMap.get(d.ts)||'';
         html+=`
@@ -3224,14 +3286,17 @@ function renderPoolChart(){
     if(!el)return;
     const moves=poolMoves.filter(m=>m.spot===spot&&now-m.ts<3*3600000);
     const last=moves[moves.length-1];
+    // 「○列目」の到着記録（列移動の+1/+2ではないもの）から、最新の到着時刻を取得
+    const arrivalMoves=moves.filter(m=>/^\d+列$/.test(m.lane));
+    const lastArrival=arrivalMoves[arrivalMoves.length-1];
     const prog=poolProgress[spot];
     const progExpired=!prog||(now-(prog.ts||0))>PROGRESS_TIMEOUT_MS;
     const progCount=progExpired?0:(prog.count||0);
     const dots=progCount>0?`<div style="letter-spacing:2px;font-size:15px;color:var(--gold);margin-top:2px">${'●'.repeat(Math.min(progCount,15))}</div>`:'';
     let countLabel='';
-    if(!progExpired&&prog&&prog.startTs){
-      const startStr=new Date(prog.startTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-      countLabel=`<div style="font-size:9px;color:var(--muted);margin-top:1px">【${startStr}〜】</div>`;
+    if(lastArrival){
+      const arrivalStr=new Date(lastArrival.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+      countLabel=`<div style="font-size:9px;color:var(--muted);margin-top:1px">【${arrivalStr}〜】</div>`;
     }
     if(!last&&progCount===0){el.textContent='−';return;}
     const laneText=last?last.lane:'';
@@ -3289,7 +3354,7 @@ function recordPoolMove(spot,lane){
   poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
 }
 
-const PROGRESS_TIMEOUT_MS=5*60*1000; // 5分間操作がなければリセット
+const PROGRESS_TIMEOUT_MS=10*60*1000; // 10分間操作がなければリセット
 
 function recordProgress(spot,amount){
   if(!db){toast('⚠️ Firebase未接続');return;}
@@ -3744,6 +3809,8 @@ document.addEventListener('visibilitychange',async()=>{
   if(document.visibilityState==='visible'){
     // Wake Lock 再取得
     if(wakeLockOn){try{wakeLock=await navigator.wakeLock.request('screen');}catch(e){}}
+    // プール進捗ドット・列移動表示を即座に再描画（バックグラウンド復帰時の初期化対策）
+    renderPoolChart();renderPoolButtons();
     // Firebase再接続＋仲間位置を強制リフレッシュ
     if(db){
       db.goOnline();
