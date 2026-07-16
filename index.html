@@ -8,6 +8,11 @@
 <meta http-equiv="Expires" content="0">
 <!-- v20260704-1 -->
 <title>イチバン羽田チームアプリ</title>
+<link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="イチバン羽田">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
@@ -981,11 +986,11 @@ function updateMyMarker(lat,lng){
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
-}
+  }
 
 function updatePeerMarker(id,d){
   if(id===myId)return;
-    const age=Date.now()-(d.ts||0);
+  const age=Date.now()-(d.ts||0);
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
@@ -1969,10 +1974,10 @@ function buildFareTripHtml(d,driverLabel){
       <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
       <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
     </div>
-    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
+        <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
   </div>`;
 }
-  
+
 function renderFareRanking(){
   const pEl=document.getElementById('fare-ranking-personal');
   const tEl=document.getElementById('fare-ranking-team');
@@ -2957,9 +2962,9 @@ function deleteMyAccount(){
   document.getElementById('map-offline').classList.add('show');
   document.getElementById('admin-name').value='';
   document.getElementById('admin-car').value='';
-  document.getElementById('s-name').value='';
+    document.getElementById('s-name').value='';
   document.getElementById('s-car').value='';
-    toast('🗑 アカウントを削除しました');
+  toast('🗑 アカウントを削除しました');
 }
 function adminLogout(){
   isAdmin=false;
@@ -3942,3 +3947,4 @@ window.addEventListener('load',()=>{
 
 </body>
 </html>
+    
