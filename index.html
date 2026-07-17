@@ -372,7 +372,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <div class="pc">
   <div id="wait-spot-lbl" style="font-size:13px;color:var(--muted);padding:8px 4px 0">待機場所: </div>
   <div id="wait-timer" style="display:none"></div>
-  <div class="sec">🗺 送り先（自動登録）</div>
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
+    <span>🗺 送り先（自動登録）</span>
+    <button class="btn btn-g" onclick="openManualTripModal()" style="font-size:11px;padding:5px 10px">🖊 手動で記録</button>
+  </div>
   <div id="dest-list"></div>
   <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
   <div id="team-dests-list"></div>
@@ -596,6 +599,19 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <label>所要時間（分）</label><input id="d-time" type="number" placeholder="例: 45" min="1">
     <label>距離（km）</label><input id="d-dist" type="number" placeholder="例: 18" step="0.1">
     <button class="btn btn-p" onclick="addDest()" style="width:100%">追加する</button>
+  </div>
+</div>
+
+<div class="overlay" id="manual-trip-overlay">
+  <div class="modal">
+    <h3>乗車・降車を手動記録 <button class="mc" onclick="closeManualTripModal()">✕</button></h3>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">ボタン操作がうまく反映されなかった時など、乗車地・降車地を直接入力して記録できます。</div>
+    <label>乗車時刻</label><input id="mt-board-time" type="time">
+    <label>乗車地（住所）</label><input id="mt-board-addr" placeholder="例: 東京都渋谷区道玄坂1-2-3">
+    <label>降車時刻</label><input id="mt-alight-time" type="time">
+    <label>降車地（住所）</label><input id="mt-alight-addr" placeholder="例: 東京都新宿区西新宿2-8-1">
+    <label>運賃（円・分かれば）</label><input id="mt-fare" type="number" inputmode="numeric" placeholder="例: 3200">
+    <button class="btn btn-p" onclick="saveManualTrip()" style="width:100%">記録する</button>
   </div>
 </div>
 
@@ -986,8 +1002,7 @@ function updateMyMarker(lat,lng){
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
-  }
-
+}
 function updatePeerMarker(id,d){
   if(id===myId)return;
   const age=Date.now()-(d.ts||0);
@@ -1430,11 +1445,20 @@ function setStatus(s){
     }
   }
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
+    const fallbackBoardTs=jitsushaStart; // 実車開始時刻を、乗車時刻の保険として保持
     jitsushaStart=null;
-    if(myLat!==null&&boardInfo){
-      const tripTs=Date.now();
-      createTripEntry(myLat,myLng,tripTs);
+    const tripTs=Date.now();
+    // GPSが一瞬取得できていない場合に備え、直近の位置情報履歴もフォールバックとして使う
+    const fbLat=myLat!==null?myLat:(posHistory.length?posHistory[posHistory.length-1].lat:null);
+    const fbLng=myLng!==null?myLng:(posHistory.length?posHistory[posHistory.length-1].lng:null);
+    if(fbLat!==null&&fbLng!==null){
+      createTripEntry(fbLat,fbLng,tripTs,fallbackBoardTs);
       showFareModal(tripTs);
+      if(!boardInfo){
+        toast('⚠️ 乗車時の詳細情報が見つからず、簡易記録になりました（時刻は保持されています）');
+      }
+    }else{
+      toast('⚠️ 位置情報が取得できず、自動記録できませんでした。「手動で記録」から追記してください');
     }
     boardInfo=null;
   }
@@ -1739,7 +1763,7 @@ function kanjiToNum(s){
   });
 }
 
-async function createTripEntry(alightLat,alightLng,presetTs){
+async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs){
   const saved=boardInfo; // capture before async
   const alightTime=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   const now=new Date();
@@ -1748,9 +1772,11 @@ async function createTripEntry(alightLat,alightLng,presetTs){
     reverseGeocode(alightLat,alightLng),
     saved&&saved.lat!==null?reverseGeocode(saved.lat,saved.lng):Promise.resolve(null)
   ]);
+  // boardInfoが失われていても、実車開始時刻（fallbackBoardTs）があれば、乗車時刻だけは正確に残す
+  const fallbackBoardTime=fallbackBoardTs?new Date(fallbackBoardTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'−';
   const entry={
     type:'trip',
-    boardTime:saved?saved.time:'−',
+    boardTime:saved?saved.time:fallbackBoardTime,
     boardAddr:boardAddr||'',
     boardSpot:saved?saved.spot:null,
     alightTime,
@@ -1974,7 +2000,7 @@ function buildFareTripHtml(d,driverLabel){
       <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
       <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
     </div>
-        <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
+    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
   </div>`;
 }
 
@@ -1983,7 +2009,7 @@ function renderFareRanking(){
   const tEl=document.getElementById('fare-ranking-team');
   if(!pEl||!tEl)return;
   // 個人ランキング（過去ベスト5）
-  const myTrips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0)).slice(0,5);
+    const myTrips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0)).slice(0,5);
   pEl.innerHTML=myTrips.length
     ?myTrips.map((d,i)=>`<div style="font-size:12px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'};margin-bottom:2px">${i+1}位</div>${buildFareTripHtml(d,null)}`).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
@@ -2962,7 +2988,7 @@ function deleteMyAccount(){
   document.getElementById('map-offline').classList.add('show');
   document.getElementById('admin-name').value='';
   document.getElementById('admin-car').value='';
-    document.getElementById('s-name').value='';
+  document.getElementById('s-name').value='';
   document.getElementById('s-car').value='';
   toast('🗑 アカウントを削除しました');
 }
@@ -2989,7 +3015,7 @@ function loadAccountList(){
       const isMe=id===myId;
       const age=Date.now()-(d.ts||0);
       const alive=age<5*60*1000;
-      const statusCls=alive?'color:var(--green)':'color:var(--muted)';
+            const statusCls=alive?'color:var(--green)':'color:var(--muted)';
       return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600">${esc(d.name||'名前なし')}${isMe?' <span style="font-size:10px;color:var(--accent)">(自分)</span>':''}</div>
@@ -3143,6 +3169,51 @@ function addDest(){
   destinations.push({name,addr:document.getElementById('d-addr').value.trim(),
     time:document.getElementById('d-time').value,dist:document.getElementById('d-dist').value,done:false});
   saveDests();renderDests();closeDestModal();toast('✅ 追加しました');
+}
+
+function openManualTripModal(){
+  const now=new Date();
+  const hh=String(now.getHours()).padStart(2,'0');
+  const mm=String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('mt-board-time').value=`${hh}:${mm}`;
+  document.getElementById('mt-alight-time').value=`${hh}:${mm}`;
+  document.getElementById('mt-board-addr').value='';
+  document.getElementById('mt-alight-addr').value='';
+  document.getElementById('mt-fare').value='';
+  document.getElementById('manual-trip-overlay').classList.add('open');
+}
+
+function closeManualTripModal(){
+  document.getElementById('manual-trip-overlay').classList.remove('open');
+}
+
+function saveManualTrip(){
+  const boardTime=document.getElementById('mt-board-time').value;
+  const boardAddr=document.getElementById('mt-board-addr').value.trim();
+  const alightTime=document.getElementById('mt-alight-time').value;
+  const alightAddr=document.getElementById('mt-alight-addr').value.trim();
+  const fare=parseInt(document.getElementById('mt-fare').value)||0;
+  if(!boardAddr||!alightAddr){toast('⚠️ 乗車地・降車地を入力してください');return;}
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const tripTs=now.getTime();
+  const entry={
+    type:'trip',
+    boardTime:boardTime||'−',
+    boardAddr,
+    boardSpot:null,
+    alightTime:alightTime||'−',
+    alightAddr,
+    waitMins:null,
+    dateStr,ts:tripTs
+  };
+  if(fare>0)entry.fare=fare;
+  destinations.push(entry);
+  saveDests();renderDests();
+  pushDestToFirebase(entry);
+  if(fare>0)saveFareEntry(fare,0,tripTs);
+  closeManualTripModal();
+  toast('✅ 手動で記録しました');
 }
 function rmDest(i){
   const d=destinations[i];
@@ -3947,4 +4018,3 @@ window.addEventListener('load',()=>{
 
 </body>
 </html>
-    
