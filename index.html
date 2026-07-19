@@ -63,7 +63,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-.gps-pill{position:absolute;bottom:122px;left:8px;z-index:500;
+.gps-pill{position:absolute;bottom:140px;left:8px;z-index:500;
   background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
   border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);
   display:flex;align-items:center;gap:6px}
@@ -305,7 +305,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
    background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border);
    padding:6px 10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;pointer-events:none">
    <div style="text-align:center">
-    <div style="font-size:10px;color:var(--muted)">本日の勤務時間</div>
+    <div style="font-size:10px;color:var(--muted)">本日の上がり予定</div>
     <div id="daily-worked-time" style="font-size:14px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums">--:--:--</div>
    </div>
    <div style="text-align:center">
@@ -334,7 +334,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <!-- オートフォロー -->
   <button class="map-ctrl-btn" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:104px">🎯</button>
   <button id="abure-row" onclick="recordAbure()"
-    style="position:absolute;left:8px;bottom:76px;z-index:500;
+    style="position:absolute;left:8px;bottom:94px;z-index:500;
       padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
       background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
       backdrop-filter:blur(6px)">😔 あぶれ</button>
@@ -1034,9 +1034,10 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
     </div>`,className:'',iconAnchor:[18,18]
   });
 }
+
 function updateMyMarker(lat,lng){
   const name=localStorage.getItem('taxi_name')||'自分';
-  const car=localStorage.getItem('taxi_car')||'';
+    const car=localStorage.getItem('taxi_car')||'';
   const plate=localStorage.getItem('taxi_number')||'';
   const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
   const isWeak=ageSec!==null&&ageSec>20;
@@ -1171,12 +1172,14 @@ function _attachGPSWatch(){
     if(autoFollow&&!followPeerId&&leafletMap)leafletMap.setView([myLat,myLng]);
     pushMyPosition(false);
     checkGeofences(myLat,myLng);
-    // GPS初回フィックス時：プール内なら列選択モーダルを表示
+    // GPS初回フィックス時：プール内なら列選択モーダルを表示（ただし直近30分以内に表示済みなら出さない）
     if(isFirstFix){
       const cp=checkpoints.find(c=>c.id==='haneda');
       if(cp&&cp.lat!==null&&haversine(myLat,myLng,cp.lat,cp.lng)<=cp.radius){
-        if(document.getElementById('pool-lane-modal').style.display==='none'||
-           !document.getElementById('pool-lane-modal').style.display){
+        const lastShownTs=parseInt(localStorage.getItem('taxi_pool_modal_shown_ts')||'0');
+        const shownRecently=(Date.now()-lastShownTs)<30*60*1000;
+        if(!shownRecently&&(document.getElementById('pool-lane-modal').style.display==='none'||
+           !document.getElementById('pool-lane-modal').style.display)){
           showPoolLaneModal();
         }
       }
@@ -1306,9 +1309,9 @@ function selectDutyPlan(choice){
 }
 
 function applyDutyPlanChoice(){
-  const todayStr=new Date().toLocaleDateString('ja-JP');
-  if(dutyPlanChoice==='use'&&dutyPlanHours!==null){
-    localStorage.setItem('taxi_today_target_hours',JSON.stringify({hours:dutyPlanHours,dateStr:todayStr}));
+  // シフト開始時刻（dutyStart）に紐づけて保存するため、日をまたぐ夜勤でも消えない
+  if(dutyPlanChoice==='use'&&dutyPlanHours!==null&&dutyStart){
+    localStorage.setItem('taxi_today_target_hours',JSON.stringify({hours:dutyPlanHours,shiftStartTs:dutyStart.getTime()}));
   }else{
     localStorage.removeItem('taxi_today_target_hours');
   }
@@ -1321,17 +1324,17 @@ function confirmDutyCarModal(){
   const plate=document.getElementById('duty-car-plate').value.trim();
   if(carNum)localStorage.setItem('taxi_car',carNum);
   if(plate)localStorage.setItem('taxi_number',plate);
-  applyDutyPlanChoice();
   document.getElementById('duty-car-modal').style.display='none';
   _startDuty();
+  applyDutyPlanChoice();
 }
 
 function skipDutyCarModal(){
   if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
   if(!dutyPlanChoice){toast('⚠️ 本日の勤務時間プランを選んでください');return;}
-  applyDutyPlanChoice();
   document.getElementById('duty-car-modal').style.display='none';
   _startDuty();
+  applyDutyPlanChoice();
 }
 
 function _startDuty(){
@@ -2071,9 +2074,9 @@ function checkGeofences(lat,lng){
     const nowInside=dist<=cp.radius;
     if(nowInside&&!wasInside)onArrival(cp,Math.round(dist));
     if(!nowInside&&wasInside)onDeparture(cp);
-      cpInside[cp.id]=nowInside;
+    cpInside[cp.id]=nowInside;
   });
-}
+  }
 
 function onDeparture(cp){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
@@ -2358,19 +2361,23 @@ function updateDailyBar(){
   timeEl.textContent='--:--:--';
   timeEl.style.color='var(--gold)';
   amtEl.textContent='-';
-  if(workedEl)workedEl.textContent='--:--:--';
+  if(workedEl)workedEl.textContent='--:--';
   if(targetAmtEl)targetAmtEl.textContent='-';
   return;
  }
- // 本日の勤務時間（出勤してからの経過時間）
- if(workedEl){
-  const elapsedSecForWorked=Math.floor((Date.now()-dutyStart.getTime())/1000);
-  workedEl.textContent=toHMS(elapsedSecForWorked);
- }
  // 出勤時に選んだ「本日の予定時間」があればそれを使い、なければ従来通り動的計算
+ // シフト開始時刻で照合するため、日をまたぐ夜勤でも消えない
  const storedPlan=JSON.parse(localStorage.getItem('taxi_today_target_hours')||'null');
- const todayStrForPlan=new Date().toLocaleDateString('ja-JP');
- const perDayHours=(storedPlan&&storedPlan.dateStr===todayStrForPlan)?storedPlan.hours:null;
+ const perDayHours=(storedPlan&&storedPlan.shiftStartTs===dutyStart.getTime())?storedPlan.hours:null;
+ // 本日の上がり予定時間（出勤時刻＋予定時間の、時計としての時刻）
+ if(workedEl){
+  if(perDayHours===null){
+   workedEl.textContent='--:--';
+  }else{
+   const finishTs=dutyStart.getTime()+Math.round(perDayHours*3600*1000);
+   workedEl.textContent=new Date(finishTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  }
+ }
  if(perDayHours===null){
   timeEl.textContent='--:--:--';
  }else{
@@ -3566,6 +3573,7 @@ function recordProgress(spot,amount){
 const LANE_MODAL_COUNTS={'1号':8,'2号':11,'3号':10,'4号':9};
 let laneModalSpot=null,laneModalLane=null;
 function showPoolLaneModal(){
+  localStorage.setItem('taxi_pool_modal_shown_ts',String(Date.now()));
   laneModalSpot=null;laneModalLane=null;
   ['1号','2号','3号','4号'].forEach(s=>{
     const b=document.getElementById('lms-'+s);
@@ -4144,4 +4152,3 @@ window.addEventListener('load',()=>{
 
 </body>
 </html>
-  
