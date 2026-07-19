@@ -63,7 +63,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-.gps-pill{position:absolute;bottom:52px;left:110px;z-index:500;
+.gps-pill{position:absolute;bottom:122px;left:8px;z-index:500;
   background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
   border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);
   display:flex;align-items:center;gap:6px}
@@ -334,7 +334,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <!-- オートフォロー -->
   <button class="map-ctrl-btn" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:104px">🎯</button>
   <button id="abure-row" onclick="recordAbure()"
-    style="position:absolute;left:8px;bottom:52px;z-index:500;
+    style="position:absolute;left:8px;bottom:76px;z-index:500;
       padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
       background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
       backdrop-filter:blur(6px)">😔 あぶれ</button>
@@ -519,6 +519,19 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="btn btn-p" onclick="debugGeocode()" style="width:100%">📍 現在地の住所をテスト</button>
     <div id="debug-geo-out" style="margin-top:10px;font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;display:none"></div>
   </div>
+  <div class="sec">🕐 出勤・退勤時間の手動記録・修正</div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">押し忘れ・押し間違いがあった場合、日付ごとの出勤・退勤時間を直接入力して記録できます。「勤務時間管理」の集計にすぐ反映されます。</div>
+    <label>日付</label>
+    <input type="date" id="sl-date" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:10px">
+    <label>出勤時刻</label>
+    <input type="time" id="sl-start" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:10px">
+    <label>退勤時刻</label>
+    <input type="time" id="sl-end" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:4px">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">※日をまたぐ勤務（夜勤）の場合、退勤時刻は翌日として自動計算されます</div>
+    <button class="btn btn-p" onclick="saveManualShift()" style="width:100%">この内容で記録する</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">保存した内容は、下の「勤務時間管理」の記録一覧から確認・編集・削除できます。</div>
+  </div>
   <div class="sec">🔄 月途中から利用する方向け</div>
 <div class="card">
  <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">月の途中からこのアプリを使い始める場合、前日までの実績をここで入力しておくと、以降の集計・ランキングに自動で反映されます。</div>
@@ -688,6 +701,21 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
 </div>
 
+<div id="duty-end-confirm-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
+    <div style="text-align:center;font-size:16px;font-weight:700;margin-bottom:18px">退勤時刻を確認してください</div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">退勤時刻</div>
+      <input id="duty-end-time" type="time"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="cancelEndDuty()" class="btn btn-g" style="flex:1">キャンセル</button>
+      <button onclick="confirmEndDuty()" class="btn btn-p" style="flex:1">退勤する</button>
+    </div>
+  </div>
+</div>
+
 <div id="duty-end-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--surface);border-radius:20px;padding:36px 24px 28px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6);text-align:center">
     <div style="font-size:40px;margin-bottom:16px">🌙</div>
@@ -713,6 +741,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       </div>
     </div>
     <div id="duty-car-greeting" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:22px;line-height:1.5"></div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">出勤時刻</div>
+      <input id="duty-start-time" type="time"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
+    </div>
     <div style="margin-bottom:14px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">車番</div>
       <input id="duty-car-num" type="text" inputmode="numeric" placeholder="例: 5" maxlength="6"
@@ -1001,7 +1034,6 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
     </div>`,className:'',iconAnchor:[18,18]
   });
 }
-
 function updateMyMarker(lat,lng){
   const name=localStorage.getItem('taxi_name')||'自分';
   const car=localStorage.getItem('taxi_car')||'';
@@ -1012,7 +1044,7 @@ function updateMyMarker(lat,lng){
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
 }
-  
+
 function updatePeerMarker(id,d){
   if(id===myId)return;
   const age=Date.now()-(d.ts||0);
@@ -2026,7 +2058,7 @@ function renderFareRanking(){
 
 function clearWaitHistory(){
   if(!confirm('待機履歴を全て削除しますか？'))return;
-    localStorage.removeItem('taxi_wait_history');
+  localStorage.removeItem('taxi_wait_history');
   renderWaitHistory();
   toast('🗑 履歴をクリアしました');
 }
@@ -2039,7 +2071,7 @@ function checkGeofences(lat,lng){
     const nowInside=dist<=cp.radius;
     if(nowInside&&!wasInside)onArrival(cp,Math.round(dist));
     if(!nowInside&&wasInside)onDeparture(cp);
-    cpInside[cp.id]=nowInside;
+      cpInside[cp.id]=nowInside;
   });
 }
 
@@ -2157,7 +2189,7 @@ function renderSpotRow(){
   }).join('');
 }
 
-function recordAbure(){
+async function recordAbure(){
   const now=new Date();
   const alightTime=now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
@@ -2172,11 +2204,20 @@ function recordAbure(){
     const m=Math.floor((sec%3600)/60);
     waitMinsStr=h>0?`${h}時間${m}分`:(m>0?`${m}分`:'');
   }
+  // 号が未選択の場合でも、必ず待機先が分かるようフォールバックを用意
+  let boardAddrFallback='';
+  if(!spot){
+    if(saved&&saved.waitAddr){
+      boardAddrFallback=saved.waitAddr;
+    }else if(myLat!==null&&myLng!==null){
+      boardAddrFallback=await reverseGeocode(myLat,myLng);
+    }
+  }
   const entry={
     type:'trip',
     boardTime,
-    boardAddr:'',
-    boardSpot:spot,
+    boardAddr:spot?'':boardAddrFallback,
+    boardSpot:spot||null,
     alightTime,
     alightAddr:'あぶれ',
     waitMins:null,
@@ -2401,6 +2442,33 @@ function renderWorkStats(){
   <div class="row2"><span class="rl">1日あたり目安</span><span class="rv" style="color:var(--gold);font-weight:800">${perDayStr}</span></div>
  `;
  renderShiftEntries();
+}
+
+function saveManualShift(){
+  const dateVal=document.getElementById('sl-date').value;
+  const startVal=document.getElementById('sl-start').value;
+  const endVal=document.getElementById('sl-end').value;
+  if(!dateVal||!startVal||!endVal){toast('⚠️ 日付・出勤時刻・退勤時刻を全て入力してください');return;}
+  const [y,m,d]=dateVal.split('-').map(Number);
+  const [sh,sm]=startVal.split(':').map(Number);
+  const [eh,em]=endVal.split(':').map(Number);
+  const startDate=new Date(y,m-1,d,sh,sm,0);
+  let endDate=new Date(y,m-1,d,eh,em,0);
+  if(endDate.getTime()<=startDate.getTime()){
+    endDate=new Date(endDate.getTime()+24*3600*1000); // 日をまたぐ夜勤として翌日扱いにする
+  }
+  const startTs=startDate.getTime();
+  const endTs=endDate.getTime();
+  const durationSec=Math.floor((endTs-startTs)/1000)+1800; // 通常の退勤処理と同じ+30分ボーナスを適用
+  const dateStr=startDate.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  log.push({dateStr,startTs,endTs,durationSec});
+  localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+  renderShiftEntries();
+  renderWorkStats();
+  toast('✅ 出勤・退勤記録を保存しました');
+  document.getElementById('sl-start').value='';
+  document.getElementById('sl-end').value='';
 }
 
 function renderShiftEntries(){
@@ -3361,6 +3429,7 @@ function renderPoolChart(){
   const allSpotTs=['1号','2号','3号','4号'].map(s=>(poolProgress[s]&&poolProgress[s].ts)||0);
   const globalLastActivity=Math.max(0,...allSpotTs);
   const allExpired=(now-globalLastActivity)>PROGRESS_TIMEOUT_MS;
+  if(allExpired)cleanupExpiredProgressIfNeeded(globalLastActivity,now);
   ['1号','2号','3号','4号'].forEach(spot=>{
     const el=document.getElementById('pool-info-'+spot);
     if(!el)return;
@@ -3437,6 +3506,28 @@ function recordPoolMove(spot,lane){
 }
 
 const PROGRESS_TIMEOUT_MS=10*60*1000; // 10分間操作がなければリセット
+let lastCleanupGlobalTs=0;
+
+function cleanupExpiredProgressIfNeeded(globalLastActivity,now){
+  if(!db)return;
+  if(globalLastActivity===0)return; // まだ一度も記録がない
+  if((now-globalLastActivity)<=PROGRESS_TIMEOUT_MS)return; // まだ期限内
+  if(globalLastActivity<=lastCleanupGlobalTs)return; // この期限切れ分は既に掃除済み
+  lastCleanupGlobalTs=globalLastActivity;
+  // 進捗カウンターをリセット（4乗り場すべて）
+  ['1号','2号','3号','4号'].forEach(spot=>{
+    db.ref('pool_progress/'+spot).remove();
+  });
+  // 対応する「+1」「+2」の移動履歴も削除（今回期限切れになった分のみ、それより新しい記録は残す）
+  db.ref('pool_moves').orderByChild('ts').endAt(globalLastActivity).once('value',snap=>{
+    snap.forEach(child=>{
+      const v=child.val();
+      if(v&&typeof v.lane==='string'&&v.lane.charAt(0)==='+'){
+        child.ref.remove();
+      }
+    });
+  });
+}
 
 function recordProgress(spot,amount){
   if(!db){toast('⚠️ Firebase未接続');return;}
@@ -4053,3 +4144,4 @@ window.addEventListener('load',()=>{
 
 </body>
 </html>
+  
