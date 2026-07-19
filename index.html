@@ -537,8 +537,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
  <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">月の途中からこのアプリを使い始める場合、前日までの実績をここで入力しておくと、以降の集計・ランキングに自動で反映されます。</div>
  <label>前日までの累計売上（円）</label>
  <input type="number" id="s-carry-fare" placeholder="例: 250000">
- <label>前日までの累計時間（時間）</label>
- <input type="number" id="s-carry-hours" placeholder="例: 120">
+ <label>前日までの累計時間（時:分）</label>
+ <input type="text" id="s-carry-hours" inputmode="numeric" placeholder="例: 85:41（85時間41分の場合）">
+ <div style="font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:10px">「時:分」の形式で入力してください（例: 85時間41分 → 85:41）。自動的に小数に変換されます。</div>
  <label>前日までの勤務日数（日）</label>
  <input type="number" id="s-carry-days" placeholder="例: 10">
  <div class="btn-row">
@@ -1037,12 +1038,12 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
 
 function updateMyMarker(lat,lng){
   const name=localStorage.getItem('taxi_name')||'自分';
-    const car=localStorage.getItem('taxi_car')||'';
+  const car=localStorage.getItem('taxi_car')||'';
   const plate=localStorage.getItem('taxi_number')||'';
   const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
   const isWeak=ageSec!==null&&ageSec>20;
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak);
-  if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
+    if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
 }
 
@@ -2076,7 +2077,7 @@ function checkGeofences(lat,lng){
     if(!nowInside&&wasInside)onDeparture(cp);
     cpInside[cp.id]=nowInside;
   });
-  }
+}
 
 function onDeparture(cp){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
@@ -2087,7 +2088,7 @@ function onDeparture(cp){
   const elapsed=toHMS(waitSec);
   document.getElementById('wait-spot-lbl').textContent=`待機場所: ${cp.name}（終了）`;
   document.getElementById('arrival-title').textContent=cp.icon+' '+cp.name+' を出発';
-  document.getElementById('arrival-sub').textContent=`出発時刻 ${timeStr}　待機時間 ${elapsed}`;
+    document.getElementById('arrival-sub').textContent=`出発時刻 ${timeStr}　待機時間 ${elapsed}`;
   const banner=document.getElementById('arrival-banner');
   banner.style.borderColor='var(--amber)';banner.classList.add('show');
   if(bannerTimer)clearTimeout(bannerTimer);
@@ -2303,9 +2304,32 @@ function getCarryover(){
  };
 }
 
+function parseClockHours(str){
+  // 「85:41」のような時:分形式を、小数の時間（85.68）に変換する
+  str=(str||'').trim();
+  if(!str)return 0;
+  const m=str.match(/^(\d+)[:：](\d{1,2})$/);
+  if(m){
+    const h=parseInt(m[1],10);
+    const mins=parseInt(m[2],10);
+    return Math.round((h+mins/60)*100)/100;
+  }
+  // 「:」がない場合は、従来通り小数としてそのまま扱う
+  const f=parseFloat(str);
+  return isNaN(f)?0:f;
+}
+
+function formatClockHours(hours){
+  // 小数の時間（85.68）を、「85:41」のような時:分形式に変換する
+  if(!hours)return '';
+  const h=Math.floor(hours);
+  const m=Math.round((hours-h)*60);
+  return `${h}:${String(m).padStart(2,'0')}`;
+}
+
 function saveCarryover(){
  const fare=parseInt(document.getElementById('s-carry-fare').value)||0;
- const hours=parseFloat(document.getElementById('s-carry-hours').value)||0;
+ const hours=parseClockHours(document.getElementById('s-carry-hours').value);
  const days=parseInt(document.getElementById('s-carry-days').value)||0;
  localStorage.setItem('taxi_carry_fare',fare);
  localStorage.setItem('taxi_carry_hours',hours);
@@ -3109,13 +3133,13 @@ function loadAccountList(){
         ${!isMe?`<button class="btn btn-d" style="font-size:11px;padding:5px 10px;flex-shrink:0"
           onclick="deleteAccount('${id}','${esc(d.name||'このアカウント')}')">削除</button>`:'<span style="font-size:11px;color:var(--muted)">自分</span>'}
       </div>`;
-    }).join('');
+      }).join('');
   });
 }
 
 function deleteAccount(id,name){
   if(!confirm(name+'を削除しますか？\nこの操作は取り消せません。'))return;
-    if(!db){toast('⚠️ Firebase未接続');return;}
+  if(!db){toast('⚠️ Firebase未接続');return;}
   db.ref('drivers/'+id).remove()
     .then(()=>{
       db.ref('team_dests/'+id).remove();
@@ -3949,7 +3973,7 @@ function loadSettings(){
   document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
   document.getElementById('s-target-amount').value=localStorage.getItem('taxi_target_amount')||'';
   document.getElementById('s-carry-fare').value=localStorage.getItem('taxi_carry_fare')||'';
-  document.getElementById('s-carry-hours').value=localStorage.getItem('taxi_carry_hours')||'';
+  document.getElementById('s-carry-hours').value=formatClockHours(parseFloat(localStorage.getItem('taxi_carry_hours'))||0);
   document.getElementById('s-carry-days').value=localStorage.getItem('taxi_carry_days')||'';
  renderCarryoverStatus();
  renderWorkStats();renderSalesStats();
