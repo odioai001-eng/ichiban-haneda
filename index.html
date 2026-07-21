@@ -1252,6 +1252,7 @@ function stopGPS(){
 }
 
 function toggleDuty(){
+ alert('toggleDuty呼び出し確認: isDuty='+isDuty);
  try{
   if(!isDuty){
     // 出勤前に車番入力モーダルを表示
@@ -2183,8 +2184,8 @@ function onDeparture(cp){
   const banner=document.getElementById('arrival-banner');
   banner.style.borderColor='var(--amber)';banner.classList.add('show');
   if(bannerTimer)clearTimeout(bannerTimer);
-  bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
-    if(navigator.vibrate)navigator.vibrate([200,100,200]);
+    bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
+  if(navigator.vibrate)navigator.vibrate([200,100,200]);
   const durMins=Math.round(waitSec/60);
   if(hadTimer)saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
   // チェックポイント滞在を送先リストに追加
@@ -3276,8 +3277,8 @@ function deleteMyAccount(){
   document.getElementById('admin-name').value='';
   document.getElementById('admin-car').value='';
   document.getElementById('s-name').value='';
-  document.getElementById('s-car').value='';
-    toast('🗑 アカウントを削除しました');
+    document.getElementById('s-car').value='';
+  toast('🗑 アカウントを削除しました');
 }
 function adminLogout(){
   isAdmin=false;
