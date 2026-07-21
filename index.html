@@ -1089,7 +1089,7 @@ function updatePeerMarker(id,d){
   if(id===myId)return;
   const age=Date.now()-(d.ts||0);
   const alive=age<5*60*1000;
-          const status=alive?(d.status||'kuusha'):'offline';
+    const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
   const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5});
