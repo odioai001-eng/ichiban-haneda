@@ -1089,9 +1089,9 @@ function updatePeerMarker(id,d){
   if(id===myId)return;
   const age=Date.now()-(d.ts||0);
   const alive=age<5*60*1000;
-    const status=alive?(d.status||'kuusha'):'offline';
+  const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
-  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
+    const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5});
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
@@ -1252,6 +1252,7 @@ function stopGPS(){
 }
 
 function toggleDuty(){
+ try{
   if(!isDuty){
     // 出勤前に車番入力モーダルを表示
     const name=localStorage.getItem('taxi_name')||'自分';
@@ -1272,6 +1273,10 @@ function toggleDuty(){
   const timeInput=document.getElementById('duty-end-time');
   if(timeInput)timeInput.value=`${hh}:${mm}`;
   document.getElementById('duty-end-confirm-modal').style.display='flex';
+ }catch(e){
+  toast('⚠️ エラー: '+e.message);
+  alert('toggleDutyエラー: '+e.message+'\n\n'+e.stack);
+ }
 }
 
 function cancelEndDuty(){
@@ -2179,8 +2184,8 @@ function onDeparture(cp){
   banner.style.borderColor='var(--amber)';banner.classList.add('show');
   if(bannerTimer)clearTimeout(bannerTimer);
   bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
-  if(navigator.vibrate)navigator.vibrate([200,100,200]);
-    const durMins=Math.round(waitSec/60);
+    if(navigator.vibrate)navigator.vibrate([200,100,200]);
+  const durMins=Math.round(waitSec/60);
   if(hadTimer)saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
   // チェックポイント滞在を送先リストに追加
   if(hadTimer&&durMins>0){
@@ -3271,8 +3276,8 @@ function deleteMyAccount(){
   document.getElementById('admin-name').value='';
   document.getElementById('admin-car').value='';
   document.getElementById('s-name').value='';
-    document.getElementById('s-car').value='';
-  toast('🗑 アカウントを削除しました');
+  document.getElementById('s-car').value='';
+    toast('🗑 アカウントを削除しました');
 }
 function adminLogout(){
   isAdmin=false;
