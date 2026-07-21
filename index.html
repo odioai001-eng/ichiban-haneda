@@ -1091,8 +1091,8 @@ function updatePeerMarker(id,d){
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
-    const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
-  if(followPeerId===id&&d.lat&&d.lng&&leafletMap)leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5});
+  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
+    if(followPeerId===id&&d.lat&&d.lng&&leafletMap)leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5});
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
@@ -1263,7 +1263,12 @@ function toggleDuty(){
     document.getElementById('duty-car-plate').value=localStorage.getItem('taxi_number')||'';
     resetPaymentConfirm();
     resetDutyPlan();
-    document.getElementById('duty-car-modal').style.display='flex';
+    const modalEl=document.getElementById('duty-car-modal');
+    alert('モーダル要素: '+(modalEl?'見つかった':'見つからない！これが原因'));
+    if(modalEl){
+      modalEl.style.display='flex';
+      alert('display設定後: '+modalEl.style.display+' / 実際のスタイル: '+getComputedStyle(modalEl).display);
+    }
     setTimeout(()=>document.getElementById('duty-car-num').focus(),200);
     return;
   }
@@ -2181,10 +2186,10 @@ function onDeparture(cp){
   document.getElementById('wait-spot-lbl').textContent=`待機場所: ${cp.name}（終了）`;
   document.getElementById('arrival-title').textContent=cp.icon+' '+cp.name+' を出発';
   document.getElementById('arrival-sub').textContent=`出発時刻 ${timeStr}　待機時間 ${elapsed}`;
-  const banner=document.getElementById('arrival-banner');
+    const banner=document.getElementById('arrival-banner');
   banner.style.borderColor='var(--amber)';banner.classList.add('show');
   if(bannerTimer)clearTimeout(bannerTimer);
-    bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
+  bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
   if(navigator.vibrate)navigator.vibrate([200,100,200]);
   const durMins=Math.round(waitSec/60);
   if(hadTimer)saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
@@ -3275,9 +3280,9 @@ function deleteMyAccount(){
   document.getElementById('duty-label').textContent='休み中';
   document.getElementById('map-offline').classList.add('show');
   document.getElementById('admin-name').value='';
-  document.getElementById('admin-car').value='';
+    document.getElementById('admin-car').value='';
   document.getElementById('s-name').value='';
-    document.getElementById('s-car').value='';
+  document.getElementById('s-car').value='';
   toast('🗑 アカウントを削除しました');
 }
 function adminLogout(){
