@@ -1091,7 +1091,7 @@ function updatePeerMarker(id,d){
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
-    const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
+                const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5});
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
