@@ -1264,7 +1264,7 @@ function toggleDuty(){
     document.getElementById('duty-car-plate').value=localStorage.getItem('taxi_number')||'';
     resetPaymentConfirm();
     resetDutyPlan();
-    document.getElementById('duty-car-modal').style.display='flex';
+  const dcm=document.getElementById('duty-car-modal');document.body.appendChild(dcm);dcm.style.cssText='position:fixed!important;inset:0!important;z-index:2147483647!important;background:rgba(0,0,0,.9)!important;display:flex!important;visibility:visible!important;opacity:1!important;align-items:center;justify-content:center;padding:16px';
     setTimeout(()=>document.getElementById('duty-car-num').focus(),200);
     return;
   }
