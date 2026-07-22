@@ -4303,6 +4303,23 @@ window.addEventListener('load',()=>{
   setTimeout(()=>{if(leafletMap){leafletMap.invalidateSize();leafletMap.setView([35.5494,139.7798],13);}},500);
   setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},1500);
 });
+  function editCurrentDutyStart(){
+  if(!isDuty||!dutyStart){toast('⚠️ 出勤中のみ修正できます');return;}
+  const cur=dutyStart.toTimeString().slice(0,5);
+  const input=prompt('正しい出勤時刻を入力してください（例: 8:30）',cur);
+  if(input===null)return;
+  const m=input.match(/^(\d{1,2}):(\d{1,2})$/);
+  if(!m){toast('⚠️ 「時:分」の形式で入力してください');return;}
+  const h=parseInt(m[1],10),mi=parseInt(m[2],10);
+  const now=new Date();
+  let nd=new Date(now.getFullYear(),now.getMonth(),now.getDate(),h,mi,0);
+  if(nd.getTime()>now.getTime()+5*60*1000)nd=new Date(nd.getTime()-24*3600*1000);
+  dutyStart=nd;
+  document.getElementById('duty-start').textContent=fmtTime(dutyStart);
+  saveAppState();
+  updateDailyBar();
+  toast('✅ 出勤時刻を修正しました');
+}
 </script>
 <!-- プール8ボタンパネル（固定・全タブ表示） -->
 <div id="pool-panel" style="display:none;position:fixed;bottom:58px;left:0;right:0;z-index:800;
