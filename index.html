@@ -316,7 +316,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 6px;margin-bottom:4px">
     <div style="text-align:center">
      <div style="font-size:8px;color:var(--muted)">本日の出勤時間</div>
-     <div id="daily-start-time" onclick="editCurrentDutyStart()" style="cursor:pointer;text-decoration:underline" style="font-size:11px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
+     <div id="daily-start-time" style="font-size:11px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
     </div>
     <div style="text-align:center">
      <div style="font-size:8px;color:var(--muted)">本日の上がり予定</div>
@@ -1091,7 +1091,7 @@ function updatePeerMarker(id,d){
   const alive=age<5*60*1000;
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
-                const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
+        const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5});
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
@@ -1264,7 +1264,7 @@ function toggleDuty(){
     document.getElementById('duty-car-plate').value=localStorage.getItem('taxi_number')||'';
     resetPaymentConfirm();
     resetDutyPlan();
-  const dcm=document.getElementById('duty-car-modal');document.body.appendChild(dcm);dcm.style.cssText='position:fixed!important;inset:0!important;z-index:2147483647!important;background:rgba(0,0,0,.9)!important;display:flex!important;visibility:visible!important;opacity:1!important;align-items:center;justify-content:center;padding:16px';
+    document.getElementById('duty-car-modal').style.display='flex';
     setTimeout(()=>document.getElementById('duty-car-num').focus(),200);
     return;
   }
@@ -4303,23 +4303,6 @@ window.addEventListener('load',()=>{
   setTimeout(()=>{if(leafletMap){leafletMap.invalidateSize();leafletMap.setView([35.5494,139.7798],13);}},500);
   setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},1500);
 });
-  function editCurrentDutyStart(){
-  if(!isDuty||!dutyStart){toast('⚠️ 出勤中のみ修正できます');return;}
-  const cur=dutyStart.toTimeString().slice(0,5);
-  const input=prompt('正しい出勤時刻を入力してください（例: 8:30）',cur);
-  if(input===null)return;
-  const m=input.match(/^(\d{1,2}):(\d{1,2})$/);
-  if(!m){toast('⚠️ 「時:分」の形式で入力してください');return;}
-  const h=parseInt(m[1],10),mi=parseInt(m[2],10);
-  const now=new Date();
-  let nd=new Date(now.getFullYear(),now.getMonth(),now.getDate(),h,mi,0);
-  if(nd.getTime()>now.getTime()+5*60*1000)nd=new Date(nd.getTime()-24*3600*1000);
-  dutyStart=nd;
-  document.getElementById('duty-start').textContent=fmtTime(dutyStart);
-  saveAppState();
-  updateDailyBar();
-  toast('✅ 出勤時刻を修正しました');
-}
 </script>
 <!-- プール8ボタンパネル（固定・全タブ表示） -->
 <div id="pool-panel" style="display:none;position:fixed;bottom:58px;left:0;right:0;z-index:800;
