@@ -63,7 +63,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-.gps-pill{position:absolute;bottom:130px;left:22px;z-index:500;
+.gps-pill{position:absolute;bottom:140px;left:8px;z-index:500;
   background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
   border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);
   display:flex;align-items:center;gap:6px}
@@ -294,20 +294,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div id="spot-chips" style="display:contents"></div>
     </div>
     <!-- Row 4: 直近移動情報 -->
-    <div id="pool-info-row" style="display:flex;flex-direction:column;gap:2px;width:100%">
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center">
-        <div style="font-size:10px;color:var(--muted);font-weight:700">1号</div>
-        <div style="font-size:10px;color:var(--muted);font-weight:700">2号</div>
-        <div style="font-size:10px;color:var(--muted);font-weight:700">3号</div>
-        <div style="font-size:10px;color:var(--muted);font-weight:700">4号</div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
-        <div id="pool-info-1号" class="pool-info-cell">−</div>
-        <div id="pool-info-2号" class="pool-info-cell">−</div>
-        <div id="pool-info-3号" class="pool-info-cell">−</div>
-        <div id="pool-info-4号" class="pool-info-cell">−</div>
-      </div>
-      <div id="pool-info-shared-time" style="text-align:center;font-size:10px;color:var(--muted);margin-top:2px"></div>
+    <div id="pool-info-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%">
+      <div id="pool-info-1号" class="pool-info-cell">−</div>
+      <div id="pool-info-2号" class="pool-info-cell">−</div>
+      <div id="pool-info-3号" class="pool-info-cell">−</div>
+      <div id="pool-info-4号" class="pool-info-cell">−</div>
     </div>
   </div>
   <div id="daily-bar" style="position:absolute;left:0;right:0;bottom:0;z-index:480;
@@ -316,7 +307,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 6px;margin-bottom:4px">
     <div style="text-align:center">
      <div style="font-size:8px;color:var(--muted)">本日の出勤時間</div>
-     <div id="daily-start-time" style="font-size:11px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
+     <div id="daily-start-time" style="font-size:11px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums">--:--</div>
     </div>
     <div style="text-align:center">
      <div style="font-size:8px;color:var(--muted)">本日の上がり予定</div>
@@ -324,17 +315,17 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <div style="text-align:center">
      <div style="font-size:8px;color:var(--muted)">本日の目標</div>
-     <div id="daily-target-amount" style="font-size:11px;font-weight:800;color:var(--green)">-</div>
+     <div id="daily-target-amount" style="font-size:11px;font-weight:800;color:var(--text)">-</div>
     </div>
    </div>
    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 8px">
     <div style="text-align:center">
      <div style="font-size:10px;color:var(--muted)">本日の残り時間</div>
-     <div id="daily-time-left" style="font-size:14px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums">--:--:--</div>
+     <div id="daily-time-left" style="font-size:14px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums">--:--:--</div>
     </div>
     <div style="text-align:center">
      <div style="font-size:10px;color:var(--muted)">目標まであと</div>
-     <div id="daily-amount-left" style="font-size:14px;font-weight:800;color:var(--green)">-</div>
+     <div id="daily-amount-left" style="font-size:14px;font-weight:800;color:var(--cyan)">-</div>
     </div>
    </div>
   </div>
@@ -399,14 +390,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div id="wait-spot-lbl" style="font-size:13px;color:var(--muted);padding:8px 4px 0">待機場所: </div>
   <div id="wait-timer" style="display:none"></div>
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
-    <span>🗺 送り先（自動登録・本日分）</span>
+    <span>🗺 送り先（自動登録）</span>
     <button class="btn btn-g" onclick="openManualTripModal()" style="font-size:11px;padding:5px 10px">🖊 手動で記録</button>
   </div>
-  <div id="dest-list-today"></div>
+  <div id="dest-list"></div>
   <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
   <div id="team-dests-list"></div>
-  <div class="sec" style="margin-top:18px">📖 送り先（自分・前日以前）</div>
-  <div id="dest-list-past"></div>
   <div class="sec" style="margin-top:18px">🏆 運賃ランキング（個人）</div>
   <div id="fare-ranking-personal"></div>
   <div class="sec" style="margin-top:18px">🏆 運賃ランキング（仲間）</div>
@@ -545,16 +534,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <label>日付</label>
     <input type="date" id="sl-date" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:10px">
     <label>出勤時刻</label>
-    <input type="text" inputmode="numeric" id="sl-start" placeholder="例: 8:30" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:10px">
+    <input type="time" id="sl-start" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:10px">
     <label>退勤時刻</label>
-    <input type="text" inputmode="numeric" id="sl-end" placeholder="例: 17:45" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:4px">
+    <input type="time" id="sl-end" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:4px">
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">※日をまたぐ勤務（夜勤）の場合、退勤時刻は翌日として自動計算されます</div>
     <button class="btn btn-p" onclick="saveManualShift()" style="width:100%">この内容で記録する</button>
     <div style="font-size:11px;color:var(--muted);margin-top:8px">保存した内容は、下の「勤務時間管理」の記録一覧から確認・編集・削除できます。</div>
-  </div>
-  <div class="sec">👥 全員の出勤・退勤（時系列）</div>
-  <div class="card">
-    <div id="team-shift-log"></div>
   </div>
   <div class="sec">🔄 月途中から利用する方向け</div>
 <div class="card">
@@ -582,7 +567,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
  <div id="work-stats-out" style="margin-top:10px"></div>
  <div id="shift-entries-list" style="margin-top:10px"></div>
 </div>
-<div class="sec">💰 売上管理（記録の確認・修正は今月分すべて表示）</div>
+<div class="sec">💰 売上管理</div>
 <div class="card">
  <div id="sales-stats-out"></div>
  <div id="fare-entries-list" style="margin-top:10px"></div>
@@ -701,38 +686,24 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="font-size:32px;margin-bottom:10px">✈️</div>
     <div style="font-size:17px;font-weight:700;margin-bottom:6px">羽田プールに到着しました</div>
     <div style="font-size:14px;color:var(--muted);margin-bottom:18px">何列目に入りましたか？</div>
-    <div style="margin-bottom:16px">
-      <div style="display:flex;flex-direction:column;gap:8px" id="lane-modal-rows">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="width:34px;font-weight:700;font-size:13px;flex-shrink:0">1号</span>
-          <select id="lms-select-1号" onchange="selectLaneModalFromDropdown('1号')"
-            style="flex:1;padding:9px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px">
-            <option value="">列を選択</option>
-          </select>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="width:34px;font-weight:700;font-size:13px;flex-shrink:0">2号</span>
-          <select id="lms-select-2号" onchange="selectLaneModalFromDropdown('2号')"
-            style="flex:1;padding:9px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px">
-            <option value="">列を選択</option>
-          </select>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="width:34px;font-weight:700;font-size:13px;flex-shrink:0">3号</span>
-          <select id="lms-select-3号" onchange="selectLaneModalFromDropdown('3号')"
-            style="flex:1;padding:9px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px">
-            <option value="">列を選択</option>
-          </select>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="width:34px;font-weight:700;font-size:13px;flex-shrink:0">4号</span>
-          <select id="lms-select-4号" onchange="selectLaneModalFromDropdown('4号')"
-            style="flex:1;padding:9px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px">
-            <option value="">列を選択</option>
-          </select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">乗り場</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="lane-modal-spots">
+          <button onclick="selectLaneModalSpot('1号')" class="pool-btn" id="lms-1号">1号</button>
+          <button onclick="selectLaneModalSpot('2号')" class="pool-btn" id="lms-2号">2号</button>
+          <button onclick="selectLaneModalSpot('3号')" class="pool-btn" id="lms-3号">3号</button>
+          <button onclick="selectLaneModalSpot('4号')" class="pool-btn" id="lms-4号">4号</button>
         </div>
       </div>
-    <div style="font-size:13px;color:var(--muted);margin:14px 0" id="lane-modal-sel">乗り場と列を選んでください</div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">列</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:220px;overflow-y:auto" id="lane-modal-lanes">
+          <div style="grid-column:1/-1;font-size:11px;color:var(--muted);padding:8px 0">先に乗り場を選んでください</div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px" id="lane-modal-sel">乗り場と列を選んでください</div>
     <div style="display:flex;gap:8px">
       <button onclick="confirmPoolLaneModal()" class="btn btn-p" style="flex:1;padding:12px;font-size:14px">記録する</button>
       <button onclick="document.getElementById('pool-lane-modal').style.display='none'" class="btn btn-g" style="padding:12px 16px;font-size:14px">スキップ</button>
@@ -745,7 +716,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="text-align:center;font-size:16px;font-weight:700;margin-bottom:18px">退勤時刻を確認してください</div>
     <div style="margin-bottom:20px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">退勤時刻</div>
-      <input id="duty-end-time" type="text" inputmode="numeric" placeholder="例: 17:30"
+      <input id="duty-end-time" type="time"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
     <div style="display:flex;gap:10px">
@@ -782,7 +753,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="duty-car-greeting" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:22px;line-height:1.5"></div>
     <div style="margin-bottom:14px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">出勤時刻（空欄の場合は現在時刻）</div>
-      <input id="duty-start-time" type="text" inputmode="numeric" placeholder="例: 8:00"
+      <input id="duty-start-time" type="time"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
     <div style="margin-bottom:14px">
@@ -1084,12 +1055,11 @@ function updateMyMarker(lat,lng){
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
 }
-
 function updatePeerMarker(id,d){
   if(id===myId)return;
   const age=Date.now()-(d.ts||0);
   const alive=age<5*60*1000;
-          const status=alive?(d.status||'kuusha'):'offline';
+  const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
   const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5});
@@ -1211,12 +1181,13 @@ function _attachGPSWatch(){
     if(autoFollow&&!followPeerId&&leafletMap)leafletMap.setView([myLat,myLng]);
     pushMyPosition(false);
     checkGeofences(myLat,myLng);
-    // GPS初回フィックス時：プール内なら列選択モーダルを表示（ただし、実車ボタンを押すまでは再表示しない）
+    // GPS初回フィックス時：プール内なら列選択モーダルを表示（ただし直近30分以内に表示済みなら出さない）
     if(isFirstFix){
       const cp=checkpoints.find(c=>c.id==='haneda');
       if(cp&&cp.lat!==null&&haversine(myLat,myLng,cp.lat,cp.lng)<=cp.radius){
-        const alreadyAnswered=localStorage.getItem('taxi_pool_modal_answered')==='1';
-        if(!alreadyAnswered&&(document.getElementById('pool-lane-modal').style.display==='none'||
+        const lastShownTs=parseInt(localStorage.getItem('taxi_pool_modal_shown_ts')||'0');
+        const shownRecently=(Date.now()-lastShownTs)<30*60*1000;
+        if(!shownRecently&&(document.getElementById('pool-lane-modal').style.display==='none'||
            !document.getElementById('pool-lane-modal').style.display)){
           showPoolLaneModal();
         }
@@ -1308,11 +1279,6 @@ function confirmEndDuty(){
    durationSec:Math.floor((endTs-dutyStart.getTime())/1000)+1800
   });
   localStorage.setItem('taxi_shift_log',JSON.stringify(shiftLog));
-  // 仲間と共有するため、Firebaseにも出退勤時間を記録
-  if(db){
-   const shareName=localStorage.getItem('taxi_name')||'自分';
-   db.ref('team_shifts/'+myId).push({name:shareName,startTs:dutyStart.getTime(),endTs});
-  }
  }
 
   stopGPS();myLat=null;myLng=null;dutyStart=null;
@@ -1549,12 +1515,11 @@ function setStatus(s){
   toast('ステータス: '+statusCfg[s].label);
   if(s==='jitsusha'){
     jitsushaStart=Date.now();
-    localStorage.removeItem('taxi_pool_modal_answered'); // 実車になったので、次にプールに入った時はまたポップアップを出す
     currentSpotSelection=null;
     renderSpotRow();
     hidePoolPanel();hidePoolHistory();syncPoolPanel();
-    // 待機時間を計算（待機開始時刻からの経過＝実車ボタンを押した時までの時間）
-    const waitMins=waitStart?Math.round((Date.now()-waitStart)/60000):null;
+    // 待機時間を計算してboardInfoに保存
+    const waitMins=manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null;
     boardInfo={
       time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),
       lat:myLat,lng:myLng,
@@ -1622,10 +1587,6 @@ function connectFirebase(config){
     db.ref('team_sales').on('value',snap=>{
       teamSales=snap.val()||{};
       renderTeamSalesRanking();
-    });
-    db.ref('team_shifts').on('value',snap=>{
-      teamShifts=snap.val()||{};
-      renderTeamShiftLog();
     });
     const chatInitTs=Date.now();
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
@@ -2152,7 +2113,8 @@ function clearWaitHistory(){
   renderWaitHistory();
   toast('🗑 履歴をクリアしました');
 }
-
+  
+  
 function checkGeofences(lat,lng){
   checkpoints.forEach(cp=>{
     if(!cp.enabled||cp.lat===null)return;
@@ -2180,7 +2142,7 @@ function onDeparture(cp){
   if(bannerTimer)clearTimeout(bannerTimer);
   bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
   if(navigator.vibrate)navigator.vibrate([200,100,200]);
-    const durMins=Math.round(waitSec/60);
+  const durMins=Math.round(waitSec/60);
   if(hadTimer)saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
   // チェックポイント滞在を送先リストに追加
   if(hadTimer&&durMins>0){
@@ -2213,7 +2175,7 @@ function onArrival(cp,dist){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   currentSpotSelection=null;
   cp.arrivalTimeStr=timeStr;
-  if(cp.id==='haneda'&&localStorage.getItem('taxi_pool_modal_answered')!=='1')showPoolLaneModal();
+  if(cp.id==='haneda')showPoolLaneModal();
   if(arrivalAutoTimer)clearTimeout(arrivalAutoTimer);
   arrivalAutoTimer=setTimeout(()=>{
     arrivalAutoTimer=null;
@@ -2320,7 +2282,6 @@ async function recordAbure(){
   // タイマーリセット
   currentSpotSelection=null;
   boardInfo=null;
-  localStorage.removeItem('taxi_pool_modal_answered'); // あぶれたので、次にプールに入った時はまたポップアップを出す
   stopWait();waitSec=0;
   document.getElementById('wait-timer').textContent='00:00:00';
   const m=document.getElementById('map-wait-timer');if(m)m.textContent='00:00:00';
@@ -2471,7 +2432,7 @@ function updateDailyBar(){
  if(!timeEl||!amtEl)return;
  if(!isDuty||!dutyStart){
   timeEl.textContent='--:--:--';
-  timeEl.style.color='var(--cyan)';
+  timeEl.style.color='var(--gold)';
   amtEl.textContent='-';
   if(workedEl)workedEl.textContent='--:--';
   if(targetAmtEl)targetAmtEl.textContent='-';
@@ -2505,7 +2466,7 @@ function updateDailyBar(){
    timeEl.style.color='var(--red)';
   }else{
    timeEl.textContent=toHMS(remainSec);
-   timeEl.style.color='var(--cyan)';
+   timeEl.style.color='var(--gold)';
   }
  }
  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
@@ -2517,7 +2478,7 @@ function updateDailyBar(){
   const remainAmt=dailyTarget-todaySales;
   if(remainAmt>0){
    amtEl.textContent=`¥${Math.round(remainAmt).toLocaleString()}`;
-   amtEl.style.color='var(--green)';
+   amtEl.style.color='var(--cyan)';
   }else{
    const overAmt=Math.round(Math.abs(remainAmt));
    amtEl.textContent=`¥+${overAmt.toLocaleString()}`;
@@ -2586,10 +2547,6 @@ function saveManualShift(){
   const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
   log.push({dateStr,startTs,endTs,durationSec});
   localStorage.setItem('taxi_shift_log',JSON.stringify(log));
-  if(db){
-    const shareName=localStorage.getItem('taxi_name')||'自分';
-    db.ref('team_shifts/'+myId).push({name:shareName,startTs,endTs});
-  }
   renderShiftEntries();
   renderWorkStats();
   toast('✅ 出勤・退勤記録を保存しました');
@@ -2750,7 +2707,6 @@ function saveFareEntry(fare,toll,tripTs){
 }
 
 let teamSales={};
-let teamShifts={};
 
 function isRankingOptedIn(){
  return localStorage.getItem('taxi_ranking_optin')==='1';
@@ -2811,20 +2767,18 @@ function renderTeamSalesRanking(){
  }
  const now=new Date();
  const todayStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
- const list=Object.entries(teamSales||{}).map(([id,v])=>({...v,_id:id}));
+ const list=Object.values(teamSales||{});
  const todayList=list.filter(d=>d.todayDateStr===todayStr).slice().sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
  const monthList=list.slice().sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
  if(!todayList.length){
   todayEl.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">まだ記録がありません</div>';
  }else{
   todayEl.innerHTML=todayList.map((d,i)=>{
-   const canEdit=(d._id===myId)||isAdmin;
-   const editBtns=canEdit?`<button onclick="editRankingValue('${d._id}','todayFare')" style="background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;padding:2px 4px">✏️</button><button onclick="deleteRankingEntry('${d._id}')" style="background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;padding:2px 4px">🗑</button>`:'';
-   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+   const isMe=false;
+   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
     <div style="width:22px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'}">${i+1}</div>
     <div style="flex:1;font-size:13px;font-weight:600">${esc(d.name||'不明')}</div>
     <div style="font-size:14px;font-weight:800;color:var(--green)">¥${(d.todayFare||0).toLocaleString()}</div>
-    ${editBtns}
    </div>`;
   }).join('');
  }
@@ -2833,77 +2787,16 @@ function renderTeamSalesRanking(){
  }else{
   monthEl.innerHTML=monthList.map((d,i)=>{
    const avg=d.monthDays>0?Math.round((d.monthFare||0)/d.monthDays):0;
-   const canEdit=(d._id===myId)||isAdmin;
-   const editBtns=canEdit?`<button onclick="editRankingValue('${d._id}','monthFare')" style="background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;padding:2px 4px">✏️</button><button onclick="deleteRankingEntry('${d._id}')" style="background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;padding:2px 4px">🗑</button>`:'';
-   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
     <div style="width:22px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'}">${i+1}</div>
     <div style="flex:1;font-size:13px">
      <div style="font-weight:600">${esc(d.name||'不明')}</div>
      <div style="font-size:11px;color:var(--muted)">1日平均 ¥${avg.toLocaleString()}（${d.monthDays||0}日出勤）</div>
     </div>
     <div style="font-size:14px;font-weight:800;color:var(--green)">¥${(d.monthFare||0).toLocaleString()}</div>
-    ${editBtns}
    </div>`;
   }).join('')+'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
  }
-}
-
-function renderTeamShiftLog(){
-  const el=document.getElementById('team-shift-log');
-  if(!el)return;
-  const allShifts=[];
-  Object.values(teamShifts||{}).forEach(shifts=>{
-    Object.values(shifts||{}).forEach(s=>{
-      if(s&&s.startTs&&s.endTs)allShifts.push(s);
-    });
-  });
-  if(!allShifts.length){
-    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>';
-    return;
-  }
-  allShifts.sort((a,b)=>a.startTs-b.startTs);
-  // 出勤時刻の日付ごとにグループ化（夜勤で日をまたいでも、開始日側の1箇所にのみ表示）
-  const groups={};
-  allShifts.forEach(s=>{
-    const dateKey=new Date(s.startTs).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-    if(!groups[dateKey])groups[dateKey]=[];
-    groups[dateKey].push(s);
-  });
-  const sortedDates=Object.keys(groups).sort((a,b)=>groups[a][0].startTs-groups[b][0].startTs);
-  let html='';
-  let no=1;
-  sortedDates.forEach(date=>{
-    html+=`<div style="font-size:20px;color:var(--text);font-weight:900;padding:14px 2px 10px;border-top:1px solid var(--border)">📅 ${date}</div>`;
-    groups[date].forEach(s=>{
-      const startStr=new Date(s.startTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-      const endStr=new Date(s.endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-      html+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="width:28px;font-weight:800;color:var(--accent);font-size:13px">#${no}</div>
-        <div style="font-size:13px;font-weight:700;color:var(--cyan);white-space:nowrap">${startStr}〜${endStr}</div>
-        <div style="flex:1;font-size:13px;font-weight:600">${esc(s.name||'不明')}</div>
-      </div>`;
-      no++;
-    });
-  });
-  el.innerHTML=html;
-}
-
-function editRankingValue(driverId,field){
-  if(!db)return;
-  const current=(teamSales[driverId]&&teamSales[driverId][field])||0;
-  const input=prompt('正しい金額を入力してください（円）',current);
-  if(input===null)return;
-  const val=parseInt(input.replace(/[^0-9]/g,''))||0;
-  db.ref('team_sales/'+driverId+'/'+field).set(val);
-  db.ref('team_sales/'+driverId+'/manualEditTs').set(Date.now());
-  toast('✅ 修正しました');
-}
-
-function deleteRankingEntry(driverId){
-  if(!db)return;
-  if(!confirm('この人のランキング記録を削除しますか？'))return;
-  db.ref('team_sales/'+driverId).remove();
-  toast('🗑 削除しました');
 }
 
 function renderSalesStats(){
@@ -2928,35 +2821,20 @@ function renderSalesStats(){
 function renderFareEntries(){
  const el=document.getElementById('fare-entries-list');
  if(!el)return;
- const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
- const now=new Date();
- const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
- const monthEntries=log.filter(e=>e.ts>=monthStart).sort((a,b)=>b.ts-a.ts);
- if(!monthEntries.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">今月の記録はありません</div>';return;}
- const groups={};
- monthEntries.forEach(e=>{
-  const dateKey=new Date(e.ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-  if(!groups[dateKey])groups[dateKey]=[];
-  groups[dateKey].push(e);
- });
- const sortedDates=Object.keys(groups).sort((a,b)=>groups[b][0].ts-groups[a][0].ts);
- let html='';
- sortedDates.forEach(date=>{
-  html+=`<div style="font-size:13px;font-weight:800;color:var(--text);padding:8px 0 4px">📅 ${date}</div>`;
-  groups[date].forEach(e=>{
-   const timeStr=new Date(e.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-   html+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-    <div style="flex:1;font-size:12px">
-     <span style="color:var(--muted)">${timeStr}</span>
-     ${e.fare?`<span style="font-weight:700;color:var(--green);margin-left:6px">¥${e.fare.toLocaleString()}</span>`:''}
-     ${e.toll?`<span style="color:var(--red);margin-left:6px">高速¥${e.toll.toLocaleString()}</span>`:''}
-    </div>
-    <button onclick="editFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
-    <button onclick="deleteFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
-   </div>`;
-  });
- });
- el.innerHTML=html;
+ const todayEntries=getTodayShiftFareEntries().sort((a,b)=>b.ts-a.ts);
+ if(!todayEntries.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">本日の記録はありません</div>';return;}
+ el.innerHTML=todayEntries.map(e=>{
+  const timeStr=new Date(e.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+   <div style="flex:1;font-size:12px">
+    <span style="color:var(--muted)">${timeStr}</span>
+    ${e.fare?`<span style="font-weight:700;color:var(--green);margin-left:6px">¥${e.fare.toLocaleString()}</span>`:''}
+    ${e.toll?`<span style="color:var(--red);margin-left:6px">高速¥${e.toll.toLocaleString()}</span>`:''}
+   </div>
+   <button onclick="editFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
+   <button onclick="deleteFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
+  </div>`;
+ }).join('');
 }
 
 function editFareEntry(ts){
@@ -3271,7 +3149,7 @@ function deleteMyAccount(){
   document.getElementById('admin-name').value='';
   document.getElementById('admin-car').value='';
   document.getElementById('s-name').value='';
-    document.getElementById('s-car').value='';
+  document.getElementById('s-car').value='';
   toast('🗑 アカウントを削除しました');
 }
 function adminLogout(){
@@ -3294,7 +3172,7 @@ function loadAccountList(){
       return;
     }
     el.innerHTML=entries.map(([id,d])=>{
-      const isMe=id===myId;
+        const isMe=id===myId;
       const age=Date.now()-(d.ts||0);
       const alive=age<5*60*1000;
       const statusCls=alive?'color:var(--green)':'color:var(--muted)';
@@ -3352,15 +3230,37 @@ function computeTripNumbers(tripsAscByTs){
   return numMap;
 }
 
-function buildDestGroupsHtml(entries,numMap){
+function renderDests(){
+  const el=document.getElementById('dest-list');
+  // 不要エントリをフィルタ（旧フォーマットの自動エントリは除外）
+  const visible=destinations.filter(d=>{
+    if(d.type==='trip'||d.type==='cp')return true;
+    // 旧フォーマットの自動登録エントリ（"道路名 地名 (時刻)" 形式）はreasonの有無を問わず除外
+    if(d.auto||(d.name&&/\(\d{2}:\d{2}\)$/.test(d.name)))return false;
+    // 旧フォーマット: 不要なものを除外
+    if(!d.reason)return true; // 手動追加は表示
+    if(d.reason.includes('停車＋方向転換'))return false;
+    if(d.reason.includes('空車ボタン'))return false;
+    if(d.reason.includes('回送ボタン'))return false;
+    if(d.tripMins===0)return false;
+    return false; // その他の自動エントリも非表示
+  });
+  if(!visible.length){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">送り先がありません</div>';
+    document.getElementById('done-count').textContent='0件';
+    return;
+  }
   const groups={};
-  entries.forEach(d=>{
+  visible.forEach(d=>{
     const key=d.dateStr||'日付不明';
     if(!groups[key])groups[key]=[];
     groups[key].push(d);
   });
   const sortedDates=Object.keys(groups).sort((a,b)=>(groups[b][0].ts||0)-(groups[a][0].ts||0));
   let html='';
+  // 出勤〜退勤のシフト単位で番号をリセットする
+  const allSorted=visible.filter(d=>d.type==='trip'||d.type==='cp').sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const numMap=computeTripNumbers(allSorted.filter(d=>d.type==='trip'));
   sortedDates.forEach(date=>{
     html+=`<div style="font-size:16px;color:var(--text);font-weight:800;padding:10px 2px 8px">📅 ${date}</div>`;
     groups[date].slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(d=>{
@@ -3405,48 +3305,7 @@ function buildDestGroupsHtml(entries,numMap){
       }
     });
   });
-  return html;
-}
-
-function renderDests(){
-  const todayEl=document.getElementById('dest-list-today');
-  const pastEl=document.getElementById('dest-list-past');
-  // 不要エントリをフィルタ（旧フォーマットの自動エントリは除外）
-  const visible=destinations.filter(d=>{
-    if(d.type==='trip'||d.type==='cp')return true;
-    // 旧フォーマットの自動登録エントリ（"道路名 地名 (時刻)" 形式）はreasonの有無を問わず除外
-    if(d.auto||(d.name&&/\(\d{2}:\d{2}\)$/.test(d.name)))return false;
-    // 旧フォーマット: 不要なものを除外
-    if(!d.reason)return true; // 手動追加は表示
-    if(d.reason.includes('停車＋方向転換'))return false;
-    if(d.reason.includes('空車ボタン'))return false;
-    if(d.reason.includes('回送ボタン'))return false;
-    if(d.tripMins===0)return false;
-    return false; // その他の自動エントリも非表示
-  });
-  if(!visible.length){
-    todayEl.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">送り先がありません</div>';
-    pastEl.innerHTML='';
-    document.getElementById('done-count').textContent='0件';
-    return;
-  }
-  // 出勤〜退勤のシフト単位で番号をリセットする
-  const allSorted=visible.filter(d=>d.type==='trip'||d.type==='cp').sort((a,b)=>(a.ts||0)-(b.ts||0));
-  const numMap=computeTripNumbers(allSorted.filter(d=>d.type==='trip'));
-  // 出勤中はシフト開始時刻（dutyStart）以降を「本日分」、それ以前を「前日以前」とする（夜勤で日付をまたいでもOK）
-  // 退勤中は、暦日の「今日」で判定する
-  let todayEntries,pastEntries;
-  if(isDuty&&dutyStart){
-    const dutyStartTs=dutyStart.getTime();
-    todayEntries=visible.filter(d=>(d.ts||0)>=dutyStartTs);
-    pastEntries=visible.filter(d=>(d.ts||0)<dutyStartTs);
-  }else{
-    const todayDateStr=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-    todayEntries=visible.filter(d=>(d.dateStr||'')===todayDateStr);
-    pastEntries=visible.filter(d=>(d.dateStr||'')!==todayDateStr);
-  }
-  todayEl.innerHTML=todayEntries.length?buildDestGroupsHtml(todayEntries,numMap):'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の送り先はまだありません</div>';
-  pastEl.innerHTML=pastEntries.length?buildDestGroupsHtml(pastEntries,numMap):'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">前日以前の記録はありません</div>';
+  el.innerHTML=html;
   document.getElementById('done-count').textContent=visible.length+'件';
   renderFareRanking();
 }
@@ -3647,37 +3506,39 @@ function renderPoolChart(){
   const progressAll=Object.values(poolProgress).some(p=>p&&now-(p.ts||0)<=LIMIT);
   const show=(lastAll&&now-lastAll<=LIMIT)||progressAll;
   const row=document.getElementById('pool-info-row');
-  if(row)row.style.display=show?'flex':'none';
+  if(row)row.style.display=show?'grid':'none';
   if(!show)return;
   // 4つの乗り場のうち、一番新しい最終入力時刻から10分以上経過していたら、まとめてリセットする
   const allSpotTs=['1号','2号','3号','4号'].map(s=>(poolProgress[s]&&poolProgress[s].ts)||0);
   const globalLastActivity=Math.max(0,...allSpotTs);
   const allExpired=(now-globalLastActivity)>PROGRESS_TIMEOUT_MS;
   if(allExpired)cleanupExpiredProgressIfNeeded(globalLastActivity,now);
-  // 4乗り場に共通の「累計カウント開始時刻」を求める（最も古い開始時刻＝この一連のカウントが始まった時刻）
-  let sharedStartTs=null;
-  if(!allExpired){
-    const startTsList=['1号','2号','3号','4号']
-      .map(s=>poolProgress[s]&&poolProgress[s].startTs)
-      .filter(Boolean);
-    if(startTsList.length)sharedStartTs=Math.min(...startTsList);
-  }
   ['1号','2号','3号','4号'].forEach(spot=>{
     const el=document.getElementById('pool-info-'+spot);
     if(!el)return;
+    const moves=poolMoves.filter(m=>m.spot===spot&&now-m.ts<3*3600000);
+    const last=moves[moves.length-1];
+    // 「○列目」の到着記録（列移動の+1/+2ではないもの）から、最新の到着時刻を取得
+    const arrivalMoves=moves.filter(m=>/^\d+列$/.test(m.lane));
+    const lastArrival=arrivalMoves[arrivalMoves.length-1];
     const prog=poolProgress[spot];
     const progCount=allExpired?0:(prog&&prog.count?prog.count:0);
-    el.innerHTML=progCount>0?`<span style="font-size:18px;font-weight:800;color:var(--gold)">${progCount}列</span>`:'<span style="color:var(--muted)">−</span>';
-  });
-  const sharedEl=document.getElementById('pool-info-shared-time');
-  if(sharedEl){
-    if(sharedStartTs){
-      const timeStr=new Date(sharedStartTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-      sharedEl.textContent=`${timeStr}からの累計カウント`;
-    }else{
-      sharedEl.textContent='';
+    let dots='';
+    if(progCount>0&&!allExpired){
+      dots=`<div style="font-size:16px;color:var(--gold);font-weight:800;margin-top:2px">${progCount}列</div>`;
     }
-  }
+    let countLabel='';
+    const timeSource=lastArrival?lastArrival.ts:((!allExpired&&prog&&prog.startTs)?prog.startTs:null);
+    if(timeSource){
+      const timeStr=new Date(timeSource).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+      countLabel=`<div style="font-size:9px;color:var(--muted);margin-top:1px">【${timeStr}〜】</div>`;
+    }
+    if(!last&&progCount===0){el.textContent='−';return;}
+    const laneText=last?last.lane:'';
+    const min=last?Math.floor((now-last.ts)/60000):null;
+    const timeStr=min===null?'':(min===0?'たった今':`${min}分前`);
+    el.innerHTML=`<span style="color:var(--cyan)">${laneText}</span>${dots}${countLabel}<br>${timeStr}`;
+  });
 }
 
 function renderPoolButtons(){
@@ -3788,37 +3649,43 @@ function recordProgress(spot,amount){
 const LANE_MODAL_COUNTS={'1号':8,'2号':11,'3号':10,'4号':9};
 let laneModalSpot=null,laneModalLane=null;
 function showPoolLaneModal(){
-  localStorage.setItem('taxi_pool_modal_answered','1');
+  localStorage.setItem('taxi_pool_modal_shown_ts',String(Date.now()));
   laneModalSpot=null;laneModalLane=null;
-  ['1号','2号','3号','4号'].forEach(spot=>{
-    const sel=document.getElementById('lms-select-'+spot);
-    if(!sel)return;
-    if(sel.options.length<=1){
-      const count=LANE_MODAL_COUNTS[spot]||8;
-      for(let i=1;i<=count;i++){
-        const opt=document.createElement('option');
-        opt.value=i+'列';
-        opt.textContent=i+'列';
-        sel.appendChild(opt);
-      }
-    }
-    sel.value='';
+  ['1号','2号','3号','4号'].forEach(s=>{
+    const b=document.getElementById('lms-'+s);
+    if(b)b.style.background='rgba(79,142,247,.18)';
   });
+  document.getElementById('lane-modal-lanes').innerHTML='<div style="grid-column:1/-1;font-size:11px;color:var(--muted);padding:8px 0">先に乗り場を選んでください</div>';
   document.getElementById('lane-modal-sel').textContent='乗り場と列を選んでください';
   document.getElementById('pool-lane-modal').style.display='flex';
 }
-function selectLaneModalFromDropdown(spot){
-  const sel=document.getElementById('lms-select-'+spot);
-  const val=sel?sel.value:'';
-  if(!val)return;
-  laneModalSpot=spot;laneModalLane=val;
-  // 他の乗り場のプルダウンは選択解除しておく（1つだけ選ばれた状態にする）
+function selectLaneModalSpot(spot){
+  laneModalSpot=spot;laneModalLane=null;
   ['1号','2号','3号','4号'].forEach(s=>{
-    if(s!==spot){
-      const other=document.getElementById('lms-select-'+s);
-      if(other)other.value='';
-    }
+    const b=document.getElementById('lms-'+s);
+    if(b)b.style.background=s===spot?'var(--accent)':'rgba(79,142,247,.18)';
   });
+  renderLaneModalLanes(spot);
+  updateLaneModalSel();
+}
+function renderLaneModalLanes(spot){
+  const count=LANE_MODAL_COUNTS[spot]||8;
+  const wrap=document.getElementById('lane-modal-lanes');
+  let html='';
+  for(let i=1;i<=count;i++){
+    const lane=i+'列';
+    html+=`<button onclick="selectLaneModalLane('${lane}')" class="pool-btn" id="lml-${lane}" style="padding:8px 2px">${lane}</button>`;
+  }
+  wrap.innerHTML=html;
+}
+function selectLaneModalLane(lane){
+  laneModalLane=lane;
+  const count=LANE_MODAL_COUNTS[laneModalSpot]||8;
+  for(let i=1;i<=count;i++){
+    const l=i+'列';
+    const b=document.getElementById('lml-'+l);
+    if(b)b.style.background=l===lane?'var(--cyan)':'rgba(79,142,247,.18)';
+  }
   updateLaneModalSel();
 }
 function updateLaneModalSel(){
