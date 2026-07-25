@@ -686,24 +686,39 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="font-size:32px;margin-bottom:10px">✈️</div>
     <div style="font-size:17px;font-weight:700;margin-bottom:6px">羽田プールに到着しました</div>
     <div style="font-size:14px;color:var(--muted);margin-bottom:18px">何列目に入りましたか？</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-      <div>
-        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">乗り場</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="lane-modal-spots">
-          <button onclick="selectLaneModalSpot('1号')" class="pool-btn" id="lms-1号">1号</button>
-          <button onclick="selectLaneModalSpot('2号')" class="pool-btn" id="lms-2号">2号</button>
-          <button onclick="selectLaneModalSpot('3号')" class="pool-btn" id="lms-3号">3号</button>
-          <button onclick="selectLaneModalSpot('4号')" class="pool-btn" id="lms-4号">4号</button>
+<div style="margin-bottom:16px">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:34px;font-weight:700;font-size:13px;flex-shrink:0">1号</span>
+          <select id="lms-select-1号" onchange="selectLaneModalFromDropdown('1号')"
+            style="flex:1;padding:9px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px">
+            <option value="">列を選択</option>
+          </select>
         </div>
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">列</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:220px;overflow-y:auto" id="lane-modal-lanes">
-          <div style="grid-column:1/-1;font-size:11px;color:var(--muted);padding:8px 0">先に乗り場を選んでください</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:34px;font-weight:700;font-size:13px;flex-shrink:0">2号</span>
+          <select id="lms-select-2号" onchange="selectLaneModalFromDropdown('2号')"
+            style="flex:1;padding:9px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px">
+            <option value="">列を選択</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:34px;font-weight:700;font-size:13px;flex-shrink:0">3号</span>
+          <select id="lms-select-3号" onchange="selectLaneModalFromDropdown('3号')"
+            style="flex:1;padding:9px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px">
+            <option value="">列を選択</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:34px;font-weight:700;font-size:13px;flex-shrink:0">4号</span>
+          <select id="lms-select-4号" onchange="selectLaneModalFromDropdown('4号')"
+            style="flex:1;padding:9px 8px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:14px">
+            <option value="">列を選択</option>
+          </select>
         </div>
       </div>
     </div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px" id="lane-modal-sel">乗り場と列を選んでください</div>
+    <div style="font-size:13px;color:var(--muted);margin:14px 0" id="lane-modal-sel">乗り場と列を選んでください</div>
     <div style="display:flex;gap:8px">
       <button onclick="confirmPoolLaneModal()" class="btn btn-p" style="flex:1;padding:12px;font-size:14px">記録する</button>
       <button onclick="document.getElementById('pool-lane-modal').style.display='none'" class="btn btn-g" style="padding:12px 16px;font-size:14px">スキップ</button>
