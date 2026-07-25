@@ -3666,40 +3666,36 @@ let laneModalSpot=null,laneModalLane=null;
 function showPoolLaneModal(){
   localStorage.setItem('taxi_pool_modal_shown_ts',String(Date.now()));
   laneModalSpot=null;laneModalLane=null;
-  ['1号','2号','3号','4号'].forEach(s=>{
-    const b=document.getElementById('lms-'+s);
-    if(b)b.style.background='rgba(79,142,247,.18)';
+  ['1号','2号','3号','4号'].forEach(spot=>{
+    const sel=document.getElementById('lms-select-'+spot);
+    if(!sel)return;
+    if(sel.options.length<=1){
+      const count=LANE_MODAL_COUNTS[spot]||8;
+      for(let i=1;i<=count;i++){
+        const opt=document.createElement('option');
+        opt.value=i+'列';
+        opt.textContent=i+'列';
+        sel.appendChild(opt);
+      }
+    }
+    sel.value='';
   });
-  document.getElementById('lane-modal-lanes').innerHTML='<div style="grid-column:1/-1;font-size:11px;color:var(--muted);padding:8px 0">先に乗り場を選んでください</div>';
   document.getElementById('lane-modal-sel').textContent='乗り場と列を選んでください';
   document.getElementById('pool-lane-modal').style.display='flex';
 }
-function selectLaneModalSpot(spot){
-  laneModalSpot=spot;laneModalLane=null;
+function selectLaneModalFromDropdown(spot){
+  const sel=document.getElementById('lms-select-'+spot);
+  const val=sel?sel.value:'';
+  if(!val)return;
+  laneModalSpot=spot;laneModalLane=val;
   ['1号','2号','3号','4号'].forEach(s=>{
-    const b=document.getElementById('lms-'+s);
-    if(b)b.style.background=s===spot?'var(--accent)':'rgba(79,142,247,.18)';
+    if(s!==spot){
+      const other=document.getElementById('lms-select-'+s);
+      if(other)other.value='';
+    }
   });
-  renderLaneModalLanes(spot);
   updateLaneModalSel();
 }
-function renderLaneModalLanes(spot){
-  const count=LANE_MODAL_COUNTS[spot]||8;
-  const wrap=document.getElementById('lane-modal-lanes');
-  let html='';
-  for(let i=1;i<=count;i++){
-    const lane=i+'列';
-    html+=`<button onclick="selectLaneModalLane('${lane}')" class="pool-btn" id="lml-${lane}" style="padding:8px 2px">${lane}</button>`;
-  }
-  wrap.innerHTML=html;
-}
-function selectLaneModalLane(lane){
-  laneModalLane=lane;
-  const count=LANE_MODAL_COUNTS[laneModalSpot]||8;
-  for(let i=1;i<=count;i++){
-    const l=i+'列';
-    const b=document.getElementById('lml-'+l);
-    if(b)b.style.background=l===lane?'var(--cyan)':'rgba(79,142,247,.18)';
   }
   updateLaneModalSel();
 }
