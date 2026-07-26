@@ -3532,39 +3532,35 @@ function renderPoolChart(){
   const progressAll=Object.values(poolProgress).some(p=>p&&now-(p.ts||0)<=LIMIT);
   const show=(lastAll&&now-lastAll<=LIMIT)||progressAll;
   const row=document.getElementById('pool-info-row');
-  if(row)row.style.display=show?'grid':'none';
+  if(row)row.style.display=show?'flex':'none';
   if(!show)return;
-  // 4つの乗り場のうち、一番新しい最終入力時刻から10分以上経過していたら、まとめてリセットする
   const allSpotTs=['1号','2号','3号','4号'].map(s=>(poolProgress[s]&&poolProgress[s].ts)||0);
   const globalLastActivity=Math.max(0,...allSpotTs);
   const allExpired=(now-globalLastActivity)>PROGRESS_TIMEOUT_MS;
   if(allExpired)cleanupExpiredProgressIfNeeded(globalLastActivity,now);
+  let sharedStartTs=null;
+  if(!allExpired){
+    const startTsList=['1号','2号','3号','4号']
+      .map(s=>poolProgress[s]&&poolProgress[s].startTs)
+      .filter(Boolean);
+    if(startTsList.length)sharedStartTs=Math.min(...startTsList);
+  }
   ['1号','2号','3号','4号'].forEach(spot=>{
     const el=document.getElementById('pool-info-'+spot);
     if(!el)return;
-    const moves=poolMoves.filter(m=>m.spot===spot&&now-m.ts<3*3600000);
-    const last=moves[moves.length-1];
-    // 「○列目」の到着記録（列移動の+1/+2ではないもの）から、最新の到着時刻を取得
-    const arrivalMoves=moves.filter(m=>/^\d+列$/.test(m.lane));
-    const lastArrival=arrivalMoves[arrivalMoves.length-1];
     const prog=poolProgress[spot];
     const progCount=allExpired?0:(prog&&prog.count?prog.count:0);
-    let dots='';
-    if(progCount>0&&!allExpired){
-      dots=`<div style="font-size:16px;color:var(--gold);font-weight:800;margin-top:2px">${progCount}列</div>`;
-    }
-    let countLabel='';
-    const timeSource=lastArrival?lastArrival.ts:((!allExpired&&prog&&prog.startTs)?prog.startTs:null);
-    if(timeSource){
-      const timeStr=new Date(timeSource).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-      countLabel=`<div style="font-size:9px;color:var(--muted);margin-top:1px">【${timeStr}〜】</div>`;
-    }
-    if(!last&&progCount===0){el.textContent='−';return;}
-    const laneText=last?last.lane:'';
-    const min=last?Math.floor((now-last.ts)/60000):null;
-    const timeStr=min===null?'':(min===0?'たった今':`${min}分前`);
-    el.innerHTML=`<span style="color:var(--cyan)">${laneText}</span>${dots}${countLabel}<br>${timeStr}`;
+    el.innerHTML=progCount>0?`<span style="font-size:16px;font-weight:800;color:var(--gold)">${progCount}列</span>`:'<span style="color:var(--muted)">−</span>';
   });
+  const sharedEl=document.getElementById('pool-info-shared-time');
+  if(sharedEl){
+    if(sharedStartTs){
+      const timeStr=new Date(sharedStartTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+      sharedEl.textContent=`入力者の入力開始時間→　　　　　　${timeStr}入力開始`;
+    }else{
+      sharedEl.textContent='';
+    }
+  }
 }
 
 function renderPoolButtons(){
