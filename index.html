@@ -4359,7 +4359,11 @@ function showPage(name,btn){
   document.getElementById('page-'+name).classList.add('active');
   btn.classList.add('active');
   syncZoomCtrlVisibility(name==='map');
-  if(name==='map'){setTimeout(()=>leafletMap.invalidateSize(),80);}
+  if(name==='map'){
+    setTimeout(()=>leafletMap.invalidateSize(),80);
+    // 他ページから戻った際に、号選択・総列数・入力開始時間の表示を最新状態で再描画する
+    renderSpotRow();
+  }
   if(name==='wait'){
     renderDests();renderTeamDests();renderWaitHistory();renderSpotRow();
     if(!waitTabTimer)waitTabTimer=setInterval(()=>{renderDests();renderTeamDests();},10000);
