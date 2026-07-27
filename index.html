@@ -1607,8 +1607,8 @@ function setStatus(s){
       const spotLabel=boardSpot||(hCp?hCp.name:'待機中');
       const arrStr=(hCp&&hCp.arrivalTimeStr)||'−';
       saveWaitHistory(spotLabel,arrStr,nowStr,waitSec);
-      stopWait();waitSec=0;
     }
+    resetWait();
   }
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
     const fallbackBoardTs=jitsushaStart; // 実車開始時刻を、乗車時刻の保険として保持
@@ -2242,6 +2242,8 @@ function onDeparture(cp){
     pushDestToFirebase(cpEntry);
   }
   waitSec=0;
+  document.getElementById('wait-timer').textContent='00:00:00';
+  const mWaitEl=document.getElementById('map-wait-timer');if(mWaitEl)mWaitEl.textContent='00:00:00';
   currentSpotSelection=null;
   spotChangeHistory=[];
   cp.currentSpot=null;cp.arrivalTimeStr=null;
