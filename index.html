@@ -1593,6 +1593,14 @@ function restoreAppState(){
   const spotLblEl=document.getElementById('wait-spot-lbl');
   const restoredSpot=(st.waitSpot||'').replace('未設定','').trim();
   if(spotLblEl)spotLblEl.textContent='待機場所: '+restoredSpot;
+  // 号を選択中（＝羽田プールに滞在中）だった場合、ページの完全リロードをまたいでも
+  // 「新規到着」として扱われないようにし、号選択のリセットや列選択モーダルの
+  // 再表示が起きないようにする
+  if(st.currentSpotSelection||restoredSpot.includes('羽田空港')){
+    cpInside['haneda']=true;
+    const hCp=checkpoints.find(c=>c.id==='haneda');
+    if(hCp)hCp.poolModalHandled=true;
+  }
   // スポットチップ・マーカー再描画
   renderSpotRow();
   // Firebase から自分の waitSpot を再読み込み
