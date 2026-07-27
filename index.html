@@ -1599,6 +1599,16 @@ function setStatus(s){
     manualWaitStartTime=null;manualWaitAddr=null;
     currentSpotSelection=null;
     spotChangeHistory=[];
+    // 羽田空港の乗り場から出発する場合、仲間に自動でチャット通知する
+    if(boardSpot&&db&&isDuty&&!testMode){
+      const name=localStorage.getItem('taxi_name')||'自分';
+      const wm=(waitMins&&waitMins>0)?waitMins:0;
+      const wh=Math.floor(wm/60),wmm=wm%60;
+      const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
+      db.ref('chat').push({uid:myId,name,
+        text:`🚕【自動】${name}さんが${boardSpot}乗り場を出発しました。（待機時間${waitStr}）`,
+        time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true});
+    }
     renderSpotRow();
     hidePoolPanel();hidePoolHistory();syncPoolPanel();
     if(waitInterval&&waitSec>0){
@@ -2248,7 +2258,7 @@ function onDeparture(cp){
   spotChangeHistory=[];
   cp.currentSpot=null;cp.arrivalTimeStr=null;
   if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
-  if(db&&isDuty){
+  if(db&&isDuty&&!testMode){
     const name=localStorage.getItem('taxi_name')||'自分';
     db.ref('chat').push({uid:myId,name,
       text:`🚕【自動】${cp.name} を出発（${timeStr}）待機: ${elapsed}`,
@@ -2277,7 +2287,7 @@ function onArrival(cp,dist){
     sendNotif(cp.icon+' '+cp.name+' に到着',`到着時刻 ${timeStr}`,'taxi-'+cp.id);
     if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
     toast(cp.icon+' '+cp.name+' 到着！');
-    if(db){
+    if(db&&!testMode){
       const name=localStorage.getItem('taxi_name')||'自分';
       db.ref('chat').push({uid:myId,name,
         text:`${cp.icon}【自動】${cp.name} に到着（${timeStr}）`,
