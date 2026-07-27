@@ -973,6 +973,7 @@ const CP_DEFAULTS=[
 ];
 let checkpoints=loadCPs();
 let cpInside={};
+let cpLastTransitionTs={}; // 出勤直後などGPSが不安定な時に入退場が連続で反転するのを防ぐ
 let pendingArrivalCP=null;
 let currentSpotSelection=null;
 
@@ -2192,15 +2193,22 @@ function clearWaitHistory(){
 }
   
   
+const CP_TRANSITION_DEBOUNCE_MS=10000; // 出勤直後などGPSが不安定な時に、短時間で入退場を繰り返し反転させない
 function checkGeofences(lat,lng){
+  const now=Date.now();
   checkpoints.forEach(cp=>{
     if(!cp.enabled||cp.lat===null)return;
     const dist=haversine(lat,lng,cp.lat,cp.lng);
     const wasInside=cpInside[cp.id]||false;
     const nowInside=dist<=cp.radius;
-    if(nowInside&&!wasInside)onArrival(cp,Math.round(dist));
-    if(!nowInside&&wasInside)onDeparture(cp);
+    if(nowInside===wasInside)return;
+    // GPSのジャンプ・ジッターで直前に反転したばかりの場合は、次の反転まで一定時間待つ
+    const lastT=cpLastTransitionTs[cp.id]||0;
+    if(now-lastT<CP_TRANSITION_DEBOUNCE_MS)return;
+    cpLastTransitionTs[cp.id]=now;
     cpInside[cp.id]=nowInside;
+    if(nowInside)onArrival(cp,Math.round(dist));
+    else onDeparture(cp);
   });
 }
 
