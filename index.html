@@ -786,11 +786,18 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
     <div style="margin-bottom:16px;background:rgba(79,142,247,.1);border:1.5px solid rgba(79,142,247,.4);border-radius:12px;padding:12px">
       <div id="duty-planned-hours-label" style="font-size:13px;color:var(--text);margin-bottom:10px;text-align:center;font-weight:700">📅 本日の予定時間: --時間--分</div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:6px">
         <button type="button" id="duty-plan-use-btn" onclick="selectDutyPlan('use')"
-          style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">日割り時間で勤務する</button>
+          style="flex:1;padding:9px 2px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">日割り時間で勤務する</button>
+        <button type="button" id="duty-plan-custom-btn" onclick="selectDutyPlan('custom')"
+          style="flex:1;padding:9px 2px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">上がり時間を指定</button>
         <button type="button" id="duty-plan-skip-btn" onclick="selectDutyPlan('skip')"
-          style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">スキップする</button>
+          style="flex:1;padding:9px 2px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">スキップする</button>
+      </div>
+      <div id="duty-plan-custom-wrap" style="display:none;margin-top:10px">
+        <label style="font-size:12px;color:var(--muted);margin-bottom:5px;display:block">上がり予定時刻</label>
+        <input id="duty-plan-custom-time" type="time"
+          style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
       </div>
     </div>
     <div id="duty-car-greeting" style="text-align:center;font-size:17px;font-weight:700;margin-bottom:22px;line-height:1.5"></div>
@@ -1378,25 +1385,45 @@ function resetDutyPlan(){
     const m=Math.round((perDayHours-h)*60);
     if(label)label.textContent=`📅 本日の予定時間: ${h}時間${m}分`;
   }
-  ['duty-plan-use-btn','duty-plan-skip-btn'].forEach(id=>{
+  ['duty-plan-use-btn','duty-plan-custom-btn','duty-plan-skip-btn'].forEach(id=>{
     const b=document.getElementById(id);
     if(b){b.style.background='var(--surface2)';b.style.borderColor='var(--border)';b.style.color='var(--text)';}
   });
+  const wrap=document.getElementById('duty-plan-custom-wrap');
+  if(wrap)wrap.style.display='none';
+  const timeInput=document.getElementById('duty-plan-custom-time');
+  if(timeInput)timeInput.value='';
 }
 
 function selectDutyPlan(choice){
   dutyPlanChoice=choice;
   const useBtn=document.getElementById('duty-plan-use-btn');
+  const customBtn=document.getElementById('duty-plan-custom-btn');
   const skipBtn=document.getElementById('duty-plan-skip-btn');
-  [useBtn,skipBtn].forEach(b=>{if(b){b.style.background='var(--surface2)';b.style.borderColor='var(--border)';b.style.color='var(--text)';}});
-  const activeBtn=choice==='use'?useBtn:skipBtn;
+  [useBtn,customBtn,skipBtn].forEach(b=>{if(b){b.style.background='var(--surface2)';b.style.borderColor='var(--border)';b.style.color='var(--text)';}});
+  const activeBtn=choice==='use'?useBtn:(choice==='custom'?customBtn:skipBtn);
   if(activeBtn){activeBtn.style.background='var(--green)';activeBtn.style.borderColor='var(--green)';activeBtn.style.color='#fff';}
+  const wrap=document.getElementById('duty-plan-custom-wrap');
+  if(wrap)wrap.style.display=(choice==='custom')?'block':'none';
 }
 
 function applyDutyPlanChoice(){
   // シフト開始時刻（dutyStart）に紐づけて保存するため、日をまたぐ夜勤でも消えない
   if(dutyPlanChoice==='use'&&dutyPlanHours!==null&&dutyStart){
     localStorage.setItem('taxi_today_target_hours',JSON.stringify({hours:dutyPlanHours,shiftStartTs:dutyStart.getTime()}));
+  }else if(dutyPlanChoice==='custom'&&dutyStart){
+    const val=document.getElementById('duty-plan-custom-time').value;
+    const m=val&&val.match(/^(\d{1,2}):(\d{2})$/);
+    if(m){
+      const fh=parseInt(m[1],10),fm=parseInt(m[2],10);
+      let finish=new Date(dutyStart.getFullYear(),dutyStart.getMonth(),dutyStart.getDate(),fh,fm,0);
+      // 上がり時刻が出勤時刻より前・同時刻の場合は、日をまたぐ夜勤とみなして翌日扱いにする
+      if(finish.getTime()<=dutyStart.getTime())finish=new Date(finish.getTime()+24*3600*1000);
+      const hours=(finish.getTime()-dutyStart.getTime())/3600000;
+      localStorage.setItem('taxi_today_target_hours',JSON.stringify({hours,shiftStartTs:dutyStart.getTime()}));
+    }else{
+      localStorage.removeItem('taxi_today_target_hours');
+    }
   }else{
     localStorage.removeItem('taxi_today_target_hours');
   }
@@ -1405,6 +1432,7 @@ function applyDutyPlanChoice(){
 function confirmDutyCarModal(){
   if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
   if(!dutyPlanChoice){toast('⚠️ 本日の勤務時間プランを選んでください');return;}
+  if(dutyPlanChoice==='custom'&&!document.getElementById('duty-plan-custom-time').value){toast('⚠️ 上がり予定時刻を入力してください');return;}
   const carNum=document.getElementById('duty-car-num').value.trim();
   const plate=document.getElementById('duty-car-plate').value.trim();
   if(carNum)localStorage.setItem('taxi_car',carNum);
@@ -1417,6 +1445,7 @@ function confirmDutyCarModal(){
 function skipDutyCarModal(){
   if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
   if(!dutyPlanChoice){toast('⚠️ 本日の勤務時間プランを選んでください');return;}
+  if(dutyPlanChoice==='custom'&&!document.getElementById('duty-plan-custom-time').value){toast('⚠️ 上がり予定時刻を入力してください');return;}
   document.getElementById('duty-car-modal').style.display='none';
   _startDuty();
   applyDutyPlanChoice();
