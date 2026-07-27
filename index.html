@@ -1525,23 +1525,28 @@ function setStatus(s){
   toast('ステータス: '+statusCfg[s].label);
   if(s==='jitsusha'){
     jitsushaStart=Date.now();
-    currentSpotSelection=null;
-    renderSpotRow();
-    hidePoolPanel();hidePoolHistory();syncPoolPanel();
-    // 待機時間を計算してboardInfoに保存
-    const waitMins=manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null;
+    // 号選択・待機時間は、リセットする前に確定させておく
+    const boardSpot=currentSpotSelection;
+    // 待機時間を計算してboardInfoに保存（プール到着からの待機タイマーを優先し、
+    // 手動「待機開始」ボタンのみで始めた場合はそちらの時刻を使う）
+    const waitMinsFromPool=(waitInterval)?Math.round(waitSec/60):null;
+    const waitMins=(waitMinsFromPool&&waitMinsFromPool>0)?waitMinsFromPool:
+      (manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null);
     boardInfo={
       time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),
       lat:myLat,lng:myLng,
-      spot:currentSpotSelection,
+      spot:boardSpot,
       waitMins:(waitMins&&waitMins>0)?waitMins:null,
       waitAddr:manualWaitAddr
     };
     manualWaitStartTime=null;manualWaitAddr=null;
+    currentSpotSelection=null;
+    renderSpotRow();
+    hidePoolPanel();hidePoolHistory();syncPoolPanel();
     if(waitInterval&&waitSec>0){
       const nowStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
       const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
-      const spotLabel=currentSpotSelection||(hCp?hCp.name:'待機中');
+      const spotLabel=boardSpot||(hCp?hCp.name:'待機中');
       const arrStr=(hCp&&hCp.arrivalTimeStr)||'−';
       saveWaitHistory(spotLabel,arrStr,nowStr,waitSec);
       stopWait();waitSec=0;
