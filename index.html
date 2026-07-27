@@ -2315,8 +2315,12 @@ function onDeparture(cp){
 
 function onArrival(cp,dist){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-  currentSpotSelection=null;
-  cp.arrivalTimeStr=timeStr;
+  // 同じ滞在中にGPSの揺れ等で到着イベントが再発火しても、すでに選んだ号・到着時刻を消さない
+  const isFreshStay=!cp.poolModalHandled;
+  if(isFreshStay){
+    currentSpotSelection=null;
+    cp.arrivalTimeStr=timeStr;
+  }
   if(cp.id==='haneda')showPoolLaneModal();
   if(arrivalAutoTimer)clearTimeout(arrivalAutoTimer);
   arrivalAutoTimer=setTimeout(()=>{
