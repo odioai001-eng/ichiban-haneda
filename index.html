@@ -872,6 +872,12 @@ let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=n
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
 let autoFollow=false;
 let followPeerId=null;
+let programmaticPan=false; // オートフォローによる自動パン中は、dragstartを誤検知させない
+function panMapTo(fn){
+  programmaticPan=true;
+  fn();
+  setTimeout(()=>{programmaticPan=false;},700);
+}
 const TILE_DEFS={
   osm:    {url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',          sub:['a','b','c']},
   gsi:    {url:'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',    sub:null},
@@ -1044,7 +1050,16 @@ function initMap(){
   syncZoomCtrlVisibility(document.getElementById('page-map').classList.contains('active'));
   const hIcon=L.divIcon({html:`<div style="background:#4f8ef7;border:3px solid #fff;border-radius:50%;width:16px;height:16px;box-shadow:0 0 8px rgba(79,142,247,.6)"></div>`,className:'',iconAnchor:[8,8]});
   L.marker([35.5494,139.7798],{icon:hIcon}).bindPopup('<b>✈️ 羽田空港</b>').addTo(leafletMap);
+  let dragStartCenter=null;
   leafletMap.on('dragstart',()=>{
+    dragStartCenter=programmaticPan?null:leafletMap.getCenter();
+  });
+  leafletMap.on('dragend',()=>{
+    if(!dragStartCenter)return;
+    const moved=haversine(dragStartCenter.lat,dragStartCenter.lng,leafletMap.getCenter().lat,leafletMap.getCenter().lng);
+    dragStartCenter=null;
+    // わずかな揺れ・誤タッチでは解除せず、ある程度意図的に動かした時だけオートフォローを解除する
+    if(moved<20)return;
     autoFollow=false;
     followPeerId=null;
     const btn=document.getElementById('follow-btn');
@@ -1114,7 +1129,7 @@ function updatePeerMarker(id,d){
   const status=alive?(d.status||'kuusha'):'offline';
   const ageSec=Math.floor(age/1000);
   const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
-  if(followPeerId===id&&d.lat&&d.lng&&leafletMap)leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5});
+  if(followPeerId===id&&d.lat&&d.lng&&leafletMap)panMapTo(()=>leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5}));
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
@@ -1230,7 +1245,7 @@ function _attachGPSWatch(){
     document.getElementById('gps-dot').style.background='';
     document.getElementById('gps-dot').classList.add('on');
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
-    if(autoFollow&&!followPeerId&&leafletMap)leafletMap.setView([myLat,myLng]);
+    if(autoFollow&&!followPeerId&&leafletMap)panMapTo(()=>leafletMap.setView([myLat,myLng]));
     pushMyPosition(false);
     checkGeofences(myLat,myLng);
     // GPS初回フィックス時：プール内なら列選択モーダルを表示（表示可否はshowPoolLaneModal内で判定）
