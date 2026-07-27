@@ -653,19 +653,38 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <h3>乗車・降車を手動記録 <button class="mc" onclick="closeManualTripModal()">✕</button></h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">ボタン操作がうまく反映されなかった時など、乗車地・降車地を直接入力して記録できます。</div>
     <label>乗車時刻</label>
-    <div style="display:flex;gap:6px">
-      <input id="mt-board-time" type="text" inputmode="numeric" placeholder="例: 23:03" style="flex:1">
-      <button type="button" onclick="insertColon('mt-board-time')" class="btn btn-g" style="flex-shrink:0;margin-bottom:9px">：</button>
-    </div>
+    <input id="mt-board-time" type="text" inputmode="none" readonly placeholder="例: 23:03" onclick="openTimeKeypad('mt-board-time')">
     <label>乗車地（住所）</label><input id="mt-board-addr" placeholder="例: 東京都渋谷区道玄坂1-2-3">
     <label>降車時刻</label>
-    <div style="display:flex;gap:6px">
-      <input id="mt-alight-time" type="text" inputmode="numeric" placeholder="例: 23:23" style="flex:1">
-      <button type="button" onclick="insertColon('mt-alight-time')" class="btn btn-g" style="flex-shrink:0;margin-bottom:9px">：</button>
-    </div>
+    <input id="mt-alight-time" type="text" inputmode="none" readonly placeholder="例: 23:23" onclick="openTimeKeypad('mt-alight-time')">
     <label>降車地（住所）</label><input id="mt-alight-addr" placeholder="例: 東京都新宿区西新宿2-8-1">
     <label>運賃（円・分かれば）</label><input id="mt-fare" type="number" inputmode="numeric" placeholder="例: 3200">
     <button class="btn btn-p" onclick="saveManualTrip()" style="width:100%">記録する</button>
+  </div>
+</div>
+
+<!-- 時刻入力用の専用テンキー（OS標準キーボードの代わりに表示） -->
+<div class="overlay" id="time-keypad-overlay" style="z-index:9500">
+  <div class="modal" style="max-width:300px">
+    <h3>時刻を入力 <button class="mc" onclick="closeTimeKeypad()">✕</button></h3>
+    <div id="time-keypad-display" style="text-align:center;font-size:32px;font-weight:800;
+      font-variant-numeric:tabular-nums;letter-spacing:2px;color:var(--cyan);
+      background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:14px">--:--</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+      <button type="button" class="btn btn-g" onclick="keypadPress('1')" style="padding:16px;font-size:18px">1</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('2')" style="padding:16px;font-size:18px">2</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('3')" style="padding:16px;font-size:18px">3</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('4')" style="padding:16px;font-size:18px">4</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('5')" style="padding:16px;font-size:18px">5</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('6')" style="padding:16px;font-size:18px">6</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('7')" style="padding:16px;font-size:18px">7</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('8')" style="padding:16px;font-size:18px">8</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('9')" style="padding:16px;font-size:18px">9</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress(':')" style="padding:16px;font-size:18px;color:var(--accent)">：</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('0')" style="padding:16px;font-size:18px">0</button>
+      <button type="button" class="btn btn-g" onclick="keypadBackspace()" style="padding:16px;font-size:18px">⌫</button>
+    </div>
+    <button class="btn btn-p" onclick="closeTimeKeypad()" style="width:100%">完了</button>
   </div>
 </div>
 
@@ -3392,16 +3411,41 @@ function addDest(){
   saveDests();renderDests();closeDestModal();toast('✅ 追加しました');
 }
 
-// 数字キーパッドに「：」キーがない機種向けに、カーソル位置へコロンを挿入する
-function insertColon(inputId){
+// 時刻入力用の専用テンキー（OS標準キーボードにコロンキーがない機種でも入力できるようにする）
+let timeKeypadTargetId=null;
+function openTimeKeypad(inputId){
+  timeKeypadTargetId=inputId;
   const el=document.getElementById(inputId);
-  if(!el)return;
-  const start=el.selectionStart!=null?el.selectionStart:el.value.length;
-  const end=el.selectionEnd!=null?el.selectionEnd:el.value.length;
-  el.value=el.value.slice(0,start)+':'+el.value.slice(end);
-  el.focus();
-  const pos=start+1;
-  el.setSelectionRange(pos,pos);
+  document.getElementById('time-keypad-display').textContent=(el&&el.value)?el.value:'--:--';
+  document.getElementById('time-keypad-overlay').classList.add('open');
+}
+function keypadPress(ch){
+  const disp=document.getElementById('time-keypad-display');
+  let cur=disp.textContent==='--:--'?'':disp.textContent;
+  if(ch===':'){
+    if(!cur||cur.includes(':'))return;
+    cur+=':';
+  }else{
+    if(cur.length>=5)return;
+    cur+=ch;
+  }
+  disp.textContent=cur||'--:--';
+}
+function keypadBackspace(){
+  const disp=document.getElementById('time-keypad-display');
+  let cur=disp.textContent==='--:--'?'':disp.textContent;
+  cur=cur.slice(0,-1);
+  disp.textContent=cur||'--:--';
+}
+function closeTimeKeypad(){
+  const disp=document.getElementById('time-keypad-display');
+  const val=disp.textContent==='--:--'?'':disp.textContent;
+  if(timeKeypadTargetId){
+    const el=document.getElementById(timeKeypadTargetId);
+    if(el)el.value=val;
+  }
+  document.getElementById('time-keypad-overlay').classList.remove('open');
+  timeKeypadTargetId=null;
 }
 
 function openManualTripModal(){
