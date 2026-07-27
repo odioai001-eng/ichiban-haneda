@@ -406,6 +406,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div id="dest-list"></div>
   <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
   <div id="team-dests-list"></div>
+  <div id="dest-list-past-sec" style="display:none">
+    <div class="sec" style="margin-top:18px">📅 過去の送り先（自分）</div>
+    <div id="dest-list-past"></div>
+  </div>
   <div class="sec" style="margin-top:18px">🏆 運賃ランキング（個人）</div>
   <div id="fare-ranking-personal"></div>
   <div class="sec" style="margin-top:18px">🏆 運賃ランキング（仲間）</div>
@@ -3406,8 +3410,62 @@ function computeTripNumbers(tripsAscByTs){
   return numMap;
 }
 
+function buildDestEntryHtml(d,numMap){
+  if(d.type==='trip'){
+    const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(d);
+    const no=numMap.get(d.ts)||'';
+    return `
+    <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+      <div style="font-size:15px;font-weight:800;color:var(--accent);margin-bottom:4px">#${no}</div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+        <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
+        <span style="font-size:12px;color:#fff">${boardDesc}</span>
+      </div>
+      ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-2px 0 4px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
+        <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
+      </div>
+      ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
+      ${d.fare?`<div style="margin-top:5px;display:flex;align-items:center;gap:8px">
+        <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${d.fare.toLocaleString()}</div>
+        <button onclick="editTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
+        <button onclick="deleteTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer">削除</button>
+      </div>`:''}
+    </div>`;
+  } else if(d.type==='cp'){
+    return `
+    <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+      <div style="font-size:13px;color:var(--muted)">
+        <span style="color:var(--gold);font-weight:700">${esc(d.startTime)}-${esc(d.endTime)}</span>
+        　<span style="color:var(--amber);font-weight:600">${esc(d.icon||'')} ${esc(d.name)}</span>
+        <span style="color:var(--muted)">（${d.durMins}分）</span>
+      </div>
+    </div>`;
+  } else {
+    // 手動追加エントリ（旧フォーマット互換）
+    return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:10px">
+      ${d.timeStr?`<div style="font-size:11px;color:var(--cyan);margin-bottom:3px">🕐 ${esc(d.timeStr)}</div>`:''}
+      <div style="font-size:13px;font-weight:600">${esc(d.name||'')}</div>
+      ${d.addr?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(d.addr)}</div>`:''}
+    </div>`;
+  }
+}
+function buildDestGroupsHtml(dateKeys,groups,numMap){
+  let html='';
+  dateKeys.forEach(date=>{
+    html+=`<div style="font-size:16px;color:var(--text);font-weight:800;padding:10px 2px 8px">📅 ${date}</div>`;
+    groups[date].slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(d=>{
+      html+=buildDestEntryHtml(d,numMap);
+    });
+  });
+  return html;
+}
 function renderDests(){
   const el=document.getElementById('dest-list');
+  const pastEl=document.getElementById('dest-list-past');
+  const pastSec=document.getElementById('dest-list-past-sec');
   // 不要エントリをフィルタ（旧フォーマットの自動エントリは除外）
   const visible=destinations.filter(d=>{
     if(d.type==='trip'||d.type==='cp')return true;
@@ -3423,6 +3481,8 @@ function renderDests(){
   });
   if(!visible.length){
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">送り先がありません</div>';
+    if(pastEl)pastEl.innerHTML='';
+    if(pastSec)pastSec.style.display='none';
     document.getElementById('done-count').textContent='0件';
     return;
   }
@@ -3433,56 +3493,25 @@ function renderDests(){
     groups[key].push(d);
   });
   const sortedDates=Object.keys(groups).sort((a,b)=>(groups[b][0].ts||0)-(groups[a][0].ts||0));
-  let html='';
   // 出勤〜退勤のシフト単位で番号をリセットする
   const allSorted=visible.filter(d=>d.type==='trip'||d.type==='cp').sort((a,b)=>(a.ts||0)-(b.ts||0));
   const numMap=computeTripNumbers(allSorted.filter(d=>d.type==='trip'));
-  sortedDates.forEach(date=>{
-    html+=`<div style="font-size:16px;color:var(--text);font-weight:800;padding:10px 2px 8px">📅 ${date}</div>`;
-    groups[date].slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(d=>{
-      if(d.type==='trip'){
-        const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(d);
-        const no=numMap.get(d.ts)||'';
-        html+=`
-        <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
-          <div style="font-size:15px;font-weight:800;color:var(--accent);margin-bottom:4px">#${no}</div>
-          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
-            <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
-            <span style="font-size:12px;color:#fff">${boardDesc}</span>
-          </div>
-          ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-2px 0 4px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
-          <div style="display:flex;align-items:baseline;gap:8px">
-            <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
-            <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
-          </div>
-          ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
-          ${d.fare?`<div style="margin-top:5px;display:flex;align-items:center;gap:8px">
-            <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${d.fare.toLocaleString()}</div>
-            <button onclick="editTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
-            <button onclick="deleteTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer">削除</button>
-          </div>`:''}
-        </div>`;
-      } else if(d.type==='cp'){
-        html+=`
-        <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
-          <div style="font-size:13px;color:var(--muted)">
-            <span style="color:var(--gold);font-weight:700">${esc(d.startTime)}-${esc(d.endTime)}</span>
-            　<span style="color:var(--amber);font-weight:600">${esc(d.icon||'')} ${esc(d.name)}</span>
-            <span style="color:var(--muted)">（${d.durMins}分）</span>
-          </div>
-        </div>`;
-      } else {
-        // 手動追加エントリ（旧フォーマット互換）
-        html+=`
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:10px">
-          ${d.timeStr?`<div style="font-size:11px;color:var(--cyan);margin-bottom:3px">🕐 ${esc(d.timeStr)}</div>`:''}
-          <div style="font-size:13px;font-weight:600">${esc(d.name||'')}</div>
-          ${d.addr?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(d.addr)}</div>`:''}
-        </div>`;
-      }
-    });
-  });
-  el.innerHTML=html;
+  // 自分の送り先は「本日分」と「過去の日付分」に分けて表示する
+  const todayStr=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const todayDates=sortedDates.filter(d=>d===todayStr);
+  const pastDates=sortedDates.filter(d=>d!==todayStr);
+  el.innerHTML=todayDates.length
+    ?buildDestGroupsHtml(todayDates,groups,numMap)
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の送り先はまだありません</div>';
+  if(pastEl){
+    if(pastDates.length){
+      pastEl.innerHTML=buildDestGroupsHtml(pastDates,groups,numMap);
+      if(pastSec)pastSec.style.display='';
+    }else{
+      pastEl.innerHTML='';
+      if(pastSec)pastSec.style.display='none';
+    }
+  }
   document.getElementById('done-count').textContent=visible.length+'件';
   renderFareRanking();
 }
