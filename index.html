@@ -487,6 +487,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         <button class="btn btn-g" style="font-size:11px;padding:4px 10px" onclick="adminLogout()">ロック</button>
       </div>
     </div>
+    <div class="sec">🧪 テスト用ツール</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">出勤時の車番入力・決済端末確認をスキップして、動作確認用にすぐ乗務中の状態にします。GPSや待機タイマーなど、乗務中でないと動かない機能を出勤ボタンを押さずに一通り確認できます。</div>
+      <button class="btn btn-p" onclick="adminForceStartDuty()" style="width:100%" id="admin-test-duty-btn">🧪 出勤処理をスキップして乗務中にする</button>
+    </div>
     <div class="sec">🔑 PINの変更</div>
     <div class="card">
       <label>新しいPIN（数字4〜8桁）</label>
@@ -829,6 +834,7 @@ const FIREBASE_CONFIG = {
 };
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
+let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
 let autoFollow=false;
 let followPeerId=null;
 const TILE_DEFS={
@@ -1281,7 +1287,7 @@ function confirmEndDuty(){
   const offline=document.getElementById('map-offline');
   btn.textContent='出勤する';btn.className='duty-btn off';
   lbl.textContent='休み中';offline.classList.add('show');
-  if(dutyStart){
+  if(dutyStart&&!testMode){
   const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
   shiftLog.push({
    dateStr:new Date(dutyStart.getTime()).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}),
@@ -1294,7 +1300,10 @@ function confirmEndDuty(){
   stopGPS();myLat=null;myLng=null;dutyStart=null;
   if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
   if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
-  if(db)db.ref('drivers/'+myId).remove();
+  if(db&&!testMode)db.ref('drivers/'+myId).remove();
+  const wasTestMode=testMode;
+  testMode=false;
+  if(wasTestMode)toast('🧪 テストモードを終了しました');
   localStorage.removeItem('taxi_runtime_state');
   const name=localStorage.getItem('taxi_name')||'自分';
   document.getElementById('duty-end-msg').textContent=`${name}さん、お疲れさまでした。`;
@@ -1384,13 +1393,25 @@ function skipDutyCarModal(){
   applyDutyPlanChoice();
 }
 
+// 管理者用: 車番入力・決済確認・勤務時間プランをスキップして即座に乗務中にする（動作確認用）
+function adminForceStartDuty(){
+  if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
+  if(isDuty){toast('すでに乗務中です');return;}
+  testMode=true;
+  document.getElementById('duty-start-time').value='';
+  dutyPlanChoice='skip';
+  _startDuty();
+  applyDutyPlanChoice();
+  toast('🧪 テストモード: 出勤処理をスキップして乗務中にしました（仲間には表示されません）');
+}
+
 function _startDuty(){
   isDuty=true;
   const btn=document.getElementById('duty-btn');
   const lbl=document.getElementById('duty-label');
   const offline=document.getElementById('map-offline');
   btn.textContent='退勤する';btn.className='duty-btn on';
-  lbl.textContent='乗務中';offline.classList.remove('show');
+  lbl.textContent=testMode?'乗務中（テスト）':'乗務中';offline.classList.remove('show');
   const startTimeVal=document.getElementById('duty-start-time').value;
   const now=new Date();
   if(startTimeVal){
@@ -1404,7 +1425,7 @@ function _startDuty(){
     dutyStart=now;
   }
   document.getElementById('duty-start').textContent=fmtTime(dutyStart);
-  if(db)db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
+  if(db&&!testMode)db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
   renderDests();
   requestNotificationPermission();
   startGPS();
@@ -1423,11 +1444,17 @@ let jitsushaStart=null;
 let boardInfo=null;          // 実車時の乗車情報
 let manualWaitStartTime=null; // 待機開始ボタンを押した時刻
 let manualWaitAddr=null;      // 待機開始した場所の住所
+let spotChangeHistory=[];     // 今回の待機中に乗り場を変更した履歴 [{spot,ts}]
+function recordSpotChange(spot){
+  const last=spotChangeHistory[spotChangeHistory.length-1];
+  if(!last||last.spot!==spot)spotChangeHistory.push({spot,ts:Date.now()});
+}
 
 function saveAppState(){
   const waitSpotLbl=document.getElementById('wait-spot-lbl');
   localStorage.setItem('taxi_runtime_state',JSON.stringify({
     isDuty,
+    testMode,
     currentStatus,
     dutyStartTs:dutyStart?dutyStart.getTime():null,
     waitStartTs:waitInterval?waitStart:null,
@@ -1447,13 +1474,14 @@ function restoreAppState(){
   if(!st.isDuty)return; // 退勤中なら復元しない
   // 出勤状態を復元
   isDuty=true;
+  testMode=!!st.testMode;
   currentStatus=st.currentStatus||'kuusha';
   dutyStart=st.dutyStartTs?new Date(st.dutyStartTs):new Date();
   const btn=document.getElementById('duty-btn');
   const lbl=document.getElementById('duty-label');
   const offline=document.getElementById('map-offline');
   if(btn){btn.textContent='退勤する';btn.className='duty-btn on';}
-  if(lbl)lbl.textContent='乗務中';
+  if(lbl)lbl.textContent=testMode?'乗務中（テスト）':'乗務中';
   if(offline)offline.classList.remove('show');
   document.getElementById('duty-start').textContent=fmtTime(dutyStart);
   if(dutyInterval)clearInterval(dutyInterval);
@@ -1537,10 +1565,12 @@ function setStatus(s){
       lat:myLat,lng:myLng,
       spot:boardSpot,
       waitMins:(waitMins&&waitMins>0)?waitMins:null,
-      waitAddr:manualWaitAddr
+      waitAddr:manualWaitAddr,
+      spotHistory:spotChangeHistory.length>1?spotChangeHistory.slice():null
     };
     manualWaitStartTime=null;manualWaitAddr=null;
     currentSpotSelection=null;
+    spotChangeHistory=[];
     renderSpotRow();
     hidePoolPanel();hidePoolHistory();syncPoolPanel();
     if(waitInterval&&waitSec>0){
@@ -1683,7 +1713,7 @@ function connectFirebase(config){
 }
 
 function pushMyPosition(gpsWeak=false){
-  if(!db||!isDuty||myLat===null)return;
+  if(!db||!isDuty||myLat===null||testMode)return;
   const name=localStorage.getItem('taxi_name')||'自分';
   db.ref('drivers/'+myId).update({
     name,lat:myLat,lng:myLng,status:currentStatus,
@@ -1785,13 +1815,14 @@ function toggleDriverDests(id){
   const shown=entries;
   el.innerHTML=shown.map(e=>{
     const no=numMap.get(e.ts)||'';
-    const {boardDesc,alightDesc,waitStr,isAbure}=buildTripDesc(e);
+    const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(e);
     return `<div style="border:2px solid #fff;border-radius:10px;padding:8px 12px;margin-bottom:6px;background:var(--surface)">
       ${no?`<div style="font-size:13px;font-weight:800;color:var(--accent);margin-bottom:2px">#${no}</div>`:''}
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:3px">
         <span style="font-size:13px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(e.boardTime||'--:--')}</span>
         <span style="font-size:11px;color:var(--muted)">${boardDesc}</span>
       </div>
+      ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-1px 0 3px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
       <div style="display:flex;align-items:baseline;gap:8px">
         <span style="font-size:13px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(e.alightTime||'--:--')}</span>
         <span style="font-size:12px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
@@ -1885,6 +1916,7 @@ async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs){
     boardTime:saved?saved.time:fallbackBoardTime,
     boardAddr:boardAddr||'',
     boardSpot:saved?saved.spot:null,
+    spotHistory:saved?saved.spotHistory:null,
     alightTime,
     alightAddr:alightAddr||'',
     waitMins:saved?saved.waitMins:null,
@@ -1900,6 +1932,7 @@ function startWaitManual(){
   if(waitInterval){toast('⏱ タイマーはすでに動いています');return;}
   manualWaitStartTime=Date.now();
   manualWaitAddr=null;
+  spotChangeHistory=[];
   // 号チップ未選択状態にリセット
   currentSpotSelection=null;
   const lbl=document.getElementById('wait-spot-lbl');
@@ -1917,7 +1950,7 @@ function startWaitManual(){
     document.getElementById('wait-timer').textContent=t;
     const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
   },1000);
-  if(db&&isDuty)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:null});
+  if(db&&isDuty&&!testMode)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:null});
   renderSpotRow();
   saveAppState();
   toast('⏱ 待機タイマー スタート');
@@ -2025,7 +2058,7 @@ function renderTeamDests(){
       groups[date].forEach((e,idx,arr)=>{
         const isLast=idx===arr.length-1;
         if(e.type==='trip'){
-          const {boardDesc,alightDesc,waitStr,isAbure}=buildTripDesc(e);
+          const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(e);
           const tno=teamNumMap.get(e.ts)||'';
           const adminDelBtn=(isAdmin&&!isMe)?`<button onclick="adminDeleteTeamDest('${driverId}','${e._fbKey}')" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--red);font-size:11px;cursor:pointer">🗑</button>`:'';
           html+=`
@@ -2036,6 +2069,7 @@ function renderTeamDests(){
               <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(e.boardTime||'--:--')}</span>
               <span style="font-size:12px;color:var(--muted)">${boardDesc}</span>
             </div>
+            ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-2px 0 4px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
             <div style="display:flex;align-items:baseline;gap:8px">
               <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(e.alightTime||'--:--')}</span>
               <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
@@ -2078,7 +2112,7 @@ function renderTeamDests(){
 }
 
 function buildFareTripHtml(d,driverLabel){
-  const {boardDesc,alightDesc,waitStr,isAbure}=buildTripDesc(d);
+  const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(d);
   return `
   <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
     ${driverLabel?`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px">${esc(driverLabel)}</div>`:''}
@@ -2087,6 +2121,7 @@ function buildFareTripHtml(d,driverLabel){
       <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
       <span style="font-size:12px;color:#fff">${boardDesc}</span>
     </div>
+    ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-2px 0 4px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
     <div style="display:flex;align-items:baseline;gap:8px">
       <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
       <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
@@ -2173,8 +2208,9 @@ function onDeparture(cp){
   }
   waitSec=0;
   currentSpotSelection=null;
+  spotChangeHistory=[];
   cp.currentSpot=null;cp.arrivalTimeStr=null;
-  if(db)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
+  if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
   if(db&&isDuty){
     const name=localStorage.getItem('taxi_name')||'自分';
     db.ref('chat').push({uid:myId,name,
@@ -2221,7 +2257,7 @@ function selectSpot(spotName){
   const fullSpot='東京都大田区羽田空港'+currentSpotSelection+'乗り場';
   hCp.currentSpot=fullSpot;
   document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
-  if(db)db.ref('drivers/'+myId).update({waitSpot:fullSpot});
+  if(db&&!testMode)db.ref('drivers/'+myId).update({waitSpot:fullSpot});
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
   if(!waitInterval){
     const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
@@ -2231,6 +2267,7 @@ function selectSpot(spotName){
     hCp.currentSpot=fullSpot;
     document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
   }
+  recordSpotChange(spotName);
   saveAppState();
   renderSpotRow();
   syncPoolPanel();
@@ -2291,6 +2328,7 @@ async function recordAbure(){
     boardTime,
     boardAddr:spot?'':boardAddrFallback,
     boardSpot:spot||null,
+    spotHistory:spotChangeHistory.length>1?spotChangeHistory.slice():null,
     alightTime,
     alightAddr:'あぶれ',
     waitMins:null,
@@ -2302,6 +2340,7 @@ async function recordAbure(){
   pushDestToFirebase(entry);
   // タイマーリセット
   currentSpotSelection=null;
+  spotChangeHistory=[];
   boardInfo=null;
   stopWait();waitSec=0;
   document.getElementById('wait-timer').textContent='00:00:00';
@@ -2319,6 +2358,7 @@ function startWaitAt(cp,spotName,dist,timeStr){
   if(bannerTimer)clearTimeout(bannerTimer);
   bannerTimer=setTimeout(()=>banner.classList.remove('show'),8000);
   resetWait();
+  spotChangeHistory=[];
   document.getElementById('wait-spot-lbl').textContent='待機場所: '+spotName;
   if(isDuty){
     waitStart=Date.now();waitSec=0;
@@ -2329,7 +2369,7 @@ function startWaitAt(cp,spotName,dist,timeStr){
       document.getElementById('wait-timer').textContent=t;
       const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
     },1000);
-    if(db)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:spotName});
+    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:spotName});
   }
 }
 
@@ -3009,7 +3049,7 @@ async function autoRegisterDest(lat,lng,reason,tripMins=null){
 }
 
 function pushDestToFirebase(entry){
-  if(!db||!isDuty)return;
+  if(!db||!isDuty||testMode)return;
   const driverName=localStorage.getItem('taxi_name')||'自分';
   db.ref('team_dests/'+myId).push({...entry,driverName,driverId:myId});
   // 前月1日より古いエントリを削除
@@ -3286,7 +3326,7 @@ function renderDests(){
     html+=`<div style="font-size:16px;color:var(--text);font-weight:800;padding:10px 2px 8px">📅 ${date}</div>`;
     groups[date].slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(d=>{
       if(d.type==='trip'){
-        const {boardDesc,alightDesc,waitStr,isAbure}=buildTripDesc(d);
+        const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(d);
         const no=numMap.get(d.ts)||'';
         html+=`
         <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
@@ -3295,6 +3335,7 @@ function renderDests(){
             <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
             <span style="font-size:12px;color:#fff">${boardDesc}</span>
           </div>
+          ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-2px 0 4px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
           <div style="display:flex;align-items:baseline;gap:8px">
             <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
             <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
@@ -3579,6 +3620,7 @@ function isInHanedaPool(){
 }
 function recordPoolMove(spot,lane){
   if(!db){toast('⚠️ Firebase未接続');return;}
+  if(testMode){toast('🧪 テストモード中は仲間と共有される列データを変更できません');return;}
   if(!isAdmin){
     const loc=isInHanedaPool();
     if(loc===null){toast('⚠️ GPS未取得のため位置確認できません。出勤ボタンを押してGPSを起動してください');return;}
@@ -3628,6 +3670,7 @@ function cleanupExpiredProgressIfNeeded(globalLastActivity,now){
 
 function recordProgress(spot,amount){
   if(!db){toast('⚠️ Firebase未接続');return;}
+  if(testMode){toast('🧪 テストモード中は仲間と共有される列データを変更できません');return;}
   if(!isAdmin){
     const loc=isInHanedaPool();
     if(loc===null){toast('⚠️ GPS未取得のため位置確認できません。出勤ボタンを押してGPSを起動してください');return;}
@@ -4161,7 +4204,10 @@ function buildTripDesc(e){
   const boardDesc=e.boardSpot?`東京都大田区羽田空港${esc(e.boardSpot)}乗り場`:esc(e.boardAddr||'乗車');
   const alightDesc=isAbure?'あぶれ':esc(e.alightAddr||'住所取得中');
   const waitStr=formatWaitStr(e.waitMins,e.waitMinsStr);
-  return {boardDesc,alightDesc,waitStr,isAbure};
+  const historyStr=(e.spotHistory&&e.spotHistory.length>1)
+    ?e.spotHistory.map(h=>`${esc(h.spot)}(${new Date(h.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})})`).join('→')
+    :'';
+  return {boardDesc,alightDesc,waitStr,isAbure,historyStr};
 }
 function toast(msg){
   const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
