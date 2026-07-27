@@ -502,8 +502,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <div class="sec">📍 到着通知チェックポイント</div>
     <div id="cp-list"></div>
+    <button class="btn btn-g" onclick="addCheckpoint()" style="width:100%;margin-bottom:10px">＋ チェックポイントを追加</button>
     <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.7;padding:0 2px">
-      各場所に近づくと通知・待機タイマーが自動スタートします。
+      各場所に近づくと通知・待機タイマーが自動スタートします。半径は10m単位で指定できます。
     </div>
     <div class="sec">👤 自分のアカウント編集</div>
     <div class="card">
@@ -3130,11 +3131,11 @@ function renderCPs(){
           <span style="font-size:12px;color:var(--muted)">通知範囲（半径）</span>
           <span style="font-size:13px;font-weight:700;color:var(--cyan)" id="cp-radius-val-${i}">${cp.radius}m</span>
         </div>
-        <input type="range" min="50" max="1000" step="50" value="${cp.radius}"
+        <input type="range" min="10" max="1000" step="10" value="${cp.radius}"
           style="width:100%;margin-bottom:0;padding:0;background:transparent;border:none"
           oninput="updateCPRadius(${i},this.value)">
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px">
-          <span>50m</span><span>500m</span><span>1000m</span>
+          <span>10m</span><span>500m</span><span>1000m</span>
         </div>
       </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap">
@@ -3142,6 +3143,7 @@ function renderCPs(){
         <button class="btn btn-g" style="font-size:11px;padding:5px 10px" onclick="openCPEdit(${i})">✏️ 手動入力</button>
         ${cp.lat!==null?`<button class="btn btn-g" style="font-size:11px;padding:5px 10px" onclick="previewCP(${i})">🗺 地図で確認</button>`:''}
         ${cp.lat!==null?`<button class="btn btn-p" style="font-size:11px;padding:5px 10px" onclick="openCPAdjust(${i})">🎯 地図で微調整</button>`:''}
+        ${!CP_DEFAULTS.some(d=>d.id===cp.id)?`<button class="btn btn-d" style="font-size:11px;padding:5px 10px" onclick="deleteCheckpoint(${i})">🗑 削除</button>`:''}
       </div>
     </div>`).join('');
 }
@@ -3156,8 +3158,35 @@ function openCPEdit(i){
   const r=prompt('通知半径（m）',cp.radius||150);if(r===null)return;
   const pLat=parseFloat(lat),pLng=parseFloat(lng),pR=parseInt(r);
   if(isNaN(pLat)||isNaN(pLng)){toast('⚠️ 数値を正しく入力してください');return;}
-  checkpoints[i].lat=pLat;checkpoints[i].lng=pLng;checkpoints[i].radius=isNaN(pR)?150:Math.max(50,pR);
+  checkpoints[i].lat=pLat;checkpoints[i].lng=pLng;checkpoints[i].radius=isNaN(pR)?150:Math.max(10,pR);
   saveCPs();renderCPs();toast('✅ '+cp.name+' を設定しました');
+}
+
+function addCheckpoint(){
+  const name=prompt('チェックポイント名を入力してください（例: 〇〇駐車場）');
+  if(!name||!name.trim())return;
+  const icon=prompt('アイコン（絵文字1つ、空欄なら📍）','📍')||'📍';
+  checkpoints.push({
+    id:'custom_'+Date.now(),
+    name:name.trim(),
+    icon:icon.trim()||'📍',
+    lat:myLat!==null?myLat:null,
+    lng:myLat!==null?myLng:null,
+    radius:10,
+    enabled:true,
+    spots:[]
+  });
+  saveCPs();renderCPs();
+  toast('✅ '+name.trim()+' を追加しました');
+}
+
+function deleteCheckpoint(i){
+  const cp=checkpoints[i];
+  if(!cp)return;
+  if(!confirm(cp.name+' を削除しますか？'))return;
+  checkpoints.splice(i,1);
+  saveCPs();renderCPs();
+  toast('🗑 '+cp.name+' を削除しました');
 }
 let cpAdjustMap=null,cpAdjustMarker=null,cpAdjustCircle=null,cpAdjustIdx=null;
 function openCPAdjust(i){
