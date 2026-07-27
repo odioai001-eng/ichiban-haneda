@@ -1233,16 +1233,11 @@ function _attachGPSWatch(){
     if(autoFollow&&!followPeerId&&leafletMap)leafletMap.setView([myLat,myLng]);
     pushMyPosition(false);
     checkGeofences(myLat,myLng);
-    // GPS初回フィックス時：プール内なら列選択モーダルを表示（ただし直近30分以内に表示済みなら出さない）
+    // GPS初回フィックス時：プール内なら列選択モーダルを表示（表示可否はshowPoolLaneModal内で判定）
     if(isFirstFix){
       const cp=checkpoints.find(c=>c.id==='haneda');
       if(cp&&cp.lat!==null&&haversine(myLat,myLng,cp.lat,cp.lng)<=cp.radius){
-        const lastShownTs=parseInt(localStorage.getItem('taxi_pool_modal_shown_ts')||'0');
-        const shownRecently=(Date.now()-lastShownTs)<30*60*1000;
-        if(!shownRecently&&(document.getElementById('pool-lane-modal').style.display==='none'||
-           !document.getElementById('pool-lane-modal').style.display)){
-          showPoolLaneModal();
-        }
+        showPoolLaneModal();
       }
     }
     updatePosHistory(myLat,myLng,pos.coords.speed);
@@ -3848,6 +3843,12 @@ function recordProgress(spot,amount){
 const LANE_MODAL_COUNTS={'1号':8,'2号':11,'3号':10,'4号':9};
 let laneModalSpot=null,laneModalLane=null;
 function showPoolLaneModal(){
+  // 直近30分以内に表示済み、またはすでに表示中なら再表示しない
+  // （ページ切替やバックグラウンド復帰のたびに到着イベントが再発火しても連発させないため）
+  const lastShownTs=parseInt(localStorage.getItem('taxi_pool_modal_shown_ts')||'0');
+  if(Date.now()-lastShownTs<30*60*1000)return;
+  const modalEl=document.getElementById('pool-lane-modal');
+  if(modalEl&&modalEl.style.display==='flex')return;
   localStorage.setItem('taxi_pool_modal_shown_ts',String(Date.now()));
   laneModalSpot=null;laneModalLane=null;
   ['1号','2号','3号','4号'].forEach(s=>{
