@@ -2255,7 +2255,11 @@ async function recordAbure(){
   const now=new Date();
   const alightTime=now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-  const spot=currentSpotSelection||'';
+  // 「待機開始」ボタンだけで号を選んでいない場合でも、待機場所ラベルから号を復元する
+  const lblText=(document.getElementById('wait-spot-lbl').textContent||'')
+    .replace('待機場所: ','').replace('（終了）','').replace('未設定','').trim();
+  const mSpotLbl=lblText.match(/([1-4]号)/);
+  const spot=currentSpotSelection||(mSpotLbl?mSpotLbl[1]:'');
   const saved=boardInfo;
   const boardTime=saved?saved.time:alightTime;
   // 待機時間を計算
@@ -2266,11 +2270,13 @@ async function recordAbure(){
     const m=Math.floor((sec%3600)/60);
     waitMinsStr=h>0?`${h}時間${m}分`:(m>0?`${m}分`:'');
   }
-  // 号が未選択の場合でも、必ず待機先が分かるようフォールバックを用意
+  // 号も分からない場合でも、必ず待機先が分かるようフォールバックを用意
   let boardAddrFallback='';
   if(!spot){
     if(saved&&saved.waitAddr){
       boardAddrFallback=saved.waitAddr;
+    }else if(isInHanedaPool()){
+      boardAddrFallback='東京都大田区羽田空港';
     }else if(myLat!==null&&myLng!==null){
       boardAddrFallback=await reverseGeocode(myLat,myLng);
     }
