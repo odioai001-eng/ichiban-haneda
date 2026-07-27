@@ -2281,7 +2281,7 @@ function onDeparture(cp){
   const mWaitEl=document.getElementById('map-wait-timer');if(mWaitEl)mWaitEl.textContent='00:00:00';
   currentSpotSelection=null;
   spotChangeHistory=[];
-  cp.currentSpot=null;cp.arrivalTimeStr=null;
+  cp.currentSpot=null;cp.arrivalTimeStr=null;cp.poolModalHandled=false;
   if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
   if(db&&isDuty&&!testMode){
     const name=localStorage.getItem('taxi_name')||'自分';
@@ -3843,12 +3843,13 @@ function recordProgress(spot,amount){
 const LANE_MODAL_COUNTS={'1号':8,'2号':11,'3号':10,'4号':9};
 let laneModalSpot=null,laneModalLane=null;
 function showPoolLaneModal(){
-  // 直近30分以内に表示済み、またはすでに表示中なら再表示しない
-  // （ページ切替やバックグラウンド復帰のたびに到着イベントが再発火しても連発させないため）
-  const lastShownTs=parseInt(localStorage.getItem('taxi_pool_modal_shown_ts')||'0');
-  if(Date.now()-lastShownTs<30*60*1000)return;
+  // 今回の滞在ですでに表示・判定済みなら再表示しない（羽田を出発すると再度表示可能になる）
+  // 待機時間が30分を超えることも多いため、時間ではなく「出発するまで」を基準にする
+  const hCp=checkpoints.find(c=>c.id==='haneda');
+  if(hCp&&hCp.poolModalHandled)return;
   const modalEl=document.getElementById('pool-lane-modal');
   if(modalEl&&modalEl.style.display==='flex')return;
+  if(hCp)hCp.poolModalHandled=true;
   localStorage.setItem('taxi_pool_modal_shown_ts',String(Date.now()));
   laneModalSpot=null;laneModalLane=null;
   ['1号','2号','3号','4号'].forEach(s=>{
