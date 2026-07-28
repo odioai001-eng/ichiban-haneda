@@ -3756,7 +3756,7 @@ function syncPoolHistoryBottom(){
 
 function renderPoolChart(){
   const now=Date.now();
-  const LIMIT=15*60000;
+  const LIMIT=PROGRESS_TIMEOUT_MS; // 表示可否の判定も、データのリセット時間(20分)と揃える
   const lastAll=poolMoves.length?poolMoves[poolMoves.length-1].ts:0;
   const progressAll=Object.values(poolProgress).some(p=>p&&now-(p.ts||0)<=LIMIT);
   const show=(lastAll&&now-lastAll<=LIMIT)||progressAll;
@@ -3837,7 +3837,7 @@ function recordPoolMove(spot,lane){
   poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
 }
 
-const PROGRESS_TIMEOUT_MS=10*60*1000; // 10分間操作がなければリセット
+const PROGRESS_TIMEOUT_MS=20*60*1000; // 全乗り場で20分間操作がなければリセット
 let lastCleanupGlobalTs=0;
 
 function cleanupExpiredProgressIfNeeded(globalLastActivity,now){
