@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>イベント終演ハブ</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:#0d0d1a;color:#e8e8f4;min-height:100vh;padding:20px 16px 40px;max-width:480px;margin:0 auto}
+h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:#7878a0;margin-bottom:14px}
+.datebar{background:#161628;border:1px solid #2a2a4a;border-radius:12px;padding:12px 14px;
+  font-size:12px;color:#c0c0d8;line-height:1.7;margin-bottom:20px}
+.datebar b{color:#e8e8f4}
+.cat{font-size:11px;font-weight:700;color:#7878a0;text-transform:uppercase;letter-spacing:.8px;
+  margin:22px 0 10px}
+.card{display:block;background:#161628;border:1px solid #2a2a4a;border-radius:14px;
+  padding:16px;margin-bottom:12px;text-decoration:none;color:inherit;transition:transform .15s}
+.card:active{transform:scale(.97)}
+.venue-row{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.venue-icon{font-size:20px;flex-shrink:0}
+.venue-name{font-size:19px;font-weight:800;color:#fff;line-height:1.3}
+.event-name{font-size:12px;color:#9999b8;margin:2px 0 12px;line-height:1.5}
+.stat-row{display:flex;gap:8px;margin-bottom:10px}
+.stat{flex:1;background:rgba(255,255,255,.05);border:1px solid #2a2a4a;border-radius:10px;
+  padding:10px 8px;text-align:center}
+.stat-value{font-size:24px;font-weight:800;color:#4ade80;line-height:1.15}
+.stat-value.time{color:#67e8f9}
+.stat-label{font-size:10px;font-weight:700;color:#7878a0;margin-top:3px;letter-spacing:.3px}
+.desc{font-size:11.5px;color:#9999b8;line-height:1.6}
+.daterange{font-size:11px;color:#67e8f9;font-weight:600;margin-bottom:6px}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;
+  background:rgba(255,255,255,.06);color:#c0c0d8;border:1px solid #2a2a4a;margin-bottom:8px}
+.tag.red{color:#f87171;border-color:rgba(239,68,68,.3)}
+.tag.cyan{color:#67e8f9;border-color:rgba(6,182,212,.3)}
+.tag.green{color:#4ade80;border-color:rgba(34,197,94,.3)}
+.subcat{font-size:12px;font-weight:700;color:#c0c0d8;margin:16px 0 8px}
+.note{background:#161628;border:1px solid #2a2a4a;border-radius:12px;padding:14px 16px;
+  font-size:12px;color:#9999b8;line-height:1.7;margin-top:24px}
+.note b{color:#e8e8f4}
+.note.warn{border-color:rgba(245,158,11,.3)}
+.note.warn b{color:#fbbf24}
+</style>
+</head>
+<body>
+
+<h1>🎤 イベント終演ハブ</h1>
+<div class="sub">23区・三鷹市・武蔵野市限定・終演直後の"乗車チャンス"を先読み</div>
+
+<div class="datebar">
+  📅 <b>本日 2026年7月30日（木）</b> 時点でWeb上に公開されている情報をもとに作成。23区・三鷹市・武蔵野市内で本日開催が判明している会場のみを掲載しています。開催有無・時間・規模は主催者都合で変更されることがあるため、出庫前に各会場の公式リンクで最終確認してください。
+</div>
+
+<div class="cat">🎫 本日開催している会場</div>
+
+<a class="card" href="https://www.jingu-stadium.com/event/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">⚾</span><span class="venue-name">明治神宮野球場</span></div>
+  <div class="daterange">📅 本日 7/30(木) 開催</div>
+  <div class="event-name">東京ヤクルト vs 阪神（新宿区）</div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-value time">21:00頃</div><div class="stat-label">終了目安</div></div>
+    <div class="stat"><div class="stat-value">3.2万人</div><div class="stat-label">満員時収容</div></div>
+  </div>
+  <div class="desc">18:00開始。神宮外苑・信濃町駅方面と外苑西通り沿いの両方に流出。</div>
+</a>
+
+<a class="card" href="https://enjoy.ueno.or.jp/summer2026/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏮</span><span class="venue-name">上野恩賜公園一帯</span></div>
+  <div class="daterange">📅 7/10(金)〜8/11(火・祝) 開催中（本日も対象）</div>
+  <div class="event-name">江戸趣味納涼大会 うえの夏まつり（台東区）</div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-value time">〜21時頃</div><div class="stat-label">夜間継続</div></div>
+    <div class="stat"><div class="stat-value">多数</div><div class="stat-label">縁日・盆踊り</div></div>
+  </div>
+  <div class="desc">単発終演ではなく夜間にかけて縁日・盆踊りで人出が続くタイプ。上野駅公園口・上野広小路周辺で需要。</div>
+</a>
+
+<a class="card" href="https://tokyofesta.com/23ku/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏮</span><span class="venue-name">竪川親水公園特設会場</span></div>
+  <div class="daterange">📅 本日 7/30(木) 開催（7/29・30の2日間開催）</div>
+  <div class="event-name">すみだ錦糸町河内音頭大盆踊り（墨田区）</div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-value time">21:00</div><div class="stat-label">終了</div></div>
+    <div class="stat"><div class="stat-value">17:30〜</div><div class="stat-label">開始</div></div>
+  </div>
+  <div class="desc">錦糸町駅方面への人出が集中。終了時刻がはっきりしているため21時前後の待機が読みやすい。</div>
+</a>
+
+<a class="card" href="https://www.bigsight.jp/visitor/event/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏢</span><span class="venue-name">東京ビッグサイト</span></div>
+  <div class="daterange">📅 本日 7/30(木) 開催（7/29・30の2日間開催）</div>
+  <div class="event-name">賃貸住宅フェア2026東京／リフォーム産業フェア（江東区・西1・2ホール）</div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-value time">17:00</div><div class="stat-label">閉場</div></div>
+    <div class="stat"><div class="stat-value">日中帯</div><div class="stat-label">10:00〜開催</div></div>
+  </div>
+  <div class="desc">終業後の帰宅ラッシュと重なるため夕方の会場前需要は薄め、参考程度に。</div>
+</a>
+
+<div class="cat">🚕 長距離が狙える会場（20）</div>
+<div class="note" style="margin-top:0">
+  以下は「今日開催しているか」に関わらず、<b>構造的に長距離利用が出やすい</b>会場をタイプ別にまとめたクイックリンクです。①駅アクセスが弱く自宅まで直行しやすいエリア／②富裕層・年配層中心で距離を問わずタクシーを選ぶ客層／③広域集客・深夜終演で終電を逃しやすい会場／④ホテル・国際会議場での大規模会合、の4タイプです。
+</div>
+
+<div class="subcat">① 駅アクセスが弱い湾岸・郊外エリア</div>
+
+<a class="card" href="https://www.zepp.co.jp/hall/haneda/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎸</span><span class="venue-name">Zepp Haneda（TOKYO）</span></div>
+  <div class="event-name">大田区・羽田イノベーションシティ</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">2,900人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag red">湾岸・空港隣接</div>
+  <div class="desc">最寄り駅からやや離れており、そのまま空港・遠方ホテルへ直行する長距離需要も発生しやすい。</div>
+</a>
+
+<a class="card" href="https://toyosu.pia-pit.jp/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎸</span><span class="venue-name">豊洲PIT</span></div>
+  <div class="event-name">江東区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">3,100人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag red">湾岸・単線アクセス</div>
+  <div class="desc">最寄りはゆりかもめ新豊洲駅のみで乗り換えが弱く、23区西側・北側への直行需要が出やすい。</div>
+</a>
+
+<a class="card" href="https://ariake-arena.tokyo/event/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎪</span><span class="venue-name">有明アリーナ</span></div>
+  <div class="event-name">江東区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">15,000人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag red">湾岸・単線アクセス</div>
+  <div class="desc">りんかい線・ゆりかもめとも本数が限られ、混雑時は都心方面への長距離利用が発生しやすい。</div>
+</a>
+
+<a class="card" href="https://www.shopping-sumitomo-rd.com/tokyo_garden_theater/schedule/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎭</span><span class="venue-name">東京ガーデンシアター</span></div>
+  <div class="event-name">江東区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">8,000人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag red">湾岸・単線アクセス</div>
+  <div class="desc">同じ有明エリアでアクセスが弱く、深夜終演の公演では特に長距離が狙いやすい。</div>
+</a>
+
+<a class="card" href="https://www.bigsight.jp/visitor/event/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏢</span><span class="venue-name">東京ビッグサイト</span></div>
+  <div class="event-name">江東区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">日中〜夜</div><div class="stat-label">大型展示会</div></div></div>
+  <div class="tag red">全国から集客</div>
+  <div class="desc">コミックマーケット等の大型展示会では全国から来場し、遠方ホテル・主要駅への長距離需要が大量発生。</div>
+</a>
+
+<a class="card" href="https://www.wbstudiotour.jp/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🪄</span><span class="venue-name">ワーナー ブラザース スタジオツアー東京</span></div>
+  <div class="event-name">練馬区・としまえん跡地</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">終日</div><div class="stat-label">通年営業</div></div></div>
+  <div class="tag red">駅からバス連絡</div>
+  <div class="desc">豊島園駅からバス連絡が必要でアクセスが弱く、訪日外国人客も多いため遠方ホテル・空港方面への長距離利用が出やすい。</div>
+</a>
+
+<div class="subcat">② 富裕層・年配層中心で距離を問わず利用されやすいホール</div>
+
+<a class="card" href="https://www.suntory.co.jp/suntoryhall/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎻</span><span class="venue-name">サントリーホール</span></div>
+  <div class="event-name">港区・赤坂</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">2,006人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">クラシック・年配層</div>
+  <div class="desc">閉演後は郊外・他県方面まで直行する長距離利用が目立つ客層。</div>
+</a>
+
+<a class="card" href="https://www.bunkamura.co.jp/orchard/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎻</span><span class="venue-name">Bunkamuraオーチャードホール</span></div>
+  <div class="event-name">渋谷区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">2,150人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">クラシック・年配層</div>
+  <div class="desc">渋谷駅から離れた住宅街まで直行する需要が多い。</div>
+</a>
+
+<a class="card" href="https://www.nhk-fdn.or.jp/nhk_hall/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎤</span><span class="venue-name">NHKホール</span></div>
+  <div class="event-name">渋谷区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">3,601人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">広域集客</div>
+  <div class="desc">収録・大型公演は客層が広域から集まりやすい。</div>
+</a>
+
+<a class="card" href="https://www.t-i-forum.co.jp/visitors/facilities/a/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏛</span><span class="venue-name">東京国際フォーラム ホールA</span></div>
+  <div class="event-name">千代田区・有楽町</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">5,012人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">ビジネス層</div>
+  <div class="desc">ビジネス層も多く、丸の内・八重洲発で遠方まで利用されやすい。</div>
+</a>
+
+<a class="card" href="https://www.ex-theater.com/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎤</span><span class="venue-name">EX THEATER ROPPONGI</span></div>
+  <div class="event-name">港区・六本木</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,746人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">深夜ナイトカルチャー</div>
+  <div class="desc">六本木は深夜まで賑わうエリア特性上、距離を問わずタクシー利用が定着している。</div>
+</a>
+
+<a class="card" href="https://www.operacity.jp/concert/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎻</span><span class="venue-name">東京オペラシティ コンサートホール</span></div>
+  <div class="event-name">新宿区・初台</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,632人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">クラシック・単線アクセス</div>
+  <div class="desc">京王新線1路線のみでアクセスがやや弱く、クラシック客層は遠方まで直行しやすい。</div>
+</a>
+
+<a class="card" href="https://kokugikan.sumo.or.jp/Schedule/show/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🥋</span><span class="venue-name">両国国技館</span></div>
+  <div class="event-name">墨田区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">11,100人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">桟敷席・年配層</div>
+  <div class="desc">大相撲は桟敷席中心で年配・地方からの観戦客が多く、荷物も多いためタクシー志向が強い。</div>
+</a>
+
+<div class="subcat">③ 広域集客・深夜終演で終電を逃しやすい会場</div>
+
+<a class="card" href="https://jns-e.com/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏟</span><span class="venue-name">国立競技場</span></div>
+  <div class="event-name">新宿区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">68,000人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag green">全国・海外から集客</div>
+  <div class="desc">全国・海外から集客する大規模イベントが多く、終電間際の終演では長距離需要が集中。</div>
+</a>
+
+<a class="card" href="https://www.tokyo-dome.co.jp/dome/event/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">⚾</span><span class="venue-name">東京ドーム</span></div>
+  <div class="event-name">文京区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">55,000人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag green">深夜終演あり</div>
+  <div class="desc">大型コンサートは22時前後の終演も多く、終電を逃した客の長距離利用が発生しやすい。</div>
+</a>
+
+<a class="card" href="https://www.jingu-stadium.com/event/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">⚾</span><span class="venue-name">明治神宮野球場</span></div>
+  <div class="event-name">新宿区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">31,800人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag green">延長戦リスク</div>
+  <div class="desc">ナイターが延長戦になると終電を逃す観客が出やすく、ファンは広域から来場している。</div>
+</a>
+
+<a class="card" href="http://hibiya-kokaido.com/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🌳</span><span class="venue-name">日比谷公園大音楽堂（日比谷野音）</span></div>
+  <div class="event-name">千代田区</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">3,053人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag green">屋外・深夜近くまで</div>
+  <div class="desc">屋外ライブで深夜近くまで開催されることがあり、公園内で駅からやや歩く立地。</div>
+</a>
+
+<div class="subcat">④ ホテル・国際会議場（大規模会合）</div>
+<div class="note" style="margin-top:0">
+  ホテルの宴会場・国際会議場は結婚式や学会・国際会議・企業総会などの大規模会合が頻繁に行われますが、多くは非公開の予約制で一般のチケットサイトには載りません。以下は特に大宴会場の規模が大きく、会合終了後に他ホテル・空港方面への長距離利用が出やすい施設です。出発前に各施設の宴会場スケジュール（公開されている場合）でご確認ください。
+</div>
+
+<a class="card" href="https://www.princehotels.co.jp/shintakanawa/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏨</span><span class="venue-name">グランドプリンスホテル新高輪 国際館パミール</span></div>
+  <div class="event-name">港区・高輪</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">2,880人</div><div class="stat-label">大宴会場最大（崑崙）</div></div></div>
+  <div class="tag green">国際会議・大規模総会</div>
+  <div class="desc">国内屈指のMICE施設で国際会議・大規模総会が多く、閉会後は羽田・都心ホテルへの長距離利用が出やすい。</div>
+</a>
+
+<a class="card" href="https://www.newotani.co.jp/tokyo/banquet/hall/tsuru/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏨</span><span class="venue-name">ホテルニューオータニ東京 鶴の間</span></div>
+  <div class="event-name">千代田区・紀尾井町</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">2,500人</div><div class="stat-label">立食時最大</div></div></div>
+  <div class="tag green">式典・大規模宴会</div>
+  <div class="desc">結婚式・周年式典・大規模宴会が多く、閉会時間が集中しやすいため会場前での待機が効率的。</div>
+</a>
+
+<a class="card" href="https://www.princehotels.co.jp/shinagawa/stellarball/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏨</span><span class="venue-name">品川プリンスホテル ステラボール</span></div>
+  <div class="event-name">港区・高輪（品川駅前）</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,800人</div><div class="stat-label">立見時最大</div></div></div>
+  <div class="tag green">式典・カンファレンス</div>
+  <div class="desc">品川駅至近だが館内が広く出口が分散するため、幹線道路側で待機すると拾いやすい。</div>
+</a>
+
+<div class="note warn">
+  <b>データについて：</b>掲載中の「本日判明しているイベント」はWeb検索時点の情報をまとめたものです。開演・終演時間や動員規模は主催者発表の目安であり、天候・進行状況で前後します。実際の出庫判断は各会場の公式リンクを開いて当日情報を確認してから行ってください。
+</div>
+
+<div class="note">
+  <b>待機のコツ：</b>終演の15〜20分前に会場出口に近い幹線道路・タクシー乗り場付近へ移動しておくと、退場ラッシュの先頭を拾いやすくなります。駅直結の大型会場は駅前が入場規制になることも多く、少し離れた出口側のほうが早く拾える場合があります。
+</div>
+
+</body>
+</html>
