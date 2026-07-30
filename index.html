@@ -374,6 +374,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </button>
   <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報" style="bottom:200px;right:8px">🚦</button>
   <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索" style="bottom:250px;right:8px">💴</button>
+  <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ" style="bottom:300px;right:8px">🎤</button>
   <!-- 移動記録ボタン（仲間ボタンの左） -->
   <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
     right:8px;bottom:300px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
@@ -787,7 +788,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <!-- 出勤時 車番入力モーダル -->
 <div id="duty-car-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
+  <div style="background:var(--surface);border-radius:20px;padding:28px 22px calc(22px + env(safe-area-inset-bottom,0px));width:100%;max-width:340px;max-height:calc(100vh - 32px);overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.6)">
     <div style="margin-bottom:16px;background:rgba(79,142,247,.1);border:1.5px solid rgba(79,142,247,.4);border-radius:12px;padding:12px">
       <div id="duty-planned-hours-label" style="font-size:13px;color:var(--text);margin-bottom:10px;text-align:center;font-weight:700">📅 本日の予定時間: --時間--分</div>
       <div style="display:flex;gap:6px">
