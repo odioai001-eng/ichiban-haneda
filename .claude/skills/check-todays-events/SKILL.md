@@ -1,0 +1,96 @@
+---
+name: check-todays-events
+description: Refreshes the "🎫 本日開催している会場" (today's confirmed events) section of event_hub.html in the イチバン羽田 taxi-driver app by checking each venue link listed in the evergreen "🚕 長距離が狙える会場" section for a notable event happening today. Use this whenever the user asks to update/refresh today's events, check today's venues, regenerate or sync the event hub, or says something like "今日のイベントをチェックして", "event_hub.htmlを更新して", "会場の今日の予定を調べて". Also run this automatically once per day as soon as the calendar date changes, without waiting for the user to ask — the whole point of this page is that a taxi driver needs current-day data every morning, so a new day starting is itself the trigger, not a request.
+compatibility: Requires WebFetch and WebSearch tools, git, and Python 3 (stdlib only) for the bundled extraction script.
+---
+
+# 今日のイベントチェック & event_hub.html 更新
+
+## なぜこのスキルが必要か
+
+`event_hub.html` の「🎫 本日開催している会場」セクションは、タクシードライバーが**その日**の終演直後の乗車チャンスを判断するために使う。日付がずれたデータが載っていると、ドライバーは存在しないイベントを当てにして無駄な移動をしてしまう。実際にこのページを作った際、会話の中の日付情報を鵜呑みにして1日古いデータのまま公開しそうになったことがある。だからこの作業でいちばん重要なのは、(1) 今日は本当は何月何日かを思い込みではなく確認すること、(2) 各会場について「今日確実に開催されている」という裏付けを持って判断すること、の2点。存在しないイベントを載せるくらいなら、載せない方が安全。
+
+「🚕 長距離が狙える会場」セクション（会場数は変動しうるので、抽出結果の件数を正とする）は日付に関係ない構造的な特性（駅アクセスの弱さ、客層、集客規模、ホテルの大宴会場など）に基づく固定リストなので、このスキルでは**内容を書き換えない**。今日のイベントの有無をチェックする対象（＝リンク元）として使うだけで、更新対象は常に「本日開催している会場」セクションだけ。
+
+## 手順
+
+### 1. 実際の今日の日付を取得する
+
+まずシェルで実行する:
+
+```bash
+date "+%Y-%m-%d %A"
+```
+
+会話の文脈やシステムリマインダーにある日付を鵜呑みにせず、必ずこのコマンドで裏を取る。曜日も一緒に取得しておくと、カード内の日付表記（例:「7/30(木)」）がそのまま作れる。
+
+### 2. 対象会場のリンクを抽出する
+
+`event_hub.html` を毎回目視でパースする代わりに、同梱スクリプトを使う（決定的でトークンを節約できる）:
+
+```bash
+python "スキルのディレクトリ/scripts/extract_venues.py" event_hub.html
+```
+
+`event_hub.html` はリポジトリのルート直下にある想定。実行すると `[{"name", "href", "area", "category"}, ...]` のJSON配列が標準出力に出る。スクリプトがセクションのマーカーを見つけられずエラーになった場合（HTML構造が変わった可能性がある）は、`event_hub.html` を直接読んで「🚕 長距離が狙える会場」の見出しから次の `class="note warn"` までにある `<a class="card" href="...">` を手動で拾う。
+
+### 3. 各会場について「今日の大きなイベント」の有無を調べる
+
+抽出した各会場について:
+
+1. まず `href` を WebFetch し、今日の日付に該当する予定が載っているか確認する。会場公式サイトの作りはバラバラなので、「今月のカレンダー画像しかない」「JSで描画されていて内容が取れない」「ページ自体が施設概要で予定表が別ページ」といったことが普通に起こる。その場合は WebSearch で「会場名 + 今日の日付（例: 2026年7月30日）+ イベント」のように検索して裏を取る。
+2. 判断に迷うケース（「年間を通じて営業しています」という施設紹介ページしか出てこない、検索結果が先月・来月のものしかない、複数の情報源で開催日がズレている等）は、無理に決め打ちせず「不明」として最終報告に回す。
+3. イベントが見つかったら、可能な範囲で次を集める:
+   - 正式なイベント名
+   - 開始時刻・終演予定時刻（正確な終演時刻が取れなければ「〜◯時頃」のように目安で書く）
+   - 想定動員数・満員時収容人数
+   - 客がどちらの駅・道路方向に流れやすいか（既存カードの `desc` の書きぶりを踏襲する。venue quick-link 側の `desc` に書いてある土地勘があれば流用してよい）
+   - 開催が複数日にまたがる場合はその範囲（例: 7/29(水)・30(木)）
+
+会場数が多いので、複数件をまとめて並行調査してよい。ただし1会場について事実と異なる情報を載せるくらいなら、その会場は「該当イベントなし／不明」として省く方がこのページの信頼性にとって重要。
+
+**プロ野球場（東京ドーム・明治神宮野球場）の特記事項：** これらは公式サイトの月間予定表よりも [Yahoo!プロ野球 日程](https://baseball.yahoo.co.jp/npb/schedule/) の方が対戦カード・開始時刻・試合経過（延長戦の有無）を裏付けやすい。event_hub.html 側でもこの2会場のカードのリンク先は既にこのYahoo!ページに統一してあるので、調査時もまずここを確認し、必要ならWebSearchで補強する。延長戦になり得るため、終演目安は「◯時頃」のように幅を持たせて書く。
+
+### 4. event_hub.html を更新する
+
+- `.datebar` 内の日付テキスト（`本日 YYYY年M月D日（曜）`）を今日の日付に更新する。
+- 「🎫 本日開催している会場」セクションのカードを次のルールで入れ替える:
+  - 今日が終了日を過ぎたイベント（単日イベントの翌日など）のカードは削除する。
+  - 複数日開催で今日もその範囲に含まれるイベントはそのまま残す。ただし `.daterange` の文言だけ「本日 M/D(曜) 開催」に更新する。
+  - 手順3で新たに見つかった今日のイベントは、既存カードと同じHTML構造・CSSクラスで追加する:
+
+    ```html
+    <a class="card" href="公式リンク" target="_blank">
+      <div class="venue-row"><span class="venue-icon">絵文字</span><span class="venue-name">会場名</span></div>
+      <div class="daterange">📅 本日 M/D(曜) 開催</div>
+      <div class="event-name">イベント名（区）</div>
+      <div class="stat-row">
+        <div class="stat"><div class="stat-value time">終演目安</div><div class="stat-label">終了目安</div></div>
+        <div class="stat"><div class="stat-value">動員数</div><div class="stat-label">満員時収容</div></div>
+      </div>
+      <div class="desc">開始時刻や人の流れ方の説明。</div>
+    </a>
+    ```
+- 「🚕 長距離が狙える会場」セクションと下部の `.note` / `.note.warn` は書き換えない。
+
+### 5. コミット＆プッシュする
+
+このリポジトリでは `scripts/update_traffic.py` による首都高情報の自動更新が、既に「取得→生成→コミット→プッシュ」を1つのフローとして日次で回っている（`.github/workflows/update-traffic.yml`）。このスキルもその慣習に合わせる:
+
+```bash
+git add event_hub.html
+git commit -m "自動更新: イベント終演ハブ (YYYY-MM-DD HH:MM)"
+git push origin main
+```
+
+- **ユーザーとの対話の中でこのスキルが呼ばれた場合**（スラッシュコマンドや「今日のイベントをチェックして」といった依頼文経由）は、pushする前に変更点（追加・削除した会場）を一度ユーザーに見せて確認を取る。対話相手がいるのに無断でpushしない。
+- **スケジュールタスク経由で無人実行された場合**（日付が変わったタイミングでの自動起動）は、確認なしでコミット・プッシュしてよい。そもそも確認を求める相手がその場におらず、これは事前にユーザーが明示的に依頼した自動化の範囲内であるため。
+
+### 6. 結果を報告する
+
+対話中に呼ばれた場合は、次を簡潔に報告する:
+- 今日のイベントが見つかって追加・更新した会場
+- 調べたが今日は該当イベントがなかった会場
+- 判断がつかず「不明」として保留した会場（あれば理由も添えて）
+
+無人実行の場合はコミットメッセージと最小限のログに残すだけでよい（報告する対話相手がいないため）。
