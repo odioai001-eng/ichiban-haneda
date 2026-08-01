@@ -2043,10 +2043,12 @@ async function reverseGeocode(lat,lng){
       // neighbourhood > quarter > suburb > road の順で丁目を含むものを優先
       const candidates=[a.neighbourhood,a.quarter,a.hamlet,a.suburb,a.road].filter(Boolean);
       let area=candidates.find(c=>c.includes('丁目')||c.includes('番地'))||candidates[0]||'';
-      // display_name から丁目を補完
-      if(area&&!area.includes('丁目')){
-        const dm=(data.display_name||'').match(/(\S+丁目)/);
-        if(dm)area=area.replace(/([^\d]+)$/,'')+dm[1];
+      // どの候補にも丁目が含まれない場合、display_nameの区切りの中から
+      // 丁目を含む部分をそのまま採用する（OSMの構造化データが手薄な地点向けの保険）
+      if(!area||!area.includes('丁目')){
+        const parts=(data.display_name||'').split(',').map(s=>s.trim());
+        const chomePart=parts.find(p=>p.includes('丁目'));
+        if(chomePart)area=chomePart;
       }
       const addr=[pref,city,area].filter(Boolean).join('');
       return kanjiToNum(addr);
