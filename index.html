@@ -2257,6 +2257,7 @@ function clearWaitHistory(){
   
   
 const CP_TRANSITION_DEBOUNCE_MS=10000; // 出勤直後などGPSが不安定な時に、短時間で入退場を繰り返し反転させない
+let pendingDepartureTimer={};
 function checkGeofences(lat,lng){
   const now=Date.now();
   checkpoints.forEach(cp=>{
@@ -2264,14 +2265,35 @@ function checkGeofences(lat,lng){
     const dist=haversine(lat,lng,cp.lat,cp.lng);
     const wasInside=cpInside[cp.id]||false;
     const nowInside=dist<=cp.radius;
-    if(nowInside===wasInside)return;
+    if(nowInside===wasInside){
+      // 内側に戻った場合は、確認待ちの退場判定をキャンセルする
+      // （バックグラウンド復帰直後のGPS精度低下等による「通過」の誤検知を防ぐ）
+      if(nowInside&&pendingDepartureTimer[cp.id]){
+        clearTimeout(pendingDepartureTimer[cp.id]);
+        delete pendingDepartureTimer[cp.id];
+      }
+      return;
+    }
     // GPSのジャンプ・ジッターで直前に反転したばかりの場合は、次の反転まで一定時間待つ
     const lastT=cpLastTransitionTs[cp.id]||0;
     if(now-lastT<CP_TRANSITION_DEBOUNCE_MS)return;
-    cpLastTransitionTs[cp.id]=now;
-    cpInside[cp.id]=nowInside;
-    if(nowInside)onArrival(cp,Math.round(dist));
-    else onDeparture(cp);
+    if(nowInside){
+      cpLastTransitionTs[cp.id]=now;
+      cpInside[cp.id]=true;
+      onArrival(cp,Math.round(dist));
+    } else {
+      // 退場は即確定せず、1分後も実際に外側のままなら確定する（一瞬だけ外れた「通過」は無視する）
+      if(pendingDepartureTimer[cp.id])return;
+      pendingDepartureTimer[cp.id]=setTimeout(()=>{
+        delete pendingDepartureTimer[cp.id];
+        if(myLat===null||myLng===null)return;
+        const d2=haversine(myLat,myLng,cp.lat,cp.lng);
+        if(d2<=cp.radius)return; // 1分後には戻っていた（誤検知）
+        cpLastTransitionTs[cp.id]=Date.now();
+        cpInside[cp.id]=false;
+        onDeparture(cp);
+      },60000);
+    }
   });
 }
 
