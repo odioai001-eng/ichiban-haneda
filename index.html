@@ -440,6 +440,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="font-size:10px;color:var(--muted)">※月末リセット対象外・累計</span>
   </div>
   <div id="spotdest-table"></div>
+  <div class="sec" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center">
+    <span>🕐 曜日・時間帯別待機時間（分）</span>
+    <span style="font-size:10px;color:var(--muted)">※月末リセット対象外・累計</span>
+  </div>
+  <div id="spotwait-table"></div>
 </div>
 </div>
 
@@ -1738,6 +1743,8 @@ function setStatus(s){
     manualWaitStartTime=null;manualWaitAddr=null;
     currentSpotSelection=null;
     spotChangeHistory=[];
+    // 曜日・時間帯別の待機時間統計に記録する（月末リセットの対象外で累計し続ける）
+    recordSpotWaitStat(boardSpot,waitMins,Date.now());
     // 羽田空港の乗り場から出発する場合、仲間に自動でチャット通知する
     if(boardSpot&&db&&isDuty&&!testMode){
       const name=localStorage.getItem('taxi_name')||'自分';
@@ -1817,6 +1824,10 @@ function connectFirebase(config){
     db.ref('spot_dest_stats').on('value',snap=>{
       spotDestStats=snap.val()||{};
       renderSpotDestTable();
+    });
+    db.ref('spot_wait_stats').on('value',snap=>{
+      spotWaitStats=snap.val()||{};
+      renderSpotWaitStats();
     });
     const chatInitTs=Date.now();
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
@@ -2131,6 +2142,18 @@ function recordSpotDestStat(boardSpot,alightAddr){
   const ward=extractWard(alightAddr);
   if(!ward)return;
   db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>(cur||0)+1);
+}
+
+const DOW_JP=['日','月','火','水','木','金','土'];
+// 曜日・時間帯別の待機時間統計に記録する（team_destsとは別パスのため月末リセットの対象外）
+// 時間帯は「待機を始めた時刻（実車ボタンを押した時刻から待機時間を差し引いた時刻）」の時を使う
+function recordSpotWaitStat(boardSpot,waitMins,boardTs){
+  if(!db||!boardSpot||!waitMins||waitMins<=0)return;
+  const arrivalTs=boardTs-waitMins*60000;
+  const d=new Date(arrivalTs);
+  const day=DOW_JP[d.getDay()];
+  const hour=d.getHours();
+  db.ref(`spot_wait_stats/${boardSpot}/${day}/${hour}`).push(waitMins);
 }
 function startWaitManual(){
   if(waitInterval){toast('⏱ タイマーはすでに動いています');return;}
@@ -3067,6 +3090,48 @@ function renderSpotDestTable(){
     }).join('')+'</tr>';
   }
   html+='</table></div>';
+  el.innerHTML=html;
+}
+
+let spotWaitStats={}; // {spot:{day:{hour:{pushKey:waitMins}}}}。月末リセットの対象外で累計し続ける
+
+// 営業時間帯（11時始まり〜翌1時）の並び順で時刻を比較するための正規化
+function normHourForSort(h){return h<11?h+24:h;}
+
+function renderSpotWaitStats(){
+  const el=document.getElementById('spotwait-table');
+  if(!el)return;
+  const spots=['1号','2号','3号','4号'];
+  const dayOrder=['月','火','水','木','金','土','日'];
+  let html='';
+  spots.forEach(spot=>{
+    const dayData=spotWaitStats[spot]||{};
+    const foldId='spotwait-fold-'+spot;
+    html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden">
+      <div onclick="(function(el){el.style.display=el.style.display==='none'?'block':'none'})(document.getElementById('${foldId}'))"
+        style="padding:10px 14px;background:var(--surface2);cursor:pointer;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center">
+        <span>${esc(spot)}</span><span style="font-size:11px;color:var(--muted)">タップで開閉</span>
+      </div>
+      <div id="${foldId}" style="display:none;padding:10px 14px">`;
+    let any=false;
+    dayOrder.forEach(day=>{
+      const hours=dayData[day];
+      if(!hours)return;
+      const hourKeys=Object.keys(hours).map(Number).sort((a,b)=>normHourForSort(a)-normHourForSort(b));
+      if(!hourKeys.length)return;
+      any=true;
+      html+=`<div style="font-size:13px;font-weight:700;margin:10px 0 4px;color:var(--accent)">${esc(day)}曜日</div>`;
+      hourKeys.forEach(h=>{
+        const vals=Object.values(hours[h]);
+        html+=`<div style="display:flex;gap:10px;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border)">
+          <div style="width:44px;color:var(--muted);flex-shrink:0">${h}:00</div>
+          <div style="flex:1;color:var(--text)">${vals.join(', ')}</div>
+        </div>`;
+      });
+    });
+    if(!any)html+='<div style="text-align:center;color:var(--muted);font-size:12px;padding:10px">まだ記録がありません</div>';
+    html+='</div></div>';
+  });
   el.innerHTML=html;
 }
 
@@ -4536,7 +4601,7 @@ function showPage(name,btn){
   }
   if(name==='settings'){renderNotifToggle();}
   if(name==='ranking'){renderRankingPage();}
-  if(name==='spotdest'){renderSpotDestTable();}
+  if(name==='spotdest'){renderSpotDestTable();renderSpotWaitStats();}
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
     setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
