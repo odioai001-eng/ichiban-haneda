@@ -544,6 +544,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div id="account-list"></div>
       <button class="btn btn-g" onclick="loadAccountList()" style="width:100%;margin-top:4px">🔄 最新の一覧を取得</button>
     </div>
+    <div class="sec">🗑 送り先データの月次リセット</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">仲間全員分の待機/送り先データをCSVファイルとして保存してから、Firebase上のデータを削除してリセットします。毎月末の退勤時に自動でも実行されますが、ここから手動でも実行できます。</div>
+      <button class="btn btn-d" onclick="exportAndResetTeamDests(true)" style="width:100%">📥 CSV保存してリセットする</button>
+    </div>
     <div class="sec">📡 Firebase接続</div>
     <div class="card">
       <div class="conn-status" id="conn-status">
@@ -1366,6 +1371,58 @@ function confirmEndDuty(){
   const name=localStorage.getItem('taxi_name')||'自分';
   document.getElementById('duty-end-msg').textContent=`${name}さん、お疲れさまでした。`;
   document.getElementById('duty-end-modal').style.display='flex';
+  checkMonthEndDestsReset();
+}
+
+function isLastDayOfMonth(d){
+  const next=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1);
+  return next.getMonth()!==d.getMonth();
+}
+
+// 月末の退勤時に、まだ今月分のCSV保存・リセットが済んでいなければ自動で実行する
+function checkMonthEndDestsReset(){
+  if(!db||!isLastDayOfMonth(new Date()))return;
+  const monthKey=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'});
+  db.ref('team_config/last_dests_reset_month').once('value',snap=>{
+    if(snap.val()===monthKey)return; // 今月は他の誰かが既にリセット済み
+    db.ref('team_config/last_dests_reset_month').set(monthKey);
+    exportAndResetTeamDests(false);
+  });
+}
+
+// 待機/送先タブの記録（仲間全員分）をCSVで保存し、Firebase上のデータを削除してリセットする
+async function exportAndResetTeamDests(manual){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  const snap=await db.ref('team_dests').once('value');
+  const all=snap.val()||{};
+  const rows=[['氏名','日付','種別','乗車時刻','乗車地','降車時刻','降車地','待機時間','運賃(円)']];
+  Object.values(all).forEach(driverEntries=>{
+    Object.values(driverEntries||{}).forEach(e=>{
+      if(e.type==='trip'){
+        const boardDesc=e.boardSpot?`東京都大田区羽田空港${e.boardSpot}乗り場`:(e.boardAddr||'');
+        rows.push([e.driverName||'',e.dateStr||'','送迎',e.boardTime||'',boardDesc,e.alightTime||'',e.alightAddr||'',e.waitMinsStr||(e.waitMins?e.waitMins+'分':''),e.fare||0]);
+      }else if(e.type==='cp'){
+        rows.push([e.driverName||'',e.dateStr||'','待機',e.startTime||'',e.name||'',e.endTime||'','',(e.durMins||0)+'分','']);
+      }
+    });
+  });
+  if(rows.length<=1){
+    toast('保存する送り先データがありません');
+    if(!manual)return;
+  }
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const monthStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'}).replace(/\//g,'-');
+  a.href=url;a.download=`送り先記録_${monthStr}.csv`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if(!confirm('CSVを保存しました。仲間全員分の送り先データを削除してリセットしますか？'))return;
+  await db.ref('team_dests').remove();
+  destinations=[];
+  saveDests();renderDests();
+  toast('🗑 送り先データを全員分リセットしました');
 }
 
 let paymentConfirmed=false;
