@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -31,14 +31,18 @@ html,body{height:100%;overflow:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
   background:var(--bg);color:var(--text);max-width:480px;margin:0 auto;position:relative}
 .hdr{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
-  height:var(--hh);background:var(--surface);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;padding:0 14px;z-index:1000}
+  height:calc(var(--hh) + env(safe-area-inset-top,0px));box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding-left:14px;padding-right:14px;z-index:1000}
 .hdr-title{font-size:15px;font-weight:700;letter-spacing:.3px;line-height:1.15}
 .duty-btn{padding:6px 13px;border-radius:20px;border:none;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s}
 .duty-btn.on{background:var(--green);color:#fff}
 .duty-btn.off{background:var(--red);color:#fff}
 .nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
-  height:var(--nh);background:var(--surface);border-top:1px solid var(--border);
+  height:calc(var(--nh) + env(safe-area-inset-bottom,0px));box-sizing:border-box;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  background:var(--surface);border-top:1px solid var(--border);
   display:flex;z-index:1000}
 .nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:2px;border:none;background:transparent;color:var(--muted);cursor:pointer;
@@ -49,8 +53,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   background:var(--red);border-radius:8px;display:none;
   font-size:10px;font-weight:700;color:#fff;
   align-items:center;justify-content:center;padding:0 4px;line-height:16px;text-align:center}
-.page{display:none;position:fixed;top:var(--hh);left:50%;transform:translateX(-50%);
-  width:100%;max-width:480px;bottom:var(--nh);overflow-y:auto}
+.page{display:none;position:fixed;top:calc(var(--hh) + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;bottom:calc(var(--nh) + env(safe-area-inset-bottom,0px));overflow-y:auto}
 .page.active{display:block}
 #page-map{overflow:hidden}
 #map{width:100%;height:100%;position:relative}
