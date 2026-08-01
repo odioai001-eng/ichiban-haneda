@@ -2322,7 +2322,10 @@ function renderRankMonthGroup(){
   }
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
   el.innerHTML=(list.length
-    ?list.map((d,i)=>rankRowHtml(i,esc(d.name||'不明'),`${d.monthDays||0}日出勤`,d.monthFare,adminDelBtnHtml(`adminResetTeamSales('${d.uid}','month')`))).join('')
+    ?list.map((d,i)=>{
+      const avg=d.monthDays>0?Math.round((d.monthFare||0)/d.monthDays):0;
+      return rankRowHtml(i,esc(d.name||'不明'),`1日平均 ¥${avg.toLocaleString()}（${d.monthDays||0}日出勤）`,d.monthFare,adminDelBtnHtml(`adminResetTeamSales('${d.uid}','month')`));
+    }).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>')
     +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
 }
