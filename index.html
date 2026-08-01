@@ -2372,7 +2372,7 @@ function renderRankTodayGroup(){
   const todayStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.todayDateStr===todayStr).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
   el.innerHTML=list.length
-    ?list.map((d,i)=>rankRowHtml(i,esc(d.name||'不明'),'',d.todayFare,adminDelBtnHtml(`adminResetTeamSales('${d.uid}','today')`))).join('')
+    ?list.map((d,i)=>rankRowHtml(i,esc(d.name||'不明'),'',d.todayFare,adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`))).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>';
 }
 // ③ 今月の売り上げランキング（グループ・送先売上の合計）
@@ -2388,7 +2388,7 @@ function renderRankMonthGroup(){
   el.innerHTML=(list.length
     ?list.map((d,i)=>{
       const avg=d.monthDays>0?Math.round((d.monthFare||0)/d.monthDays):0;
-      return rankRowHtml(i,esc(d.name||'不明'),`1日平均 ¥${avg.toLocaleString()}（${d.monthDays||0}日出勤）`,d.monthFare,adminDelBtnHtml(`adminResetTeamSales('${d.uid}','month')`));
+      return rankRowHtml(i,esc(d.name||'不明'),`1日平均 ¥${avg.toLocaleString()}（${d.monthDays||0}日出勤）`,d.monthFare,adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`));
     }).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>')
     +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
@@ -2442,12 +2442,13 @@ function renderRankAllTimeGroup(){
     ?allTrips.slice(0,50).map((d,i)=>buildRankTripCardHtml(d,i+1,d.driverName||'不明')).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
 }
-function adminResetTeamSales(uid,kind){
+// 端末の入れ替え・localStorageクリア等でuidが変わると、同じ人の重複した行が
+// ランキングに残ってしまうため、削除ボタンでは今日・今月分をまとめて完全に削除する
+function adminDeleteTeamSalesEntry(uid){
   if(!isAdmin){toast('⚠️ 管理者のみ操作できます');return;}
-  if(!confirm('このランキング記録を削除しますか？'))return;
+  if(!confirm('この売上ランキングの行を完全に削除しますか？（今日・今月分とも削除されます）'))return;
   if(!db)return;
-  if(kind==='today')db.ref('team_sales/'+uid).update({todayFare:0});
-  else db.ref('team_sales/'+uid).update({monthFare:0,monthDays:0});
+  db.ref('team_sales/'+uid).remove();
   toast('🗑 削除しました');
 }
 function renderRankingPage(){
