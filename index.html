@@ -2303,16 +2303,19 @@ function renderRankTodayGroup(){
   if(!isRankingOptedIn()){el.innerHTML=rankingLockHtml();return;}
   const todayStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.todayDateStr===todayStr).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
-  el.innerHTML=(list.length
+  el.innerHTML=list.length
     ?list.map((d,i)=>rankRowHtml(i,esc(d.name||'不明'),'',d.todayFare,adminDelBtnHtml(`adminResetTeamSales('${d.uid}','today')`))).join('')
-    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>')
-    +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>';
 }
 // ③ 今月の売り上げランキング（グループ・送先売上の合計）
+// グループランキングへの入室・退出ボタンは②③で共通のため、こちら側にのみ表示する
 function renderRankMonthGroup(){
   const el=document.getElementById('rank-month-group');
   if(!el)return;
-  if(!isRankingOptedIn()){el.innerHTML=rankingLockHtml();return;}
+  if(!isRankingOptedIn()){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px">上の「本日の売り上げランキング（グループ）」から入室してください</div>';
+    return;
+  }
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
   el.innerHTML=(list.length
     ?list.map((d,i)=>rankRowHtml(i,esc(d.name||'不明'),`${d.monthDays||0}日出勤`,d.monthFare,adminDelBtnHtml(`adminResetTeamSales('${d.uid}','month')`))).join('')
