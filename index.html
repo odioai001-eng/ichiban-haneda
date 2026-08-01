@@ -1021,13 +1021,13 @@ function loadCPsFromFirebase(){
   db.ref('team_config/checkpoints').once('value',snap=>{
     const remote=snap.val();
     if(!remote||!Array.isArray(remote))return;
-    // ローカルにlat/lngが無い項目をFirebaseで補完
+    // ローカルにlat/lngが無い項目だけをFirebaseで補完する
+    // （radius/enabledまで毎回同期すると、再接続のたびに管理者が設定した値が
+    // 古いFirebase側のデータで上書きされてしまうため、ここでは対象にしない）
     let updated=false;
     checkpoints.forEach(cp=>{
       const r=remote.find(x=>x.id===cp.id);
       if(r&&cp.lat===null&&r.lat!==null){cp.lat=r.lat;cp.lng=r.lng;updated=true;}
-      if(r&&r.radius)cp.radius=r.radius;
-      if(r&&r.enabled!==undefined)cp.enabled=r.enabled;
     });
     if(updated){
       localStorage.setItem('taxi_checkpoints',JSON.stringify(checkpoints));
