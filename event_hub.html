@@ -41,6 +41,8 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 .note b{color:#e8e8f4}
 .note.warn{border-color:rgba(245,158,11,.3)}
 .note.warn b{color:#fbbf24}
+.today-note{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.3);border-radius:8px;
+  padding:6px 10px;font-size:11.5px;color:#4ade80;margin:6px 0;font-weight:700;line-height:1.5}
 </style>
 </head>
 <body>
@@ -140,6 +142,7 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 <a class="card" href="https://www.bigsight.jp/visitor/event/" target="_blank">
   <div class="venue-row"><span class="venue-icon">🏢</span><span class="venue-name">東京ビッグサイト</span></div>
   <div class="event-name">江東区</div>
+  <div class="today-note">🎫 本日開催: 第26回JAPANドラッグストアショー2026（10:00開催・17:00閉場予定）</div>
   <div class="stat-row"><div class="stat"><div class="stat-value">日中〜夜</div><div class="stat-label">大型展示会</div></div></div>
   <div class="tag red">全国から集客</div>
   <div class="desc">コミックマーケット等の大型展示会では全国から来場し、遠方ホテル・主要駅への長距離需要が大量発生。</div>
@@ -224,6 +227,7 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 <a class="card" href="https://baseball.yahoo.co.jp/npb/schedule/" target="_blank">
   <div class="venue-row"><span class="venue-icon">⚾</span><span class="venue-name">東京ドーム</span></div>
   <div class="event-name">文京区</div>
+  <div class="today-note">🎫 本日開催: 読売ジャイアンツ vs 横浜DeNA（18:00開始・21:00頃終演目安）</div>
   <div class="stat-row"><div class="stat"><div class="stat-value">55,000人</div><div class="stat-label">満員時最大</div></div></div>
   <div class="tag green">深夜終演あり</div>
   <div class="desc">大型コンサートは22時前後の終演も多く、終電を逃した客の長距離利用が発生しやすい。巨人戦開催日はリンク先のYahoo!プロ野球でイニング経過をリアルタイム確認すると終了予測が立てやすい。</div>
@@ -232,6 +236,7 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 <a class="card" href="https://baseball.yahoo.co.jp/npb/schedule/" target="_blank">
   <div class="venue-row"><span class="venue-icon">⚾</span><span class="venue-name">明治神宮野球場</span></div>
   <div class="event-name">新宿区</div>
+  <div class="today-note">🎫 本日開催: 東京ヤクルト vs 阪神（18:00開始・21:00頃終演目安）</div>
   <div class="stat-row"><div class="stat"><div class="stat-value">31,800人</div><div class="stat-label">満員時最大</div></div></div>
   <div class="tag green">延長戦リスク</div>
   <div class="desc">ナイターが延長戦になると終電を逃す観客が出やすく、ファンは広域から来場している。リンク先のYahoo!プロ野球でその日の対戦カードとイニング経過をリアルタイム確認できる。</div>
@@ -274,5 +279,23 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
   <b>待機のコツ：</b>終演の15〜20分前に会場出口に近い幹線道路・タクシー乗り場付近へ移動しておくと、退場ラッシュの先頭を拾いやすくなります。駅直結の大型会場は駅前が入場規制になることも多く、少し離れた出口側のほうが早く拾える場合があります。
 </div>
 
+<script>
+// 会場リンクを開いて戻ってきた時（バックグラウンドでの再読み込みを含む）に、
+// ページ先頭ではなく元のスクロール位置に戻れるようにする
+(function(){
+  var KEY='event_hub_scroll_y';
+  var saved=sessionStorage.getItem(KEY);
+  if(saved){
+    window.scrollTo(0, parseInt(saved,10)||0);
+  }
+  var pending=null;
+  window.addEventListener('scroll', function(){
+    if(pending)clearTimeout(pending);
+    pending=setTimeout(function(){
+      sessionStorage.setItem(KEY, String(window.scrollY));
+    },150);
+  }, {passive:true});
+})();
+</script>
 </body>
 </html>
