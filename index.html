@@ -411,10 +411,19 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="sec" style="margin-top:18px">📅 過去の送り先（自分）</div>
     <div id="dest-list-past"></div>
   </div>
-  <div class="sec" style="margin-top:18px">🏆 運賃ランキング（個人）</div>
-  <div id="fare-ranking-personal"></div>
-  <div class="sec" style="margin-top:18px">🏆 運賃ランキング（仲間）</div>
-  <div id="fare-ranking-team"></div>
+</div>
+</div>
+
+<div class="page" id="page-ranking">
+<div class="pc">
+  <div class="sec">🏆 本日の売り上げランキング（本人）</div>
+  <div class="card"><div id="rank-today-personal"></div></div>
+  <div class="sec" style="margin-top:18px">🏆 本日の売り上げランキング（グループ）</div>
+  <div class="card"><div id="rank-today-group"></div></div>
+  <div class="sec" style="margin-top:18px">🏆 今月の売り上げランキング（グループ）</div>
+  <div class="card"><div id="rank-month-group"></div></div>
+  <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（本人）</div>
+  <div class="card"><div id="rank-alltime-personal"></div></div>
 </div>
 </div>
 
@@ -600,15 +609,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
  <input type="number" id="toll-only-input" placeholder="例: 500">
  <button class="btn btn-p" onclick="saveTollEntry()" style="width:100%">記録する</button>
 </div>
-<div class="sec">🏆 本日の売上ランキング</div>
-<div class="card">
- <div id="team-sales-ranking-today"></div>
-</div>
-<div class="sec">🏆 今月の売上ランキング（平均付き）</div>
-<div class="card">
- <div id="team-sales-ranking-month"></div>
-</div>
-
   <div class="sec">📊 本日の記録</div>
   <div class="card">
     <div class="row2"><span class="rl">乗務開始</span><span class="rv" id="duty-start">-</span></div>
@@ -635,6 +635,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
     </svg>チャット
+  </button>
+  <button class="nb" onclick="showPage('ranking',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/>
+      <path d="M7 5H4a1 1 0 0 0-1 1 4 4 0 0 0 4 4M17 5h3a1 1 0 0 1 1 1 4 4 0 0 1-4 4"/>
+    </svg>ランキング
   </button>
   <button class="nb" onclick="showPage('settings',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -1727,7 +1733,7 @@ function connectFirebase(config){
     });
     db.ref('team_sales').on('value',snap=>{
       teamSales=snap.val()||{};
-      renderTeamSalesRanking();
+      renderRankingPage();
     });
     const chatInitTs=Date.now();
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
@@ -2204,53 +2210,80 @@ function renderTeamDests(){
   el.innerHTML=html||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
   // 開いていたフォルダを復元
   openFolders.forEach(id=>{const f=document.getElementById('team-fold-'+id);if(f)f.style.display='block';});
-  renderFareRanking();
+  renderRankingPage();
 }
 
-function buildFareTripHtml(d,driverLabel){
-  const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(d);
-  return `
-  <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
-    ${driverLabel?`<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px">${esc(driverLabel)}</div>`:''}
-    <div style="font-size:14px;color:var(--text);font-weight:700;margin-bottom:5px">📅 ${esc(d.dateStr||'-')}</div>
-    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
-      <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
-      <span style="font-size:12px;color:#fff">${boardDesc}</span>
+
+function rankRowHtml(i,label,sub,amount,delBtn){
+  return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+    <div style="width:22px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'}">${i+1}</div>
+    <div style="flex:1;font-size:13px">
+      <div style="font-weight:600">${label}</div>
+      ${sub?`<div style="font-size:11px;color:var(--muted)">${sub}</div>`:''}
     </div>
-    ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-2px 0 4px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
-    <div style="display:flex;align-items:baseline;gap:8px">
-      <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
-      <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
-    </div>
-    ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
-    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
+    <div style="font-size:14px;font-weight:800;color:var(--green);white-space:nowrap">¥${(amount||0).toLocaleString()}</div>
+    ${delBtn||''}
   </div>`;
 }
-
-function renderFareRanking(){
-  const pEl=document.getElementById('fare-ranking-personal');
-  const tEl=document.getElementById('fare-ranking-team');
-  if(!pEl||!tEl)return;
-  // 個人ランキング（過去ベスト5）
-  const myTrips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0)).slice(0,5);
-  pEl.innerHTML=myTrips.length
-    ?myTrips.map((d,i)=>`<div style="font-size:12px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'};margin-bottom:2px">${i+1}位</div>${buildFareTripHtml(d,null)}`).join('')
-    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
-  // 仲間ランキング（要・グループランキング入室）
-  if(!isRankingOptedIn()){
-    tEl.innerHTML=rankingLockHtml();
-    return;
-  }
-  let allTrips=[];
-  Object.keys(teamDests).forEach(driverId=>{
-    const entries=Object.values(teamDests[driverId]||{}).filter(e=>e.type==='trip'&&e.fare>0);
-    entries.forEach(e=>allTrips.push(e));
-  });
-  allTrips.sort((a,b)=>(b.fare||0)-(a.fare||0));
-  tEl.innerHTML=(allTrips.length
-    ?allTrips.slice(0,30).map((d,i)=>`<div style="font-size:12px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'};margin-bottom:2px">${i+1}位</div>${buildFareTripHtml(d,d.driverName||'不明')}`).join('')
-    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>')
+function adminDelBtnHtml(onclick){
+  if(!isAdmin)return'';
+  return `<button onclick="${onclick}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer;margin-left:4px;flex-shrink:0">🗑削除</button>`;
+}
+// ① 本日の売り上げランキング（本人・1回の送先ごと）
+function renderRankTodayPersonal(){
+  const el=document.getElementById('rank-today-personal');
+  if(!el)return;
+  const todayStr=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0&&d.dateStr===todayStr).slice().sort((a,b)=>(b.fare||0)-(a.fare||0));
+  el.innerHTML=trips.length
+    ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),d.fare,adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の記録がありません</div>';
+}
+// ② 本日の売り上げランキング（グループ・送先売上の合計）
+function renderRankTodayGroup(){
+  const el=document.getElementById('rank-today-group');
+  if(!el)return;
+  if(!isRankingOptedIn()){el.innerHTML=rankingLockHtml();return;}
+  const todayStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.todayDateStr===todayStr).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
+  el.innerHTML=(list.length
+    ?list.map((d,i)=>rankRowHtml(i,esc(d.name||'不明'),'',d.todayFare,adminDelBtnHtml(`adminResetTeamSales('${d.uid}','today')`))).join('')
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>')
     +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
+}
+// ③ 今月の売り上げランキング（グループ・送先売上の合計）
+function renderRankMonthGroup(){
+  const el=document.getElementById('rank-month-group');
+  if(!el)return;
+  if(!isRankingOptedIn()){el.innerHTML=rankingLockHtml();return;}
+  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
+  el.innerHTML=(list.length
+    ?list.map((d,i)=>rankRowHtml(i,esc(d.name||'不明'),`${d.monthDays||0}日出勤`,d.monthFare,adminDelBtnHtml(`adminResetTeamSales('${d.uid}','month')`))).join('')
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>')
+    +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
+}
+// ④ 歴代送り先ランキング（本人・1回の送先ごと、日付含む）
+function renderRankAllTimePersonal(){
+  const el=document.getElementById('rank-alltime-personal');
+  if(!el)return;
+  const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0)).slice(0,50);
+  el.innerHTML=trips.length
+    ?trips.map((d,i)=>rankRowHtml(i,esc(d.dateStr||'')+'　'+esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),d.fare)).join('')
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
+}
+function adminResetTeamSales(uid,kind){
+  if(!isAdmin){toast('⚠️ 管理者のみ操作できます');return;}
+  if(!confirm('このランキング記録を削除しますか？'))return;
+  if(!db)return;
+  if(kind==='today')db.ref('team_sales/'+uid).update({todayFare:0});
+  else db.ref('team_sales/'+uid).update({monthFare:0,monthDays:0});
+  toast('🗑 削除しました');
+}
+function renderRankingPage(){
+  renderRankTodayPersonal();
+  renderRankTodayGroup();
+  renderRankMonthGroup();
+  renderRankAllTimePersonal();
 }
 
 function clearWaitHistory(){
@@ -2892,8 +2925,7 @@ function enterGroupRanking(){
  localStorage.setItem('taxi_ranking_optin','1');
  toast('✅ グループランキングに参加しました');
  pushTeamSales();
- renderTeamSalesRanking();
- renderFareRanking();
+ renderRankingPage();
 }
 
 function leaveGroupRanking(){
@@ -2901,8 +2933,7 @@ function leaveGroupRanking(){
  localStorage.removeItem('taxi_ranking_optin');
  if(db)db.ref('team_sales/'+myId).remove();
  toast('🔒 グループランキングから退出しました');
- renderTeamSalesRanking();
- renderFareRanking();
+ renderRankingPage();
 }
 
 function pushTeamSales(){
@@ -2920,48 +2951,6 @@ function pushTeamSales(){
  db.ref('team_sales/'+myId).set({name,todayFare,todayDateStr:todayStr,monthFare,monthDays,ts:Date.now()});
 }
 
-function renderTeamSalesRanking(){
- const todayEl=document.getElementById('team-sales-ranking-today');
- const monthEl=document.getElementById('team-sales-ranking-month');
- if(!todayEl||!monthEl)return;
- if(!isRankingOptedIn()){
-  todayEl.innerHTML=rankingLockHtml();
-  monthEl.innerHTML=rankingLockHtml();
-  return;
- }
- const now=new Date();
- const todayStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
- const list=Object.values(teamSales||{});
- const todayList=list.filter(d=>d.todayDateStr===todayStr).slice().sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
- const monthList=list.slice().sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
- if(!todayList.length){
-  todayEl.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">まだ記録がありません</div>';
- }else{
-  todayEl.innerHTML=todayList.map((d,i)=>{
-   const isMe=false;
-   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-    <div style="width:22px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'}">${i+1}</div>
-    <div style="flex:1;font-size:13px;font-weight:600">${esc(d.name||'不明')}</div>
-    <div style="font-size:14px;font-weight:800;color:var(--green)">¥${(d.todayFare||0).toLocaleString()}</div>
-   </div>`;
-  }).join('');
- }
- if(!monthList.length){
-  monthEl.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">まだ記録がありません</div>';
- }else{
-  monthEl.innerHTML=monthList.map((d,i)=>{
-   const avg=d.monthDays>0?Math.round((d.monthFare||0)/d.monthDays):0;
-   return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-    <div style="width:22px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'}">${i+1}</div>
-    <div style="flex:1;font-size:13px">
-     <div style="font-weight:600">${esc(d.name||'不明')}</div>
-     <div style="font-size:11px;color:var(--muted)">1日平均 ¥${avg.toLocaleString()}（${d.monthDays||0}日出勤）</div>
-    </div>
-    <div style="font-size:14px;font-weight:800;color:var(--green)">¥${(d.monthFare||0).toLocaleString()}</div>
-   </div>`;
-  }).join('')+'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
- }
-}
 
 function renderSalesStats(){
  const out=document.getElementById('sales-stats-out');
@@ -3305,7 +3294,7 @@ function adminLogin(){
     document.getElementById('admin-area').style.display='block';
     document.getElementById('admin-name').value=localStorage.getItem('taxi_name')||'';
     document.getElementById('admin-car').value=localStorage.getItem('taxi_car')||'';
-    renderCPs();toast('🔓 管理者モード');
+    renderCPs();renderRankingPage();toast('🔓 管理者モード');
   }else{toast('⚠️ PINが違います');document.getElementById('pin-input').value='';}
 }
 
@@ -3349,6 +3338,7 @@ function adminLogout(){
   document.getElementById('admin-lock-area').style.display='block';
   document.getElementById('admin-area').style.display='none';
   document.getElementById('pin-input').value='';
+  renderRankingPage();
   toast('🔒 ロック');
 }
 
@@ -3525,7 +3515,7 @@ function renderDests(){
     }
   }
   document.getElementById('done-count').textContent=visible.length+'件';
-  renderFareRanking();
+  renderRankingPage();
 }
 function openDestModal(){document.getElementById('dest-overlay').classList.add('open');}
 function closeDestModal(){
@@ -4288,7 +4278,6 @@ function loadSettings(){
  renderCarryoverStatus();
  renderWorkStats();renderSalesStats();
  updateDailyBar();
- renderTeamSalesRanking();
 }
 function saveSettings(){
   localStorage.setItem('taxi_name',document.getElementById('s-name').value.trim()||'自分');
@@ -4381,6 +4370,7 @@ function showPage(name,btn){
     if(waitTabTimer){clearInterval(waitTabTimer);waitTabTimer=null;}
   }
   if(name==='settings'){renderNotifToggle();}
+  if(name==='ranking'){renderRankingPage();}
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
     setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
