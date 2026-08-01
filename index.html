@@ -428,6 +428,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="card"><div id="rank-month-group"></div></div>
   <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（本人）</div>
   <div class="card"><div id="rank-alltime-personal"></div></div>
+  <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（グループ）</div>
+  <div class="card"><div id="rank-alltime-group"></div></div>
 </div>
 </div>
 
@@ -2330,12 +2332,52 @@ function renderRankMonthGroup(){
     +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="width:100%;margin-top:8px;font-size:11px">🔒 グループランキングから退出する</button>';
 }
 // ④ 歴代送り先ランキング（本人・1回の送先ごと、日付含む）
+// 待機/送先タブと同じ表記（乗車地・降車地・乗り場移動履歴・待機時間）でランキングの1件を表示する
+function buildRankTripCardHtml(d,rank,driverLabel){
+  const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(d);
+  return `
+  <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:15px;font-weight:800;color:${rank===1?'var(--gold)':'var(--accent)'}">${rank}位</div>
+      <div style="font-size:11px;color:var(--muted)">${esc(d.dateStr||'')}${driverLabel?'　'+esc(driverLabel):''}</div>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+      <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
+      <span style="font-size:12px;color:#fff">${boardDesc}</span>
+    </div>
+    ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-2px 0 4px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
+      <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
+    </div>
+    ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
+    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
+  </div>`;
+}
 function renderRankAllTimePersonal(){
   const el=document.getElementById('rank-alltime-personal');
   if(!el)return;
   const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0)).slice(0,50);
   el.innerHTML=trips.length
-    ?trips.map((d,i)=>rankRowHtml(i,esc(d.dateStr||'')+'　'+esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),d.fare)).join('')
+    ?trips.map((d,i)=>buildRankTripCardHtml(d,i+1,null)).join('')
+    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
+}
+// ⑤ 歴代送り先ランキング（グループ・1回の送先ごと、日付含む）
+function renderRankAllTimeGroup(){
+  const el=document.getElementById('rank-alltime-group');
+  if(!el)return;
+  if(!isRankingOptedIn()){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px">上の「本日の売り上げランキング（グループ）」から入室してください</div>';
+    return;
+  }
+  let allTrips=[];
+  Object.keys(teamDests||{}).forEach(driverId=>{
+    const entries=Object.values(teamDests[driverId]||{}).filter(e=>e.type==='trip'&&e.fare>0);
+    entries.forEach(e=>allTrips.push(e));
+  });
+  allTrips.sort((a,b)=>(b.fare||0)-(a.fare||0));
+  el.innerHTML=allTrips.length
+    ?allTrips.slice(0,50).map((d,i)=>buildRankTripCardHtml(d,i+1,d.driverName||'不明')).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
 }
 function adminResetTeamSales(uid,kind){
@@ -2351,6 +2393,7 @@ function renderRankingPage(){
   renderRankTodayGroup();
   renderRankMonthGroup();
   renderRankAllTimePersonal();
+  renderRankAllTimeGroup();
 }
 
 function clearWaitHistory(){
