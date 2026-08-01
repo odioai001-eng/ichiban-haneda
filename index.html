@@ -455,6 +455,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="card">
     <label>ドライバー名</label><input type="text" id="s-name" placeholder="例: 田中">
     <label>車両番号</label><input type="text" id="s-car" placeholder="例: 品川 501 あ 1234">
+    <label>ナンバープレート</label><input type="text" id="s-plate" inputmode="numeric" placeholder="例: 1234">
     <button class="btn btn-p" onclick="saveSettings()" style="width:100%">保存する</button>
   </div>
   <div class="sec">🔔 プッシュ通知設定</div>
@@ -4278,6 +4279,7 @@ async function debugGeocode(){
 function loadSettings(){
   document.getElementById('s-name').value=localStorage.getItem('taxi_name')||'';
   document.getElementById('s-car').value=localStorage.getItem('taxi_car')||'';
+  document.getElementById('s-plate').value=localStorage.getItem('taxi_number')||'';
   document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
   document.getElementById('s-target-amount').value=localStorage.getItem('taxi_target_amount')||'';
   document.getElementById('s-carry-fare').value=localStorage.getItem('taxi_carry_fare')||'';
@@ -4291,6 +4293,7 @@ function loadSettings(){
 function saveSettings(){
   localStorage.setItem('taxi_name',document.getElementById('s-name').value.trim()||'自分');
   localStorage.setItem('taxi_car',document.getElementById('s-car').value.trim());
+  localStorage.setItem('taxi_number',document.getElementById('s-plate').value.trim());
   toast('✅ 設定保存');
 }
 
