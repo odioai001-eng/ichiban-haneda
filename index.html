@@ -2343,12 +2343,7 @@ function onDeparture(cp){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
   if(cp.stopNotifyTimer){clearTimeout(cp.stopNotifyTimer);cp.stopNotifyTimer=null;}
-  if(db&&isDuty&&!testMode){
-    const name=localStorage.getItem('taxi_name')||'自分';
-    db.ref('chat').push({uid:myId,name,
-      text:`🚕【自動】${cp.name} を出発（${timeStr}）`,
-      time:timeStr,ts:Date.now(),isAuto:true});
-  }
+  // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
   sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
   toast(cp.icon+' '+cp.name+' を出発しました');
   renderSpotRow();
@@ -2373,15 +2368,10 @@ function onArrival(cp,dist){
   cp.stopNotifyTimer=setTimeout(()=>{
     cp.stopNotifyTimer=null;
     if(!cpInside[cp.id]||!isDuty)return;
+    // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
     sendNotif(cp.icon+' '+cp.name+' に到着',`到着時刻 ${timeStr}`,'taxi-'+cp.id);
     if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
     toast(cp.icon+' '+cp.name+' 到着！');
-    if(db&&!testMode){
-      const name=localStorage.getItem('taxi_name')||'自分';
-      db.ref('chat').push({uid:myId,name,
-        text:`${cp.icon}【自動】${cp.name} に到着（${timeStr}）`,
-        time:timeStr,ts:Date.now(),isAuto:true});
-    }
   },60000);
   renderSpotRow();
 }
