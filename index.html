@@ -1662,13 +1662,17 @@ function setStatus(s){
         text:`🚕【自動】${name}さんが${boardSpot}乗り場を出発しました。（待機時間${waitStr}）`,
         time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true});
     }
+    // 待機タイマー・号選択の停止は実車ボタンを押した時点で確定するため、
+    // ここでチェックポイントの滞在状態（次回また新規到着として扱われるように）をリセットする
+    const hCpAll=checkpoints.find(c=>c.spots&&c.spots.length>0);
+    const arrStr=(hCpAll&&hCpAll.arrivalTimeStr)||'−';
+    if(hCpAll){hCpAll.currentSpot=null;hCpAll.arrivalTimeStr=null;hCpAll.poolModalHandled=false;}
+    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
     renderSpotRow();
     hidePoolPanel();hidePoolHistory();syncPoolPanel();
     if(waitInterval&&waitSec>0){
       const nowStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-      const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
-      const spotLabel=boardSpot||(hCp?hCp.name:'待機中');
-      const arrStr=(hCp&&hCp.arrivalTimeStr)||'−';
+      const spotLabel=boardSpot||(hCpAll?hCpAll.name:'待機中');
       saveWaitHistory(spotLabel,arrStr,nowStr,waitSec);
     }
     resetWait();
@@ -2298,49 +2302,21 @@ function checkGeofences(lat,lng){
 }
 
 function onDeparture(cp){
+  // 待機タイマー・号選択・列移動履歴の停止は実車ボタンを押した時だけと決めているため、
+  // チェックポイントのGPS上の退場（一時的にエリアを外れただけの場合も含む）では
+  // 待機タイマーや号選択・待機先の情報を一切リセットしない。ここでは
+  // チェックポイント固有のタイマー整理と、仲間への参考通知のみ行う。
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
   if(cp.stopNotifyTimer){clearTimeout(cp.stopNotifyTimer);cp.stopNotifyTimer=null;}
-  const hadTimer=waitInterval!==null||waitSec>0;
-  stopWait();
-  const elapsed=toHMS(waitSec);
-  document.getElementById('wait-spot-lbl').textContent=`待機場所: ${cp.name}（終了）`;
-  document.getElementById('arrival-title').textContent=cp.icon+' '+cp.name+' を出発';
-  document.getElementById('arrival-sub').textContent=`出発時刻 ${timeStr}　待機時間 ${elapsed}`;
-  const banner=document.getElementById('arrival-banner');
-  banner.style.borderColor='var(--amber)';banner.classList.add('show');
-  if(bannerTimer)clearTimeout(bannerTimer);
-  bannerTimer=setTimeout(()=>{banner.classList.remove('show');banner.style.borderColor='var(--green)';},8000);
-  if(navigator.vibrate)navigator.vibrate([200,100,200]);
-  const durMins=Math.round(waitSec/60);
-  if(hadTimer)saveWaitHistory(cp.currentSpot||cp.name, cp.arrivalTimeStr||'−', timeStr, waitSec);
-  // チェックポイント滞在を送先リストに追加
-  if(hadTimer&&durMins>0){
-    const cpEntry={
-      type:'cp',name:cp.name,icon:cp.icon||'📍',
-      startTime:cp.arrivalTimeStr||'−',endTime:timeStr,durMins,
-      dateStr:new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}),
-      ts:Date.now()
-    };
-    destinations.push(cpEntry);
-    saveDests();renderDests();
-    pushDestToFirebase(cpEntry);
-  }
-  waitSec=0;
-  document.getElementById('wait-timer').textContent='00:00:00';
-  const mWaitEl=document.getElementById('map-wait-timer');if(mWaitEl)mWaitEl.textContent='00:00:00';
-  currentSpotSelection=null;
-  spotChangeHistory=[];
-  cp.currentSpot=null;cp.arrivalTimeStr=null;cp.poolModalHandled=false;
-  if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
   if(db&&isDuty&&!testMode){
     const name=localStorage.getItem('taxi_name')||'自分';
     db.ref('chat').push({uid:myId,name,
-      text:`🚕【自動】${cp.name} を出発（${timeStr}）待機: ${elapsed}`,
+      text:`🚕【自動】${cp.name} を出発（${timeStr}）`,
       time:timeStr,ts:Date.now(),isAuto:true});
   }
-  sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}　待機 ${elapsed}`,'taxi-depart-'+cp.id);
-  toast(cp.icon+' '+cp.name+' 出発 — 待機: '+elapsed);
+  sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
+  toast(cp.icon+' '+cp.name+' を出発しました');
   renderSpotRow();
 }
 
