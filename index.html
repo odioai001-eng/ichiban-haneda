@@ -708,6 +708,19 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
 </div>
 
+<!-- 送り先データCSV保存モーダル -->
+<div class="overlay" id="csv-export-overlay">
+  <div class="modal">
+    <h3>送り先データのCSV保存 <button class="mc" onclick="closeCsvExportModal()">✕</button></h3>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">下のボタンをタップしてCSVファイルを保存してください。保存が完了したら「削除する」を押すと、仲間全員分の送り先データがFirebase上から削除されます。</div>
+    <a id="csv-download-link" class="btn btn-p" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box">📥 CSVをダウンロード</a>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-g" onclick="closeCsvExportModal()" style="flex:1">キャンセル</button>
+      <button class="btn btn-d" onclick="confirmCsvExportDelete()" style="flex:1">🗑 削除する</button>
+    </div>
+  </div>
+</div>
+
 <!-- 時刻入力用の専用テンキー（OS標準キーボードの代わりに表示） -->
 <div class="overlay" id="time-keypad-overlay" style="z-index:9500">
   <div class="modal" style="max-width:300px">
@@ -1418,6 +1431,12 @@ function checkMonthEndDestsReset(){
 }
 
 // 待機/送先タブの記録（仲間全員分）をCSVで保存し、Firebase上のデータを削除してリセットする
+let pendingCsvBlobUrl=null;
+// モバイルブラウザ（特にiOS Safari・PWA）は、非同期処理を挟んだ後の
+// a.click()によるダウンロードを「ユーザー操作起因ではない」として
+// 無音でブロックすることがある。そのため自動ダウンロードは行わず、
+// データ準備が終わった後にモーダルを表示し、ユーザー自身がリンクを
+// タップすることで確実にダウンロードが発生するようにする。
 async function exportAndResetTeamDests(manual){
   if(!db){toast('⚠️ Firebase未接続');return;}
   const snap=await db.ref('team_dests').once('value');
@@ -1439,13 +1458,21 @@ async function exportAndResetTeamDests(manual){
   }
   const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
+  if(pendingCsvBlobUrl)URL.revokeObjectURL(pendingCsvBlobUrl);
+  pendingCsvBlobUrl=URL.createObjectURL(blob);
   const monthStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'}).replace(/\//g,'-');
-  a.href=url;a.download=`送り先記録_${monthStr}.csv`;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  if(!confirm('CSVを保存しました。仲間全員分の送り先データを削除してリセットしますか？'))return;
+  const link=document.getElementById('csv-download-link');
+  link.href=pendingCsvBlobUrl;
+  link.download=`送り先記録_${monthStr}.csv`;
+  document.getElementById('csv-export-overlay').classList.add('open');
+}
+function closeCsvExportModal(){
+  document.getElementById('csv-export-overlay').classList.remove('open');
+  if(pendingCsvBlobUrl){URL.revokeObjectURL(pendingCsvBlobUrl);pendingCsvBlobUrl=null;}
+}
+async function confirmCsvExportDelete(){
+  if(!confirm('仲間全員分の送り先データを削除してリセットしますか？'))return;
+  closeCsvExportModal();
   await db.ref('team_dests').remove();
   destinations=[];
   saveDests();renderDests();
