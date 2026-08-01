@@ -433,6 +433,16 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 </div>
 </div>
 
+<div class="page" id="page-spotdest">
+<div class="pc">
+  <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
+    <span>🗺 乗り場別送先リスト</span>
+    <span style="font-size:10px;color:var(--muted)">※月末リセット対象外・累計</span>
+  </div>
+  <div id="spotdest-table"></div>
+</div>
+</div>
+
 <div class="page" id="page-chat">
   <div class="chat-wrap">
     <div class="chat-msgs" id="chat-msgs"></div>
@@ -652,6 +662,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/>
       <path d="M7 5H4a1 1 0 0 0-1 1 4 4 0 0 0 4 4M17 5h3a1 1 0 0 1 1 1 4 4 0 0 1-4 4"/>
     </svg>ランキング
+  </button>
+  <button class="nb" onclick="showPage('spotdest',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+    </svg>乗り場別
   </button>
   <button class="nb" onclick="showPage('settings',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -1798,6 +1814,10 @@ function connectFirebase(config){
       teamSales=snap.val()||{};
       renderRankingPage();
     });
+    db.ref('spot_dest_stats').on('value',snap=>{
+      spotDestStats=snap.val()||{};
+      renderSpotDestTable();
+    });
     const chatInitTs=Date.now();
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
@@ -2093,7 +2113,24 @@ async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs){
   destinations.push(entry);
   saveDests();renderDests();
   pushDestToFirebase(entry);
+  recordSpotDestStat(entry.boardSpot,entry.alightAddr);
   toast('📍 行き先を記録しました');
+}
+
+// 住所文字列から市区町村（〇〇区・〇〇市など）だけを取り出す
+function extractWard(addr){
+  if(!addr)return null;
+  const m=addr.match(/[都道府県]([^\d]+?[区市町村])/);
+  return m?m[1]:null;
+}
+
+// 乗り場別送先リストは月末リセットの対象外（累計し続ける）ため、
+// team_destsとは別のFirebaseパス(spot_dest_stats)に集計する
+function recordSpotDestStat(boardSpot,alightAddr){
+  if(!db||!boardSpot)return;
+  const ward=extractWard(alightAddr);
+  if(!ward)return;
+  db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>(cur||0)+1);
 }
 function startWaitManual(){
   if(waitInterval){toast('⏱ タイマーはすでに動いています');return;}
@@ -3006,6 +3043,32 @@ function saveFareEntry(fare,toll,tripTs){
 }
 
 let teamSales={};
+let spotDestStats={}; // {spot:{ward:count}}。月末リセットの対象外で累計し続ける
+
+function renderSpotDestTable(){
+  const el=document.getElementById('spotdest-table');
+  if(!el)return;
+  const spots=['1号','2号','3号','4号'];
+  const columns=spots.map(s=>{
+    const wards=spotDestStats[s]||{};
+    return Object.entries(wards).map(([ward,count])=>({ward,count})).sort((a,b)=>b.count-a.count);
+  });
+  const maxRows=Math.max(0,...columns.map(c=>c.length));
+  if(maxRows===0){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">まだ記録がありません</div>';
+    return;
+  }
+  let html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+  html+='<tr>'+spots.map(s=>`<th style="padding:8px 4px;border-bottom:2px solid var(--border);color:var(--accent);font-weight:800;text-align:center">${esc(s)}</th>`).join('')+'</tr>';
+  for(let r=0;r<maxRows;r++){
+    html+='<tr>'+columns.map(col=>{
+      const item=col[r];
+      return `<td style="padding:7px 4px;border-bottom:1px solid var(--border);text-align:center">${item?`<div style="font-weight:700">${esc(item.ward)}</div><div style="color:var(--cyan);font-weight:800">${item.count}</div>`:''}</td>`;
+    }).join('')+'</tr>';
+  }
+  html+='</table></div>';
+  el.innerHTML=html;
+}
 
 function isRankingOptedIn(){
  return localStorage.getItem('taxi_ranking_optin')==='1';
@@ -4473,6 +4536,7 @@ function showPage(name,btn){
   }
   if(name==='settings'){renderNotifToggle();}
   if(name==='ranking'){renderRankingPage();}
+  if(name==='spotdest'){renderSpotDestTable();}
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
     setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
