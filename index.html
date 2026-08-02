@@ -406,7 +406,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div id="wait-timer" style="display:none"></div>
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
     <span>🗺 送り先（自動登録）</span>
-    <button class="btn btn-g" onclick="openManualTripModal()" style="font-size:11px;padding:5px 10px">🖊 手動で記録</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-g" onclick="openManualTripModal()" style="font-size:11px;padding:5px 10px">🖊 手動で記録</button>
+      <button class="btn btn-g" onclick="deleteAllManualTrips()" style="font-size:11px;padding:5px 10px;color:var(--red)">🗑 手動記録を一括削除</button>
+    </div>
   </div>
   <div id="dest-list"></div>
   <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
@@ -3066,6 +3069,23 @@ function deleteTripEntry(ts){
   }
   toast('🗑 送り先を削除しました');
 }
+function deleteAllManualTrips(){
+  const targets=destinations.filter(d=>d.type==='trip'&&d.manual);
+  if(!targets.length){toast('手動で記録した送り先はありません');return;}
+  if(!confirm(`手動で記録した送り先を${targets.length}件すべて削除しますか？（元に戻せません）`))return;
+  const tsList=targets.map(d=>d.ts);
+  destinations=destinations.filter(d=>!(d.type==='trip'&&d.manual));
+  saveDests();renderDests();
+  targets.forEach(d=>{if(d.fare)syncFareLogByTripTs(d.ts,null);});
+  if(db&&isRankingOptedIn()){
+   tsList.forEach(ts=>{
+    db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
+     snap.forEach(child=>child.ref.remove());
+    });
+   });
+  }
+  toast(`🗑 手動記録${targets.length}件を削除しました`);
+}
 function syncFareLogByTripTs(tripTs,fareOrNull){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const idx=log.findIndex(e=>e.tripTs===tripTs);
@@ -3872,6 +3892,7 @@ function saveManualTrip(){
   const tripTs=now.getTime();
   const entry={
     type:'trip',
+    manual:true,
     boardTime:boardTime||'−',
     boardAddr,
     boardSpot:null,
