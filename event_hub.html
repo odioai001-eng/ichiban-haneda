@@ -43,39 +43,41 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 .note.warn b{color:#fbbf24}
 .today-note{background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.3);border-radius:8px;
   padding:6px 10px;font-size:11.5px;color:#4ade80;margin:6px 0;font-weight:700;line-height:1.5}
+.backbtn{display:block;width:100%;background:#161628;border:1px solid #2a2a4a;
+  border-radius:10px;padding:11px;margin-bottom:20px;color:#e8e8f4;font-size:14px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
+
+<button class="backbtn" onclick="goBackSmart()">← アプリに戻る</button>
+<script>
+function goBackSmart(){
+  if(window.AndroidBridge&&window.AndroidBridge.goBackInApp){
+    window.AndroidBridge.goBackInApp();
+  }else{
+    history.back();
+  }
+}
+</script>
 
 <h1>🎤 イベント終演ハブ</h1>
 <div class="sub">23区・三鷹市・武蔵野市限定・終演直後の"乗車チャンス"を先読み</div>
 
 <div class="datebar">
-  📅 <b>本日 2026年8月1日（土）</b> 時点でWeb上に公開されている情報をもとに作成。23区・三鷹市・武蔵野市内で本日開催が判明している会場のみを掲載しています。開催有無・時間・規模は主催者都合で変更されることがあるため、出庫前に各会場の公式リンクで最終確認してください。
+  📅 <b>本日 2026年8月2日（日）</b> 時点でWeb上に公開されている情報をもとに作成。23区・三鷹市・武蔵野市内で本日開催が判明している会場のみを掲載しています。開催有無・時間・規模は主催者都合で変更されることがあるため、出庫前に各会場の公式リンクで最終確認してください。
 </div>
 
 <div class="cat">🎫 本日開催している会場</div>
 
 <a class="card" href="https://baseball.yahoo.co.jp/npb/schedule/" target="_blank">
   <div class="venue-row"><span class="venue-icon">⚾</span><span class="venue-name">明治神宮野球場</span></div>
-  <div class="daterange">📅 本日 8/1(土) 開催</div>
+  <div class="daterange">📅 本日 8/2(日) 開催</div>
   <div class="event-name">東京ヤクルト vs 阪神（新宿区）</div>
   <div class="stat-row">
     <div class="stat"><div class="stat-value time">21:00頃</div><div class="stat-label">終了目安</div></div>
     <div class="stat"><div class="stat-value">3.2万人</div><div class="stat-label">満員時収容</div></div>
   </div>
   <div class="desc">18:00開始。延長戦だと終了目安が後ろにずれるため、Yahoo!プロ野球（本カードのリンク先）でイニング経過をリアルタイム確認してから出庫を。神宮外苑・信濃町駅方面と外苑西通り沿いの両方に流出。</div>
-</a>
-
-<a class="card" href="https://baseball.yahoo.co.jp/npb/schedule/" target="_blank">
-  <div class="venue-row"><span class="venue-icon">⚾</span><span class="venue-name">東京ドーム</span></div>
-  <div class="daterange">📅 本日 8/1(土) 開催</div>
-  <div class="event-name">読売ジャイアンツ vs 横浜DeNA（文京区）</div>
-  <div class="stat-row">
-    <div class="stat"><div class="stat-value time">21:00頃</div><div class="stat-label">終了目安</div></div>
-    <div class="stat"><div class="stat-value">4.6万人</div><div class="stat-label">満員時収容</div></div>
-  </div>
-  <div class="desc">18:00開始。延長戦だと終了目安が後ろにずれるため、Yahoo!プロ野球（本カードのリンク先）でイニング経過をリアルタイム確認してから出庫を。ドーム周辺は水道橋駅・後楽園駅の複数方向に流出。</div>
 </a>
 
 <a class="card" href="https://enjoy.ueno.or.jp/summer2026/" target="_blank">
@@ -91,13 +93,13 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 
 <a class="card" href="https://www.bigsight.jp/visitor/event/" target="_blank">
   <div class="venue-row"><span class="venue-icon">🏢</span><span class="venue-name">東京ビッグサイト</span></div>
-  <div class="daterange">📅 本日 8/1(土) 開催（7/31〜8/2の3日間開催、本日・明日は一般公開日）</div>
+  <div class="daterange">📅 本日 8/2(日) 開催（7/31〜8/2の3日間開催、本日が最終日）</div>
   <div class="event-name">第26回JAPANドラッグストアショー2026（江東区）</div>
   <div class="stat-row">
     <div class="stat"><div class="stat-value time">17:00</div><div class="stat-label">閉場</div></div>
     <div class="stat"><div class="stat-value">日中帯</div><div class="stat-label">10:00〜開催</div></div>
   </div>
-  <div class="desc">終業後の帰宅ラッシュと重なるため夕方の会場前需要は薄め、参考程度に。一般公開日のため来場者数は商談日より多め。</div>
+  <div class="desc">終業後の帰宅ラッシュと重なるため夕方の会場前需要は薄め、参考程度に。最終日のため来場者数は商談日より多め。</div>
 </a>
 
 <div class="cat">🚕 長距離が狙える会場（19）</div>
@@ -227,7 +229,6 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 <a class="card" href="https://baseball.yahoo.co.jp/npb/schedule/" target="_blank">
   <div class="venue-row"><span class="venue-icon">⚾</span><span class="venue-name">東京ドーム</span></div>
   <div class="event-name">文京区</div>
-  <div class="today-note">🎫 本日開催: 読売ジャイアンツ vs 横浜DeNA（18:00開始・21:00頃終演目安）</div>
   <div class="stat-row"><div class="stat"><div class="stat-value">55,000人</div><div class="stat-label">満員時最大</div></div></div>
   <div class="tag green">深夜終演あり</div>
   <div class="desc">大型コンサートは22時前後の終演も多く、終電を逃した客の長距離利用が発生しやすい。巨人戦開催日はリンク先のYahoo!プロ野球でイニング経過をリアルタイム確認すると終了予測が立てやすい。</div>
