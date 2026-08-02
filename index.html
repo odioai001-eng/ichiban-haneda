@@ -927,6 +927,9 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
+// 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
+// サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
+const APP_BUILD='20260802-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1096,6 +1099,32 @@ function init(){
 loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory(); renderTeamDests(); initMap(); initLocalChat(); tryFirebase();
   restoreAppState(); // リロード後の状態復元
   if(localStorage.getItem('taxi_wakelock')==='1')toggleWakeLock(); // スリープ防止を復元
+  setTimeout(checkForUpdate,4000);
+  setInterval(checkForUpdate,5*60*1000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkForUpdate();});
+}
+
+// サーバー上のindex.htmlを取得し、APP_BUILDが変わっていれば「更新があります」バナーを出す
+async function checkForUpdate(){
+  if(location.protocol==='file:')return; // ローカルファイルでは確認しない
+  try{
+    const res=await fetch(location.pathname+'?_cb='+Date.now(),{cache:'no-store'});
+    if(!res.ok)return;
+    const html=await res.text();
+    const m=html.match(/const APP_BUILD=['"]([^'"]+)['"]/);
+    if(m&&m[1]&&m[1]!==APP_BUILD)showUpdateBanner();
+  }catch(e){}
+}
+function showUpdateBanner(){
+  if(document.getElementById('update-banner'))return;
+  const b=document.createElement('div');
+  b.id='update-banner';
+  b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:var(--accent);color:#fff;'
+    +'text-align:center;font-size:13px;font-weight:700;cursor:pointer;'
+    +'padding:10px 14px calc(10px + env(safe-area-inset-top,0px));';
+  b.textContent='🔄 アプリの更新があります。タップして最新の状態に更新してください';
+  b.onclick=()=>location.reload();
+  document.body.appendChild(b);
 }
 
 function syncZoomCtrlVisibility(visible){
