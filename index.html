@@ -3051,6 +3051,21 @@ function deleteTripFare(ts){
  }
 }
 
+function deleteTripEntry(ts){
+  if(!confirm('この送り先の記録を削除しますか？（元に戻せません）'))return;
+  const idx=destinations.findIndex(d=>d.ts===ts);
+  if(idx<0)return;
+  const had=destinations[idx];
+  destinations.splice(idx,1);
+  saveDests();renderDests();
+  if(had.fare)syncFareLogByTripTs(ts,null);
+  if(db&&isRankingOptedIn()){
+   db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
+    snap.forEach(child=>child.ref.remove());
+   });
+  }
+  toast('🗑 送り先を削除しました');
+}
 function syncFareLogByTripTs(tripTs,fareOrNull){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const idx=log.findIndex(e=>e.tripTs===tripTs);
@@ -3134,13 +3149,9 @@ function renderSpotWaitStats(){
   let html='';
   spots.forEach(spot=>{
     const dayData=spotWaitStats[spot]||{};
-    const foldId='spotwait-fold-'+spot;
     html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden">
-      <div onclick="(function(el){el.style.display=el.style.display==='none'?'block':'none'})(document.getElementById('${foldId}'))"
-        style="padding:10px 14px;background:var(--surface2);cursor:pointer;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center">
-        <span>${esc(spot)}</span><span style="font-size:11px;color:var(--muted)">タップで開閉</span>
-      </div>
-      <div id="${foldId}" style="display:none;padding:10px 14px">`;
+      <div style="padding:10px 14px;background:var(--surface2);font-weight:700;font-size:14px">${esc(spot)}</div>
+      <div style="padding:10px 14px">`;
     let any=false;
     dayOrder.forEach(day=>{
       const hours=dayData[day];
@@ -3676,7 +3687,10 @@ function buildDestEntryHtml(d,numMap){
     const no=numMap.get(d.ts)||'';
     return `
     <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
-      <div style="font-size:15px;font-weight:800;color:var(--accent);margin-bottom:4px">#${no}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-size:15px;font-weight:800;color:var(--accent)">#${no}</div>
+        <button onclick="deleteTripEntry(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:10px;color:var(--red);cursor:pointer">🗑 削除</button>
+      </div>
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
         <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
         <span style="font-size:12px;color:#fff">${boardDesc}</span>
@@ -3706,9 +3720,14 @@ function buildDestEntryHtml(d,numMap){
     // 手動追加エントリ（旧フォーマット互換）
     return `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 14px;margin-bottom:10px">
-      ${d.timeStr?`<div style="font-size:11px;color:var(--cyan);margin-bottom:3px">🕐 ${esc(d.timeStr)}</div>`:''}
-      <div style="font-size:13px;font-weight:600">${esc(d.name||'')}</div>
-      ${d.addr?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(d.addr)}</div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1">
+          ${d.timeStr?`<div style="font-size:11px;color:var(--cyan);margin-bottom:3px">🕐 ${esc(d.timeStr)}</div>`:''}
+          <div style="font-size:13px;font-weight:600">${esc(d.name||'')}</div>
+          ${d.addr?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(d.addr)}</div>`:''}
+        </div>
+        ${d.ts?`<button onclick="deleteTripEntry(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:10px;color:var(--red);cursor:pointer;flex-shrink:0">🗑 削除</button>`:''}
+      </div>
     </div>`;
   }
 }
@@ -4172,6 +4191,8 @@ function selectLaneModalSpot(spot){
   });
   renderLaneModalLanes(spot);
   updateLaneModalSel();
+  // 列を選ばずスキップされても乗り場だけは記録に残るよう、号を選んだ時点で反映しておく
+  selectSpot(spot);
 }
 function renderLaneModalLanes(spot){
   const count=LANE_MODAL_COUNTS[spot]||8;
