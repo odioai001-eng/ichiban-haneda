@@ -18,16 +18,16 @@ import sys
 START_MARKER = "長距離が狙える会場"
 END_MARKER = 'class="note warn"'
 
-CARD_RE = re.compile(
-    r'<a class="card" href="([^"]+)"[^>]*>\s*'
-    r'<div class="venue-row">.*?<span class="venue-name">([^<]+)</span></div>\s*'
-    r'<div class="event-name">([^<]*)</div>',
-    re.S,
-)
+CARD_BLOCK_RE = re.compile(r'<a class="card" href="([^"]+)"[^>]*>(.*?)</a>', re.S)
+VENUE_NAME_RE = re.compile(r'<span class="venue-name">([^<]+)</span>')
+EVENT_NAME_RE = re.compile(r'<div class="event-name">([^<]*)</div>')
 SUBCAT_RE = re.compile(r'<div class="subcat">([^<]+)</div>')
 
 
 def extract(html: str):
+    """会場カードを <a class="card">...</a> ブロック単位で切り出してから中身を読む。
+    event-name の有無やフィールドの並び順に依存しないようにするため、
+    「タグの並びを一気に正規表現でマッチさせる」方式ではなく2段階で処理する。"""
     start = html.find(START_MARKER)
     if start == -1:
         raise ValueError(f"開始マーカーが見つかりません: {START_MARKER!r}")
@@ -39,8 +39,14 @@ def extract(html: str):
     tokens = []
     for m in SUBCAT_RE.finditer(section):
         tokens.append((m.start(), "subcat", m.group(1).strip()))
-    for m in CARD_RE.finditer(section):
-        tokens.append((m.start(), "card", (m.group(1).strip(), m.group(2).strip(), m.group(3).strip())))
+    for m in CARD_BLOCK_RE.finditer(section):
+        href, body = m.group(1).strip(), m.group(2)
+        name_m = VENUE_NAME_RE.search(body)
+        if not name_m:
+            continue  # venue-name が無いカードは会場カードとみなさない
+        event_m = EVENT_NAME_RE.search(body)
+        area = event_m.group(1).strip() if event_m else ""
+        tokens.append((m.start(), "card", (href, name_m.group(1).strip(), area)))
     tokens.sort(key=lambda t: t[0])
 
     venues = []
