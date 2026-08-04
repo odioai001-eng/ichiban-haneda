@@ -929,7 +929,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260805-3';
+const APP_BUILD='20260805-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2471,12 +2471,10 @@ function renderRankMonthGroup(){
     ?list.map((d,i)=>{
       const days=d.monthDays||0,fare=d.monthFare||0;
       const avg=days>0?Math.round(fare/days):0;
-      const hasAdjust=!!d.monthAdjust;
-      const sub=`1日平均 ¥${avg.toLocaleString()}（${days}日出勤）${hasAdjust?'　✏️手動修正あり':''}`;
+      const sub=`1日平均 ¥${avg.toLocaleString()}（${days}日出勤）`;
       let btns=adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`);
       if(d.uid===myId){
         btns+=`<button onclick="editMyMonthSales()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer;margin-left:4px;flex-shrink:0">✏️ 修正</button>`;
-        if(hasAdjust)btns+=`<button onclick="clearMyMonthAdjust()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--muted);cursor:pointer;margin-left:4px;flex-shrink:0">↩ 解除</button>`;
       }
       return rankRowHtml(i,esc(d.name||'不明'),sub,fare,btns);
     }).join('')
@@ -2513,18 +2511,6 @@ function editMyMonthSales(){
   const monthAdjust={days:days-rawDays,fare:fare-rawFare,ts:Date.now()};
   db.ref('team_sales/'+myId).update({monthAdjust,monthDays:days,monthFare:fare});
   toast('✅ 今月の出勤日数・売上を修正しました（自動計算は今後も継続します）');
-}
-function clearMyMonthAdjust(){
-  if(!db)return;
-  if(!confirm('手動修正を解除して、自動計算のみの値に戻しますか？'))return;
-  const cur=(teamSales&&teamSales[myId])||{};
-  const rawDays=cur.monthDaysRaw||0;
-  const rawFare=cur.monthFareRaw||0;
-  // 同じupdate内でmonthAdjustをnullにして削除しつつ、表示値も自動計算値に戻す
-  // （removeしてからpushTeamSales()を呼ぶと、ローカルキャッシュの反映が間に合わず
-  //  古いmonthAdjustを読み直して再度足してしまう競合が起きるため、1回のupdateにまとめる）
-  db.ref('team_sales/'+myId).update({monthAdjust:null,monthDays:rawDays,monthFare:rawFare});
-  toast('✅ 自動計算のみの値に戻しました');
 }
 // ④ 歴代送り先ランキング（本人・1回の送先ごと、日付含む）
 // 待機/送先タブと同じ表記（乗車地・降車地・乗り場移動履歴・待機時間）でランキングの1件を表示する
