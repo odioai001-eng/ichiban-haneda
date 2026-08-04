@@ -929,7 +929,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260805-2';
+const APP_BUILD='20260805-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2466,22 +2466,19 @@ function renderRankMonthGroup(){
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px">上の「本日の売り上げランキング（グループ）」から入室してください</div>';
     return;
   }
-  const list=Object.entries(teamSales||{}).map(([uid,d])=>{
-    const ov=d.monthOverride;
-    const days=ov?ov.days:(d.monthDays||0);
-    const fare=ov?ov.fare:(d.monthFare||0);
-    return {...d,uid,effDays:days,effFare:fare,isOverridden:!!ov};
-  }).sort((a,b)=>b.effFare-a.effFare);
+  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
   el.innerHTML=(list.length
     ?list.map((d,i)=>{
-      const avg=d.effDays>0?Math.round(d.effFare/d.effDays):0;
-      const sub=`1日平均 ¥${avg.toLocaleString()}（${d.effDays}日出勤）${d.isOverridden?'　✏️手動修正':''}`;
+      const days=d.monthDays||0,fare=d.monthFare||0;
+      const avg=days>0?Math.round(fare/days):0;
+      const hasAdjust=!!d.monthAdjust;
+      const sub=`1日平均 ¥${avg.toLocaleString()}（${days}日出勤）${hasAdjust?'　✏️手動修正あり':''}`;
       let btns=adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`);
       if(d.uid===myId){
         btns+=`<button onclick="editMyMonthSales()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer;margin-left:4px;flex-shrink:0">✏️ 修正</button>`;
-        if(d.isOverridden)btns+=`<button onclick="clearMyMonthOverride()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--muted);cursor:pointer;margin-left:4px;flex-shrink:0">↩ 解除</button>`;
+        if(hasAdjust)btns+=`<button onclick="clearMyMonthAdjust()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--muted);cursor:pointer;margin-left:4px;flex-shrink:0">↩ 解除</button>`;
       }
-      return rankRowHtml(i,esc(d.name||'不明'),sub,d.effFare,btns);
+      return rankRowHtml(i,esc(d.name||'不明'),sub,fare,btns);
     }).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>')
     +'<div style="display:flex;gap:6px;margin-top:8px">'
@@ -2496,28 +2493,38 @@ function syncMySalesNow(){
   toast('🔄 自分の記録を同期しました');
 }
 // 自動計算が実態と合わない場合に、本人が今月の出勤日数・売上を手動で訂正する
-// （平均金額はこの訂正した日数・金額をもとに再計算される）
+// （自動計算はその後も継続する。今の自動集計値との差分だけをmonthAdjustとして保存し、
+//  以後pushTeamSales()のたびに新しい自動集計値へこの差分を足し続けることで、
+//  「今回のズレだけ直す」を実現する。平均金額もこの修正後の日数・金額で再計算される）
 function editMyMonthSales(){
   if(!isRankingOptedIn()){toast('⚠️ グループランキングに未参加です');return;}
   if(!db){toast('⚠️ Firebase未接続');return;}
   const cur=(teamSales&&teamSales[myId])||{};
-  const ov=cur.monthOverride;
-  const curDays=ov?ov.days:(cur.monthDays||0);
-  const curFare=ov?ov.fare:(cur.monthFare||0);
-  const daysStr=prompt('今月の出勤日数を入力してください',curDays);
+  const curDays=cur.monthDays||0;
+  const curFare=cur.monthFare||0;
+  const daysStr=prompt('今月の出勤日数（正しい日数）を入力してください',curDays);
   if(daysStr===null)return;
-  const fareStr=prompt('今月の売上合計（円）を入力してください',curFare);
+  const fareStr=prompt('今月の売上合計（正しい金額・円）を入力してください',curFare);
   if(fareStr===null)return;
   const days=Math.max(0,parseInt(daysStr)||0);
   const fare=Math.max(0,parseInt(fareStr)||0);
-  db.ref('team_sales/'+myId).update({monthOverride:{days,fare,ts:Date.now()}});
-  toast('✅ 今月の出勤日数・売上を修正しました');
+  const rawDays=cur.monthDaysRaw!=null?cur.monthDaysRaw:curDays;
+  const rawFare=cur.monthFareRaw!=null?cur.monthFareRaw:curFare;
+  const monthAdjust={days:days-rawDays,fare:fare-rawFare,ts:Date.now()};
+  db.ref('team_sales/'+myId).update({monthAdjust,monthDays:days,monthFare:fare});
+  toast('✅ 今月の出勤日数・売上を修正しました（自動計算は今後も継続します）');
 }
-function clearMyMonthOverride(){
+function clearMyMonthAdjust(){
   if(!db)return;
-  if(!confirm('手動修正を解除して、自動計算に戻しますか？'))return;
-  db.ref('team_sales/'+myId+'/monthOverride').remove();
-  toast('✅ 自動計算に戻しました');
+  if(!confirm('手動修正を解除して、自動計算のみの値に戻しますか？'))return;
+  const cur=(teamSales&&teamSales[myId])||{};
+  const rawDays=cur.monthDaysRaw||0;
+  const rawFare=cur.monthFareRaw||0;
+  // 同じupdate内でmonthAdjustをnullにして削除しつつ、表示値も自動計算値に戻す
+  // （removeしてからpushTeamSales()を呼ぶと、ローカルキャッシュの反映が間に合わず
+  //  古いmonthAdjustを読み直して再度足してしまう競合が起きるため、1回のupdateにまとめる）
+  db.ref('team_sales/'+myId).update({monthAdjust:null,monthDays:rawDays,monthFare:rawFare});
+  toast('✅ 自動計算のみの値に戻しました');
 }
 // ④ 歴代送り先ランキング（本人・1回の送先ごと、日付含む）
 // 待機/送先タブと同じ表記（乗車地・降車地・乗り場移動履歴・待機時間）でランキングの1件を表示する
@@ -3347,10 +3354,16 @@ function pushTeamSales(){
  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
  const todayBizStart=getBusinessDayStart(now.getTime());
  const todayFare=log.filter(e=>(e.ts||0)>=todayBizStart&&(e.ts||0)<todayBizStart+24*3600*1000).reduce((a,e)=>a+(e.fare||0),0);
- const monthFare=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+(e.fare||0),0)+carry.fare;
- const monthDays=getMonthShifts().length+carry.days;
- // .set()だと手動修正(monthOverride)が毎回消えてしまうため、.update()で他フィールドを保ったまま更新する
- db.ref('team_sales/'+myId).update({name,todayFare,todayBizStart,monthFare,monthDays,ts:Date.now()});
+ const monthFareRaw=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+(e.fare||0),0)+carry.fare;
+ const monthDaysRaw=getMonthShifts().length+carry.days;
+ // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
+ // 自動集計が更新されるたびにその差分を足し続けることで、自動計算を止めずに
+ // 「今のズレだけ直す」を実現する
+ const adjust=(teamSales&&teamSales[myId]&&teamSales[myId].monthAdjust)||{days:0,fare:0};
+ const monthFare=monthFareRaw+(adjust.fare||0);
+ const monthDays=monthDaysRaw+(adjust.days||0);
+ // .set()だと手動修正(monthAdjust)が毎回消えてしまうため、.update()で他フィールドを保ったまま更新する
+ db.ref('team_sales/'+myId).update({name,todayFare,todayBizStart,monthFare,monthDays,monthFareRaw,monthDaysRaw,ts:Date.now()});
 }
 
 
