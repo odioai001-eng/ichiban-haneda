@@ -35,7 +35,7 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 .tag.red{color:#f87171;border-color:rgba(239,68,68,.3)}
 .tag.cyan{color:#67e8f9;border-color:rgba(6,182,212,.3)}
 .tag.green{color:#4ade80;border-color:rgba(34,197,94,.3)}
-.subcat{font-size:12px;font-weight:700;color:#c0c0d8;margin:16px 0 8px}
+.subcat{font-size:18px;font-weight:800;color:#fff;margin:22px 0 10px}
 .note{background:#161628;border:1px solid #2a2a4a;border-radius:12px;padding:14px 16px;
   font-size:12px;color:#9999b8;line-height:1.7;margin-top:24px}
 .note b{color:#e8e8f4}
@@ -71,6 +71,43 @@ function goBackSmart(){
 </div>
 
 <div class="cat">🎫 本日開催している会場</div>
+
+<div class="subcat">📍 中央区</div>
+
+<a class="card" href="https://www.kabuki-za.co.jp/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎭</span><span class="venue-name">歌舞伎座</span></div>
+  <div class="daterange">📅 本日 8/5(水) 開催（8/2〜26開催中、8/10・18は休演）</div>
+  <div class="event-name">八月納涼歌舞伎 第三部</div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-value time">20:50</div><div class="stat-label">終演予定（19:00開演）</div></div>
+    <div class="stat"><div class="stat-value">1,808人</div><div class="stat-label">満員時収容</div></div>
+  </div>
+  <div class="desc">公式発表の終演予定は20:50（変更の可能性あり）。年配・地方からの観劇客が多く着物姿など荷物も多いためタクシー志向が強い。銀座4丁目方面が混雑しやすい。</div>
+</a>
+
+<a class="card" href="https://www.shochiku.co.jp/play/theater/enbujyo/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎭</span><span class="venue-name">新橋演舞場</span></div>
+  <div class="daterange">📅 本日 8/5(水) 開催（7/3〜8/23開催中）</div>
+  <div class="event-name">スーパー歌舞伎『もののけ姫』</div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-value time">14:40</div><div class="stat-label">終演予定（11:00開演）</div></div>
+    <div class="stat"><div class="stat-value">1,428人</div><div class="stat-label">満員時収容</div></div>
+  </div>
+  <div class="desc">公式発表の終演予定は14:40（変更の可能性あり）。本日は日中1回公演のため需要は限定的だが、銀座エリアのため終演後そのまま食事に流れる客もいる。</div>
+</a>
+
+<div class="subcat">📍 新宿区</div>
+
+<a class="card" href="http://www.pit-inn.com/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎷</span><span class="venue-name">新宿PIT INN</span></div>
+  <div class="daterange">📅 本日 8/5(水) 開催</div>
+  <div class="event-name">橋爪亮督 GROUP（夜の部）</div>
+  <div class="stat-row">
+    <div class="stat"><div class="stat-value time">22:00頃</div><div class="stat-label">終演目安（19:30開演）</div></div>
+    <div class="stat"><div class="stat-value">200人</div><div class="stat-label">満員時収容</div></div>
+  </div>
+  <div class="desc">店側の目安は開演19:30〜終演22:00頃（延びる場合あり）。年配のジャズファンが多くタクシー利用率が高い。新宿駅東口至近だが路地裏で拾いにくいため出口で流すのが効率的。</div>
+</a>
 
 <div class="subcat">📍 文京区</div>
 
@@ -146,7 +183,7 @@ function goBackSmart(){
   <div class="desc">入場無料イベント。最寄り駅からやや離れており、そのまま空港・遠方ホテルへ直行する長距離需要も発生しやすい。</div>
 </a>
 
-<div class="cat">🚕 長距離が狙える会場（21）</div>
+<div class="cat">🚕 長距離が狙える会場（32）</div>
 <div class="note" style="margin-top:0">
   以下は「今日開催しているか」に関わらず、<b>構造的に長距離利用が出やすい</b>会場を区ごとにまとめたクイックリンクです。各カードのタグが長距離になりやすい理由（駅アクセスが弱い／富裕層・年配層／広域集客・深夜終演／ホテル・国際会議場／空港連絡拠点）を示しています。ホテル・国際会議場の会場については、多くが非公開の予約制で一般のチケットサイトには載らないため、出発前に各施設の宴会場スケジュール（公開されている場合）でご確認ください。
 </div>
@@ -169,6 +206,13 @@ function goBackSmart(){
   <div class="desc">結婚式・周年式典・大規模宴会が多く、閉会時間が集中しやすいため会場前での待機が効率的。</div>
 </a>
 
+<a class="card" href="https://www.nipponbudokan.or.jp/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🥋</span><span class="venue-name">日本武道館</span></div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">14,000人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag green">全国から集客</div>
+  <div class="desc">コンサート・格闘技・式典まで幅広く全国から集客。九段下駅方面に集中しやすいが、靖国通り沿いの流し需要もあり。</div>
+</a>
+
 <div class="subcat">📍 中央区</div>
 
 <a class="card" href="https://www.tcat-hakozaki.co.jp/" target="_blank">
@@ -179,6 +223,32 @@ function goBackSmart(){
   </div>
   <div class="tag cyan">空港連絡拠点</div>
   <div class="desc">成田・羽田両空港への直通リムジンバス拠点で、都心で唯一の空港型ターミナル。大きな荷物を抱えた利用客が多く、バスの待ち時間を嫌ってタクシーに流れる客も一定数いる。水天宮前駅至近。</div>
+</a>
+
+<a class="card" href="https://www.kabuki-za.co.jp/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎭</span><span class="venue-name">歌舞伎座</span></div>
+  <div class="event-name">銀座</div>
+  <div class="today-note">🎫 本日開催: 八月納涼歌舞伎 第三部（19:00開演・20:50終演予定）</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,808人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">伝統芸能・年配層</div>
+  <div class="desc">歌舞伎公演は年配・地方からの観劇客が多く、着物姿など荷物も多いためタクシー志向が強い。昼夜入替の終演直後が狙い目。</div>
+</a>
+
+<a class="card" href="https://www.meijiza.co.jp/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎭</span><span class="venue-name">明治座</span></div>
+  <div class="event-name">日本橋浜町</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,368人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">伝統芸能・年配層</div>
+  <div class="desc">歌舞伎・舞踊公演中心で年配層の観劇客が多い。最寄り駅から少し歩くため終演後のタクシー需要が読みやすい。</div>
+</a>
+
+<a class="card" href="https://www.shochiku.co.jp/play/theater/enbujyo/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎭</span><span class="venue-name">新橋演舞場</span></div>
+  <div class="event-name">銀座</div>
+  <div class="today-note">🎫 本日開催: スーパー歌舞伎『もののけ姫』（11:00開演・14:40終演予定）</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,428人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">伝統芸能・年配層</div>
+  <div class="desc">歌舞伎・新派・ミュージカル等、年配層中心の観劇客。銀座エリアのため終演後そのまま食事や二次会に流れる客もいる。</div>
 </a>
 
 <div class="subcat">📍 港区</div>
@@ -225,6 +295,14 @@ function goBackSmart(){
   <div class="desc">品川駅至近だが館内が広く出口が分散するため、幹線道路側で待機すると拾いやすい。</div>
 </a>
 
+<a class="card" href="https://www.jpnsport.go.jp/chichibunomiya/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏉</span><span class="venue-name">秩父宮ラグビー場</span></div>
+  <div class="event-name">北青山</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">25,194人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag green">広域集客</div>
+  <div class="desc">リーグワン等で全国からファンが集まる。神宮外苑再開発の工事車両で周辺道路が混雑することがあるため要注意。</div>
+</a>
+
 <div class="subcat">📍 新宿区</div>
 
 <a class="card" href="https://www.operacity.jp/concert/" target="_blank">
@@ -247,6 +325,23 @@ function goBackSmart(){
   <div class="stat-row"><div class="stat"><div class="stat-value">31,800人</div><div class="stat-label">満員時最大</div></div></div>
   <div class="tag green">延長戦リスク</div>
   <div class="desc">ナイターが延長戦になると終電を逃す観客が出やすく、ファンは広域から来場している。リンク先のYahoo!プロ野球でその日の対戦カードとイニング経過をリアルタイム確認できる。</div>
+</a>
+
+<a class="card" href="https://nippon-seinenkan.or.jp/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎤</span><span class="venue-name">日本青年館ホール</span></div>
+  <div class="event-name">霞ヶ丘</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,249人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">全国から遠征</div>
+  <div class="desc">アイドル・声優系ライブが多く、全国から遠征するファンが目立つ。神宮球場・秩父宮ラグビー場と同エリアで、イベント重複時は周辺が混雑しやすい。</div>
+</a>
+
+<a class="card" href="http://www.pit-inn.com/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎷</span><span class="venue-name">新宿PIT INN</span></div>
+  <div class="event-name">新宿</div>
+  <div class="today-note">🎫 本日開催: 橋爪亮督 GROUP（開演19:30・22:00頃終演目安）</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">200人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">ジャズ・年配層</div>
+  <div class="desc">1965年創業の名門ジャズライブハウス。夜の部は毎日開催され、終演は21時台が中心。年配のジャズファンが多くタクシー利用率が高い。</div>
 </a>
 
 <div class="subcat">📍 文京区</div>
@@ -301,6 +396,13 @@ function goBackSmart(){
   <div class="desc">コミックマーケット等の大型展示会では全国から来場し、遠方ホテル・主要駅への長距離需要が大量発生。</div>
 </a>
 
+<a class="card" href="https://www.shiki.jp/theatres/4026/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎭</span><span class="venue-name">有明四季劇場</span></div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,200人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag red">湾岸・単線アクセス</div>
+  <div class="desc">劇団四季のロングラン公演が中心。同じ有明エリアでアクセスが弱く、マチネ・ソワレとも終演直後の需要が安定している。</div>
+</a>
+
 <div class="subcat">📍 大田区</div>
 
 <a class="card" href="https://www.zepp.co.jp/hall/haneda/" target="_blank">
@@ -326,6 +428,28 @@ function goBackSmart(){
   <div class="stat-row"><div class="stat"><div class="stat-value">3,601人</div><div class="stat-label">満員時最大</div></div></div>
   <div class="tag cyan">広域集客</div>
   <div class="desc">収録・大型公演は客層が広域から集まりやすい。</div>
+</a>
+
+<a class="card" href="https://www.jpnsport.go.jp/yoyogi/event/tabid/59/default.aspx" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🏸</span><span class="venue-name">国立代々木競技場 第一体育館</span></div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">13,200人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag green">広域集客</div>
+  <div class="desc">スポーツ・コンサートとも全国から集客。原宿駅・明治神宮前駅・代々木公園駅の3方向に分散しやすい。</div>
+</a>
+
+<a class="card" href="https://www.nntt.jac.go.jp/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎻</span><span class="venue-name">新国立劇場</span></div>
+  <div class="event-name">初台</div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,814人</div><div class="stat-label">オペラパレス最大</div></div></div>
+  <div class="tag cyan">オペラ・年配層</div>
+  <div class="desc">オペラ・バレエ中心で年配・富裕層の観劇客が多い。京王新線初台駅直結だが、遠方まで直行するタクシー利用も一定数。</div>
+</a>
+
+<a class="card" href="https://linecubeshibuya.com/" target="_blank">
+  <div class="venue-row"><span class="venue-icon">🎤</span><span class="venue-name">LINE CUBE SHIBUYA（渋谷公会堂）</span></div>
+  <div class="stat-row"><div class="stat"><div class="stat-value">1,956人</div><div class="stat-label">満員時最大</div></div></div>
+  <div class="tag cyan">広域集客</div>
+  <div class="desc">渋谷駅至近だが、コンサート・イベントとも全国からのファンが多く終演後の需要が安定している。</div>
 </a>
 
 <div class="subcat">📍 練馬区</div>
