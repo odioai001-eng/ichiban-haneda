@@ -931,7 +931,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260805-7';
+const APP_BUILD='20260806-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3360,7 +3360,8 @@ function pushTeamSales(){
  // 1日平均は「退勤して1日分として確定した」売上・日数だけで計算する。
  // まだ退勤していない当日分の売上は、日数の方はまだ+1されていないため、
  // 平均の分子からも除いておく（退勤した瞬間にその日の売上と日数が両方まとめて加わる）
- const ongoingFare=(isDuty&&dutyStart)?log.filter(e=>(e.ts||0)>=dutyStart.getTime()).reduce((a,e)=>a+(e.fare||0),0):0;
+ // monthFareは税抜きなので、差し引くongoingFareも同じ税抜き基準で計算する
+ const ongoingFare=(isDuty&&dutyStart)?log.filter(e=>(e.ts||0)>=dutyStart.getTime()).reduce((a,e)=>a+exTax(e.fare||0),0):0;
  const monthFareForAvg=Math.max(0,monthFare-ongoingFare);
  // .set()だと手動修正(monthAdjust)が毎回消えてしまうため、.update()で他フィールドを保ったまま更新する
  db.ref('team_sales/'+myId).update({name,todayFare,todayBizStart,monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw,ts:Date.now()});
