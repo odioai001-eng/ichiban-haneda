@@ -411,6 +411,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <button class="btn btn-g" onclick="deleteAllManualTrips()" style="font-size:11px;padding:5px 10px;color:var(--red)">🗑 手動記録を一括削除</button>
     </div>
   </div>
+  <div style="font-size:11px;color:var(--muted);margin:4px 0 8px">※運賃の表示・削除ボタンの金額は消費税抜きです（編集ボタンでは入力した税込み金額のまま修正できます）</div>
   <div id="dest-list"></div>
   <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
   <div id="team-dests-list"></div>
@@ -423,6 +424,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <div class="page" id="page-ranking">
 <div class="pc">
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px">※このページの金額はすべて消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
   <div class="sec">🏆 本日の売り上げランキング（本人）</div>
   <div class="card"><div id="rank-today-personal"></div></div>
   <div class="sec" style="margin-top:18px">🏆 本日の売り上げランキング（グループ）</div>
@@ -929,7 +931,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260805-5';
+const APP_BUILD='20260805-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2443,7 +2445,7 @@ function renderRankTodayPersonal(){
   const bizEnd=bizStart+24*3600*1000;
   const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0&&(d.ts||0)>=bizStart&&(d.ts||0)<bizEnd).slice().sort((a,b)=>(b.fare||0)-(a.fare||0));
   el.innerHTML=trips.length
-    ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),d.fare,adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
+    ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),exTax(d.fare),adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の記録がありません</div>';
 }
 // ② 本日の売り上げランキング（グループ・送先売上の合計）
@@ -2538,7 +2540,7 @@ function buildRankTripCardHtml(d,rank,driverLabel){
       <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
     </div>
     ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
-    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
+    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${exTax(d.fare).toLocaleString()}</div>
   </div>`;
 }
 function renderRankAllTimePersonal(){
@@ -2965,7 +2967,8 @@ function updateDailyBar(){
  const targetAmount=parseInt(localStorage.getItem('taxi_target_amount')||'0');
  const dailyTarget=targetDays>0?targetAmount/targetDays:0;
  if(targetAmtEl)targetAmtEl.textContent=dailyTarget>0?`¥${Math.round(dailyTarget).toLocaleString()}`:'-';
- const todaySales=getTodayShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0);
+ // 目標金額は税抜きで入力されているため、比較する売上側も税抜きに変換して揃える
+ const todaySales=getTodayShiftFareEntries().reduce((a,e)=>a+exTax(e.fare||0),0);
  if(dailyTarget>0){
   const remainAmt=dailyTarget-todaySales;
   if(remainAmt>0){
@@ -3344,8 +3347,9 @@ function pushTeamSales(){
  const now=new Date();
  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
  const todayBizStart=getBusinessDayStart(now.getTime());
- const todayFare=log.filter(e=>(e.ts||0)>=todayBizStart&&(e.ts||0)<todayBizStart+24*3600*1000).reduce((a,e)=>a+(e.fare||0),0);
- const monthFareRaw=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+(e.fare||0),0)+carry.fare;
+ // 運賃は税込みで入力されているため、ランキングに積み上げる際は1件ずつ税抜きに変換する
+ const todayFare=log.filter(e=>(e.ts||0)>=todayBizStart&&(e.ts||0)<todayBizStart+24*3600*1000).reduce((a,e)=>a+exTax(e.fare||0),0);
+ const monthFareRaw=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+exTax(e.fare||0),0)+carry.fare;
  const monthDaysRaw=getMonthShifts().length+carry.days;
  // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
  // 自動集計が更新されるたびにその差分を足し続けることで、自動計算を止めずに
@@ -3373,10 +3377,13 @@ function renderSalesStats(){
  const todayEntries=getTodayShiftFareEntries();
  const monthEntries=log.filter(e=>e.ts>=monthStart);
  const sum=(arr,key)=>arr.reduce((a,e)=>a+(e[key]||0),0);
+ // 運賃(fare)は税込み入力なので税抜きに変換して合計する。高速代(toll)・繰越(carry.fare、
+ // 既に税抜きで入力済み)はそのまま
+ const sumFareExTax=(arr)=>arr.reduce((a,e)=>a+exTax(e.fare||0),0);
  out.innerHTML=`
-  <div class="row2"><span class="rl">本日の売上</span><span class="rv" style="color:var(--green)">¥${sum(todayEntries,'fare').toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">本日の売上（税抜）</span><span class="rv" style="color:var(--green)">¥${sumFareExTax(todayEntries).toLocaleString()}</span></div>
   <div class="row2"><span class="rl">本日の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(todayEntries,'toll').toLocaleString()}</span></div>
-  <div class="row2"><span class="rl">今月の売上（繰越込み）</span><span class="rv" style="color:var(--green)">¥${(sum(monthEntries,'fare')+carry.fare).toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">今月の売上（税抜・繰越込み）</span><span class="rv" style="color:var(--green)">¥${(sumFareExTax(monthEntries)+carry.fare).toLocaleString()}</span></div>
   <div class="row2"><span class="rl">今月の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(monthEntries,'toll').toLocaleString()}</span></div>
  `;
  renderFareEntries();
@@ -3392,7 +3399,7 @@ function renderFareEntries(){
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
    <div style="flex:1;font-size:12px">
     <span style="color:var(--muted)">${timeStr}</span>
-    ${e.fare?`<span style="font-weight:700;color:var(--green);margin-left:6px">¥${e.fare.toLocaleString()}</span>`:''}
+    ${e.fare?`<span style="font-weight:700;color:var(--green);margin-left:6px">¥${exTax(e.fare).toLocaleString()}（税抜）</span>`:''}
     ${e.toll?`<span style="color:var(--red);margin-left:6px">高速¥${e.toll.toLocaleString()}</span>`:''}
    </div>
    <button onclick="editFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
@@ -3845,7 +3852,7 @@ function buildDestEntryHtml(d,numMap){
       </div>
       ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
       ${d.fare?`<div style="margin-top:5px;display:flex;align-items:center;gap:8px">
-        <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${d.fare.toLocaleString()}</div>
+        <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${exTax(d.fare).toLocaleString()}</div>
         <button onclick="editTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
         <button onclick="deleteTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer">削除</button>
       </div>`:''}
@@ -4809,6 +4816,10 @@ function toHMS(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
 function pad(n){return String(n).padStart(2,'0');}
 function fmtTime(d){return d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// 毎回入力する運賃は消費税10%込みの金額のため、売上の合計・平均・個別表示は
+// すべて税抜き（÷1.1・四捨五入）に変換してから使う。入力・編集画面は引き続き
+// レシート通りの税込み金額のまま扱う（ここでは変換しない）
+function exTax(fare){return Math.round((fare||0)/1.1);}
 
 function formatWaitStr(mins,minsStr){
   if(minsStr)return `(待機${minsStr})`;
