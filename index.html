@@ -411,7 +411,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <button class="btn btn-g" onclick="deleteAllManualTrips()" style="font-size:11px;padding:5px 10px;color:var(--red)">🗑 手動記録を一括削除</button>
     </div>
   </div>
-  <div style="font-size:11px;color:var(--muted);margin:4px 0 8px">※運賃の表示・削除ボタンの金額は消費税抜きです（編集ボタンでは入力した税込み金額のまま修正できます）</div>
   <div id="dest-list"></div>
   <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
   <div id="team-dests-list"></div>
@@ -424,12 +423,13 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <div class="page" id="page-ranking">
 <div class="pc">
-  <div style="font-size:11px;color:var(--muted);margin-bottom:10px">※このページの金額はすべて消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
   <div class="sec">🏆 本日の売り上げランキング（本人）</div>
   <div class="card"><div id="rank-today-personal"></div></div>
   <div class="sec" style="margin-top:18px">🏆 本日の売り上げランキング（グループ）</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
   <div class="card"><div id="rank-today-group"></div></div>
   <div class="sec" style="margin-top:18px">🏆 今月の売り上げランキング（グループ）</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
   <div class="card"><div id="rank-month-group"></div></div>
   <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（本人）</div>
   <div class="card"><div id="rank-alltime-personal"></div></div>
@@ -931,7 +931,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260805-6';
+const APP_BUILD='20260805-7';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2445,7 +2445,7 @@ function renderRankTodayPersonal(){
   const bizEnd=bizStart+24*3600*1000;
   const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0&&(d.ts||0)>=bizStart&&(d.ts||0)<bizEnd).slice().sort((a,b)=>(b.fare||0)-(a.fare||0));
   el.innerHTML=trips.length
-    ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),exTax(d.fare),adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
+    ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),d.fare,adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の記録がありません</div>';
 }
 // ② 本日の売り上げランキング（グループ・送先売上の合計）
@@ -2540,7 +2540,7 @@ function buildRankTripCardHtml(d,rank,driverLabel){
       <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
     </div>
     ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
-    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${exTax(d.fare).toLocaleString()}</div>
+    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
   </div>`;
 }
 function renderRankAllTimePersonal(){
@@ -3399,7 +3399,7 @@ function renderFareEntries(){
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
    <div style="flex:1;font-size:12px">
     <span style="color:var(--muted)">${timeStr}</span>
-    ${e.fare?`<span style="font-weight:700;color:var(--green);margin-left:6px">¥${exTax(e.fare).toLocaleString()}（税抜）</span>`:''}
+    ${e.fare?`<span style="font-weight:700;color:var(--green);margin-left:6px">¥${e.fare.toLocaleString()}</span>`:''}
     ${e.toll?`<span style="color:var(--red);margin-left:6px">高速¥${e.toll.toLocaleString()}</span>`:''}
    </div>
    <button onclick="editFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
@@ -3852,7 +3852,7 @@ function buildDestEntryHtml(d,numMap){
       </div>
       ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
       ${d.fare?`<div style="margin-top:5px;display:flex;align-items:center;gap:8px">
-        <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${exTax(d.fare).toLocaleString()}</div>
+        <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${d.fare.toLocaleString()}</div>
         <button onclick="editTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
         <button onclick="deleteTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer">削除</button>
       </div>`:''}
