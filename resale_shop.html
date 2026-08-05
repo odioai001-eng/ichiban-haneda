@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>蔵書・コレクション整理セール</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d0d1a;--surface:#161628;--surface2:#1e1e35;--border:#2a2a4a;
+  --text:#e8e8f4;--muted:#7878a0;--accent:#4f8ef7;
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--gold:#fbbf24;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh;padding:20px 16px 60px;max-width:480px;margin:0 auto}
+h1{font-size:20px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6}
+.note{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 15px;
+  font-size:12px;color:#c0c0d8;line-height:1.7;margin-bottom:18px}
+.note b{color:var(--text)}
+.filter-row{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.chip{font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px;background:var(--surface);
+  border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .15s}
+.chip.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+.item{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;position:relative}
+.item.sold{opacity:.55}
+.sold-badge{position:absolute;top:12px;right:12px;background:var(--red);color:#fff;font-size:10.5px;
+  font-weight:800;padding:3px 9px;border-radius:20px}
+.item-img{width:100%;aspect-ratio:4/3;border-radius:10px;background:var(--surface2);display:flex;
+  align-items:center;justify-content:center;font-size:44px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border)}
+.item-img img{width:100%;height:100%;object-fit:cover}
+.item-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.tag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.06);
+  color:#c0c0d8;border:1px solid var(--border)}
+.item-name{font-size:16px;font-weight:800;line-height:1.4;margin-bottom:4px}
+.item-memo{font-size:12px;color:#9999b8;line-height:1.6;margin-bottom:10px}
+.item-price{font-size:24px;font-weight:800;color:var(--gold);margin-bottom:12px}
+.item-price span{font-size:12px;color:var(--muted);font-weight:600;margin-left:6px}
+.btn{display:block;width:100%;text-align:center;padding:12px;border-radius:10px;border:none;
+  background:var(--accent);color:#fff;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;transition:all .15s}
+.btn:active{transform:scale(.97)}
+.btn.disabled{background:var(--surface2);color:var(--muted);pointer-events:none}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:50px 10px}
+</style>
+</head>
+<body>
+
+<h1>🗂 蔵書・コレクション整理セール</h1>
+<div class="sub">書籍・CD・DVDなどを整理のため出品しています。ご希望の商品があれば下のボタンからお問い合わせください。</div>
+
+<div class="note">
+  <b>ご購入の流れ：</b>「問い合わせる」ボタンから内容確認済みのメールを送信できます。在庫状況・お支払い方法（銀行振込等）・発送方法についてこちらから折り返しご連絡します。
+</div>
+
+<div class="filter-row" id="filters"></div>
+<div id="list"></div>
+
+<script>
+/* ここを resale_research.html の「書き出す」で生成したコードで置き換えてください */
+const ITEMS = [];
+
+const CAT_LABEL={book:'📚 書籍',cd:'💿 CD',dvd:'📀 DVD/BD',other:'📦 その他'};
+const CAT_ICON={book:'📚',cd:'💿',dvd:'📀',other:'📦'};
+const CONTACT_EMAIL = 'bkdmc@yahoo.co.jp';
+
+let activeCat = 'all';
+
+function render(){
+  const filters = document.getElementById('filters');
+  const cats = ['all', ...new Set(ITEMS.map(i=>i.cat))];
+  filters.innerHTML = cats.map(c=>{
+    const label = c==='all' ? 'すべて' : CAT_LABEL[c]||c;
+    return `<div class="chip ${c===activeCat?'sel':''}" onclick="setFilter('${c}')">${label}</div>`;
+  }).join('');
+
+  const list = document.getElementById('list');
+  const shown = ITEMS.filter(i => activeCat==='all' || i.cat===activeCat);
+
+  if(shown.length===0){
+    list.innerHTML = '<div class="empty">現在出品中の商品はありません。</div>';
+    return;
+  }
+
+  list.innerHTML = shown.map(it=>{
+    const sold = it.status==='売却済み';
+    const subject = encodeURIComponent(`【問い合わせ】${it.name}`);
+    const body = encodeURIComponent(`以下の商品について問い合わせます。\n\n商品名：${it.name}\n価格：¥${it.price.toLocaleString()}\n\n（ここにご質問・ご希望を記入してください）`);
+    const mailto = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
+    return `
+    <div class="item ${sold?'sold':''}">
+      ${sold?'<div class="sold-badge">SOLD</div>':''}
+      <div class="item-img">${it.image ? `<img src="${escAttr(it.image)}" alt="">` : CAT_ICON[it.cat]||'📦'}</div>
+      <div class="item-tags"><span class="tag">${CAT_LABEL[it.cat]||it.cat}</span><span class="tag">状態：${esc(it.cond)}</span>${it.days?`<span class="tag">想定販売期間：約${it.days}日</span>`:''}</div>
+      <div class="item-name">${esc(it.name)}</div>
+      ${it.memo?`<div class="item-memo">${esc(it.memo)}</div>`:''}
+      <div class="item-price">¥${it.price.toLocaleString()}</div>
+      ${sold ? `<div class="btn disabled">売却済み</div>` : `<a class="btn" href="${mailto}">✉️ この商品について問い合わせる</a>`}
+    </div>`;
+  }).join('');
+}
+
+function setFilter(c){ activeCat=c; render(); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+
+render();
+</script>
+</body>
+</html>

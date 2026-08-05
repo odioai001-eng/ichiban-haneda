@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>せどりリサーチ電卓</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d0d1a;--surface:#161628;--surface2:#1e1e35;--border:#2a2a4a;
+  --text:#e8e8f4;--muted:#7878a0;--accent:#4f8ef7;
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#a855f7;--cyan:#06b6d4;--gold:#fbbf24;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh;padding:20px 16px 60px;max-width:480px;margin:0 auto}
+h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6}
+.note{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;
+  font-size:12px;color:#c0c0d8;line-height:1.8;margin-bottom:18px}
+.note b{color:var(--text)}
+.note.warn{border-color:rgba(245,158,11,.35)}
+.note.warn b{color:var(--gold)}
+.note ol{margin:6px 0 0 18px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+.sec-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600}
+.field input,.field select,.field textarea{width:100%;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;padding:9px 10px;color:var(--text);font-size:14px;font-family:inherit}
+.field textarea{resize:vertical;min-height:44px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{padding:11px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:700;transition:all .15s;width:100%}
+.btn:active{transform:scale(.97)}
+.btn-p{background:var(--accent);color:#fff}
+.btn-g{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-danger{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.4);font-size:12px;padding:6px 10px;width:auto}
+.item{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px}
+.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px}
+.item-name{font-size:15px;font-weight:700;line-height:1.4}
+.item-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.tag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(255,255,255,.06);
+  color:#c0c0d8;border:1px solid var(--border);white-space:nowrap}
+.tag.good{color:var(--green);border-color:rgba(34,197,94,.35)}
+.tag.fair{color:var(--gold);border-color:rgba(245,158,11,.35)}
+.tag.poor{color:var(--red);border-color:rgba(239,68,68,.35)}
+.calc-box{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:12px;margin:10px 0}
+.slider-row{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:6px}
+input[type=range]{flex:1;accent-color:var(--accent)}
+.result-row{display:flex;gap:8px}
+.result{flex:1;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 4px}
+.result-value{font-size:20px;font-weight:800;color:var(--gold)}
+.result-value.days{color:var(--cyan)}
+.result-label{font-size:10px;color:var(--muted);margin-top:2px;font-weight:700}
+.item-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.chk-row{display:flex;align-items:center;gap:6px;font-size:12.5px;color:#c0c0d8}
+.chk-row input{width:16px;height:16px}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:30px 10px}
+.summary{display:flex;gap:8px;margin-bottom:14px}
+.summary .result{background:var(--surface)}
+textarea.export-out{width:100%;min-height:120px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;padding:10px;color:#9999b8;font-size:11px;font-family:monospace;margin-top:10px}
+.copy-msg{font-size:11px;color:var(--green);margin-top:6px;display:none;font-weight:700}
+.scan-btn{background:var(--purple);color:#fff;margin-bottom:12px}
+.scanner-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:2000;
+  align-items:center;justify-content:center;padding:16px}
+.scanner-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:16px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto}
+.scanner-head{display:flex;justify-content:space-between;align-items:center;font-size:13px;
+  font-weight:700;color:var(--text);margin-bottom:10px}
+.scanner-head button{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+#scanner-container{width:100%;border-radius:10px;overflow:hidden;background:#000;min-height:200px}
+.scanner-manual{display:flex;gap:8px;margin-top:12px}
+.scanner-manual input{flex:1;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;padding:9px 10px;color:var(--text);font-size:14px}
+.scanner-manual button{background:var(--accent);color:#fff;border:none;border-radius:8px;
+  padding:0 16px;font-weight:700;cursor:pointer}
+.scanner-status{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6;text-align:center}
+.market-ref{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;
+  padding:10px 12px;margin:-2px 0 10px;font-size:12.5px;color:#c0c0d8;line-height:1.7}
+.market-ref b{color:var(--gold)}
+.market-ref .mr-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.market-ref button{background:var(--accent);color:#fff;border:none;border-radius:6px;
+  padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.market-ref a{color:var(--cyan);text-decoration:none;font-size:11.5px;font-weight:700;white-space:nowrap}
+.market-ref .mr-loading{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<h1>📦 せどりリサーチ電卓</h1>
+<div class="sub">Amazon等で調べた中古相場から、妥当な価格と売れるまでの日数目安を計算します</div>
+
+<div class="note warn">
+  <b>使い方（3ステップ）：</b>
+  <ol>
+    <li>Amazon・メルカリ・ヤフオク等で同じ商品の「中古の最安値」「出品者数」「（わかれば）カテゴリ内ランキング」を自分の目で調べて入力</li>
+    <li>「早さ重視 ⇔ 高値重視」のスライダーで希望に合わせて価格を調整（提案価格と目安日数がリアルタイムで変わります）</li>
+    <li>「出品する」にチェックした商品をまとめて書き出し、ショップページ（resale_shop.html）に貼り付けて公開</li>
+  </ol>
+  ※ バーコードは「📷 カメラで読み取る」か、「🔌 Bluetoothバーコードリーダー」（HIDキーボードモードでペアリングした機種）でスキャンする方法に対応しています。書籍（ISBN）は書誌情報API「openBD」（公開・無料・登録不要）、CD/DVD（JANコード）は音楽データベース「Discogs」（公開・無料・登録不要）から、タイトルなどの情報を自動取得します。Discogsは音楽中心のデータベースのため、CDは高精度で見つかりますが、映画などのDVD（音楽性のない作品）は情報が見つからないことがあります。その場合はバーコード読み取り後に商品名を手入力してください。商品名が分かった時点で、参考として「ブックオフオンライン」の実売価格も自動で取得し、中古最安値欄にワンタップで反映できます（見つかった場合のみ表示）。あわせてaucfan（相場・落札傾向サイト）へのリンクも表示します。ただしAmazon本体の中古最安値・出品者数・ランキングは自動取得できないため、引き続きご自身でAmazonを確認して入力してください（Amazonのページを自動取得＝スクレイピングする機能は規約上の理由で搭載していません）。この電卓が出す価格・日数はあくまで統計的な目安であり、実際の売却を保証するものではありません。
+</div>
+
+<div class="card">
+  <div class="sec-title">＋ 商品を追加</div>
+  <button class="btn scan-btn" onclick="openScanner()">📷 カメラでバーコードを読み取る</button>
+  <div class="field"><label>🔌 Bluetoothバーコードリーダーでの入力欄</label>
+    <input id="hid-isbn" placeholder="ここにカーソルを合わせてスキャンしてください" inputmode="numeric"
+      oninput="onHidInput(this)"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();onHidSubmit(this);}">
+  </div>
+  <div class="field"><label>商品名</label><input id="f-name" placeholder="例）〇〇 DVD-BOX"></div>
+  <div class="row2">
+    <div class="field"><label>カテゴリ</label>
+      <select id="f-cat"><option value="book">📚 書籍</option><option value="cd">💿 CD</option><option value="dvd">📀 DVD/BD</option><option value="other">📦 その他</option></select>
+    </div>
+    <div class="field"><label>コンディション</label>
+      <select id="f-cond"><option value="good">良い（ほぼ新品）</option><option value="fair">可（使用感あり）</option><option value="poor">傷・汚れあり</option></select>
+    </div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>中古最安値（円）※必須</label><input id="f-price" type="number" placeholder="例）1200"></div>
+    <div class="field"><label>出品者数（人）</label><input id="f-sellers" type="number" placeholder="例）5"></div>
+  </div>
+  <div class="market-ref" id="market-ref" style="display:none"></div>
+  <div class="row2">
+    <div class="field"><label>カテゴリ内ランキング（任意）</label><input id="f-rank" type="number" placeholder="例）45000"></div>
+    <div class="field"><label>定価（任意・参考）</label><input id="f-list" type="number" placeholder="例）3800"></div>
+  </div>
+  <div class="field"><label>メモ（任意）</label><textarea id="f-memo" placeholder="帯なし、初回盤 等"></textarea></div>
+  <button class="btn btn-p" onclick="addItem()">追加する</button>
+</div>
+
+<div class="scanner-modal" id="scanner-modal">
+  <div class="scanner-box">
+    <div class="scanner-head">📷 バーコードを枠内に写してください<button onclick="closeScanner()">✕</button></div>
+    <div id="scanner-container"></div>
+    <div class="scanner-manual">
+      <input id="manual-isbn" placeholder="読み取れない場合はバーコード番号を入力" inputmode="numeric" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupManualIsbn();}">
+      <button onclick="lookupManualIsbn()">検索</button>
+    </div>
+    <div class="scanner-status" id="scanner-status">書籍のISBN、CD/DVDのJANコード（どちらも13桁のバーコード）に対応しています。カメラはHTTPS環境（GitHub Pages公開後など）でのみ動作します。</div>
+  </div>
+</div>
+
+<div class="summary" id="summary"></div>
+
+<div id="list"></div>
+
+<div class="card">
+  <div class="sec-title">📤 公開データを書き出す</div>
+  <div class="note" style="margin-bottom:10px">「出品する」にチェックした商品だけを、resale_shop.html にそのまま貼り付けられる形式で書き出します。書き出したコードで <code>resale_shop.html</code> 内の <code>const ITEMS = [...]</code> の行を置き換えて保存・コミットすると、ショップに反映されます。</div>
+  <button class="btn btn-g" onclick="exportData()">書き出す（クリップボードにコピー）</button>
+  <div class="copy-msg" id="copy-msg">✓ コピーしました。resale_shop.html に貼り付けてください。</div>
+  <textarea class="export-out" id="export-out" readonly placeholder="ここに書き出しコードが表示されます"></textarea>
+</div>
+
+<script>
+const KEY='resaleItems_v1';
+let items = JSON.parse(localStorage.getItem(KEY)||'[]');
+
+function save(){ localStorage.setItem(KEY, JSON.stringify(items)); }
+
+let html5QrCode = null;
+let scannerRunning = false;
+
+function openScanner(){
+  document.getElementById('scanner-modal').style.display='flex';
+  document.getElementById('manual-isbn').value='';
+  const status = document.getElementById('scanner-status');
+  if(typeof Html5Qrcode === 'undefined'){
+    status.textContent = 'バーコード読み取りライブラリを読み込めませんでした（通信環境をご確認ください）。下の欄にISBNを直接入力してください。';
+    return;
+  }
+  html5QrCode = new Html5Qrcode('scanner-container');
+  const config = {
+    fps: 10,
+    qrbox: { width: 260, height: 150 },
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8
+    ]
+  };
+  html5QrCode.start({ facingMode: 'environment' }, config, onScanSuccess, ()=>{})
+    .then(()=>{ scannerRunning = true; })
+    .catch(()=>{
+      status.textContent = 'カメラを起動できませんでした（権限が拒否されたか、非対応の環境です）。下の欄にISBNを直接入力してください。';
+    });
+}
+
+function stopScanner(){
+  if(html5QrCode && scannerRunning){
+    html5QrCode.stop().then(()=>html5QrCode.clear()).catch(()=>{});
+  }
+  scannerRunning = false;
+  document.getElementById('scanner-modal').style.display='none';
+}
+
+function closeScanner(){ stopScanner(); }
+
+function onScanSuccess(decodedText){
+  const code = decodedText.replace(/[^0-9]/g,'');
+  if(code.length<10) return;
+  stopScanner();
+  handleBarcode(code);
+}
+
+function lookupManualIsbn(){
+  const v = document.getElementById('manual-isbn').value.replace(/[^0-9]/g,'');
+  if(v.length<10){ alert('バーコード番号を正しく入力してください（10桁以上）'); return; }
+  stopScanner();
+  handleBarcode(v);
+}
+
+let hidTimer = null;
+function onHidInput(el){
+  clearTimeout(hidTimer);
+  hidTimer = setTimeout(()=>onHidSubmit(el), 300);
+}
+function onHidSubmit(el){
+  clearTimeout(hidTimer);
+  const v = el.value.replace(/[^0-9]/g,'');
+  if(v.length>=10){
+    el.value='';
+    handleBarcode(v);
+  }
+}
+
+function isIsbn(code){
+  return /^97[89]\d{10}$/.test(code);
+}
+
+async function handleBarcode(code){
+  if(isIsbn(code)){
+    await lookupBook(code);
+  } else {
+    await lookupMusicVideo(code);
+  }
+}
+
+async function lookupBook(isbn){
+  document.getElementById('f-cat').value='book';
+  try{
+    const res = await fetch(`https://api.openbd.jp/v1/get?isbn=${encodeURIComponent(isbn)}`);
+    const json = await res.json();
+    const data = json && json[0];
+    if(!data){
+      alert(`ISBN ${isbn} の書誌情報が見つかりませんでした。商品名を手入力してください。`);
+      return;
+    }
+    const s = data.summary || {};
+    document.getElementById('f-name').value = s.title || '';
+    if(s.author){
+      document.getElementById('f-memo').value = `著者：${s.author}`;
+    }
+    const price = data.onix && data.onix.ProductSupply && data.onix.ProductSupply.SupplyDetail
+      && data.onix.ProductSupply.SupplyDetail.Price && data.onix.ProductSupply.SupplyDetail.Price[0];
+    if(price && price.PriceAmount){
+      document.getElementById('f-list').value = price.PriceAmount;
+    }
+    document.getElementById('f-name').scrollIntoView({behavior:'smooth', block:'center'});
+    document.getElementById('f-price').focus();
+    if(s.title) lookupBookoffPrice(s.title);
+  }catch(e){
+    alert('書誌情報の取得に失敗しました。通信環境をご確認のうえ、商品名を手入力してください。');
+  }
+}
+
+async function lookupMusicVideo(code){
+  try{
+    const res = await fetch(`https://api.discogs.com/database/search?barcode=${encodeURIComponent(code)}&type=release`);
+    const json = await res.json();
+    const hit = json && json.results && json.results[0];
+    if(!hit){
+      alert(`JANコード ${code} に一致する情報が見つかりませんでした（DiscogsはCDに強く、映画DVD等は非対応の場合があります）。カテゴリと商品名を手入力してください。`);
+      document.getElementById('f-memo').value = `JANコード：${code}`;
+      return;
+    }
+    const formats = hit.format || [];
+    const isVideo = formats.some(f => /DVD|Blu-ray|VHS/i.test(f));
+    document.getElementById('f-cat').value = isVideo ? 'dvd' : 'cd';
+    document.getElementById('f-name').value = (hit.title || '').replace(/\s*\(\d+\)/g, '');
+    const detail = [
+      hit.year ? `発売年：${hit.year}` : '',
+      formats.length ? `形式：${formats.join('/')}` : '',
+      `JANコード：${code}`
+    ].filter(Boolean).join(' / ');
+    document.getElementById('f-memo').value = detail;
+    document.getElementById('f-name').scrollIntoView({behavior:'smooth', block:'center'});
+    document.getElementById('f-price').focus();
+    if(hit.title) lookupBookoffPrice(document.getElementById('f-name').value);
+  }catch(e){
+    alert('商品情報の取得に失敗しました。通信環境をご確認のうえ、商品名を手入力してください。');
+    document.getElementById('f-memo').value = `JANコード：${code}`;
+  }
+}
+
+function simplifySearchQuery(title){
+  let t = title.split(/[:：]/)[0].trim();
+  if(t.length > 20) t = t.slice(0, 20);
+  return t || title;
+}
+
+async function lookupBookoffPrice(title){
+  const box = document.getElementById('market-ref');
+  box.style.display = 'block';
+  box.innerHTML = '<span class="mr-loading">🏬 ブックオフの実売価格を確認中…</span>';
+  const query = simplifySearchQuery(title);
+  try{
+    const res = await fetch(`https://shopping.bookoff.co.jp/search/keyword/${encodeURIComponent(query)}/`);
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const item = doc.querySelector('.productItem');
+    if(!item){
+      box.innerHTML = '<span class="mr-loading">🏬 ブックオフに該当する中古品が見つかりませんでした</span>';
+      return;
+    }
+    const priceEl = item.querySelector('.productItem__price');
+    const stockEl = item.querySelector('.productItem__stock');
+    const priceText = priceEl ? priceEl.textContent.replace(/\s+/g,'') : '';
+    const m = priceText.match(/([\d,]+)/);
+    const price = m ? Number(m[1].replace(/,/g,'')) : null;
+    const stock = stockEl ? stockEl.textContent.trim() : '在庫不明';
+    const aucfanUrl = `https://aucfan.com/search1/q-${encodeURIComponent(query)}/s-mix/`;
+    if(price){
+      box.innerHTML = `<div class="mr-row"><span>🏬 ブックオフ実売価格: <b>¥${price.toLocaleString()}</b>（${esc(stock)}・参考値）</span><button onclick="useBookoffPrice(${price})">中古最安値欄に使う</button></div>
+        <div class="mr-row" style="margin-top:6px"><span>Amazon等の最安値と合わせてご確認ください</span><a href="${aucfanUrl}" target="_blank">aucfanで相場を見る →</a></div>`;
+    } else {
+      box.innerHTML = `<div class="mr-row"><span>🏬 ブックオフで見つかりましたが価格を読み取れませんでした</span><a href="${aucfanUrl}" target="_blank">aucfanで相場を見る →</a></div>`;
+    }
+  }catch(e){
+    box.innerHTML = '<span class="mr-loading">🏬 ブックオフの価格取得に失敗しました（通信環境をご確認ください）</span>';
+  }
+}
+
+function useBookoffPrice(price){
+  document.getElementById('f-price').value = price;
+  document.getElementById('f-price').focus();
+}
+
+function calc(item, priorityPct){
+  const base = item.price;
+  const numSellers = (item.sellers===''||item.sellers==null) ? 3 : Number(item.sellers);
+  let compRatio;
+  if(numSellers<=1) compRatio=1.05;
+  else if(numSellers<=4) compRatio=0.98;
+  else if(numSellers<=9) compRatio=0.95;
+  else compRatio=0.90;
+
+  let condRatio = item.cond==='good'?1.0 : item.cond==='fair'?0.85 : 0.7;
+
+  const priorityMult = 0.85 + (priorityPct/100)*(1.25-0.85);
+  const finalRatio = compRatio*condRatio*(priorityMult/1.05);
+  const price = Math.max(10, Math.round(base*finalRatio/10)*10);
+
+  const rank = item.rank===''||item.rank==null ? null : Number(item.rank);
+  let baseDays;
+  if(rank==null || rank<=0) baseDays=30;
+  else if(rank<=10000) baseDays=4;
+  else if(rank<=50000) baseDays=10;
+  else if(rank<=100000) baseDays=21;
+  else if(rank<=300000) baseDays=45;
+  else if(rank<=1000000) baseDays=90;
+  else baseDays=180;
+
+  let compDaysFactor = numSellers<=1?0.9 : numSellers<=4?1.0 : numSellers<=9?1.15 : 1.35;
+
+  const priceRatio = price/base;
+  let priceDaysFactor;
+  if(priceRatio<=0.95) priceDaysFactor=0.7;
+  else if(priceRatio<=1.05) priceDaysFactor=1.0;
+  else if(priceRatio<=1.15) priceDaysFactor=1.4;
+  else if(priceRatio<=1.3) priceDaysFactor=2.0;
+  else priceDaysFactor=3.0;
+
+  const days = Math.max(1, Math.round(baseDays*compDaysFactor*priceDaysFactor));
+  return {price, days};
+}
+
+const CAT_LABEL={book:'📚 書籍',cd:'💿 CD',dvd:'📀 DVD/BD',other:'📦 その他'};
+const COND_LABEL={good:'良い',fair:'可',poor:'傷・汚れあり'};
+
+function addItem(){
+  const name=document.getElementById('f-name').value.trim();
+  const price=Number(document.getElementById('f-price').value);
+  if(!name){ alert('商品名を入力してください'); return; }
+  if(!price || price<=0){ alert('中古最安値を正しく入力してください'); return; }
+  items.push({
+    id:Date.now()+Math.random(),
+    name,
+    cat:document.getElementById('f-cat').value,
+    cond:document.getElementById('f-cond').value,
+    price,
+    sellers:document.getElementById('f-sellers').value,
+    rank:document.getElementById('f-rank').value,
+    list:document.getElementById('f-list').value,
+    memo:document.getElementById('f-memo').value.trim(),
+    priority:50,
+    forSale:true,
+    image:''
+  });
+  document.getElementById('f-name').value='';
+  document.getElementById('f-price').value='';
+  document.getElementById('f-sellers').value='';
+  document.getElementById('f-rank').value='';
+  document.getElementById('f-list').value='';
+  document.getElementById('f-memo').value='';
+  const box=document.getElementById('market-ref'); box.style.display='none'; box.innerHTML='';
+  save(); render();
+}
+
+function updateItem(id, patch){
+  const it = items.find(i=>i.id===id);
+  Object.assign(it, patch);
+  save(); render();
+}
+
+function removeItem(id){
+  if(!confirm('この商品を削除しますか？')) return;
+  items = items.filter(i=>i.id!==id);
+  save(); render();
+}
+
+function render(){
+  const list = document.getElementById('list');
+  if(items.length===0){
+    list.innerHTML = '<div class="empty">まだ商品が登録されていません。上のフォームから追加してください。</div>';
+  } else {
+    list.innerHTML = items.map(it=>{
+      const r = calc(it, it.priority);
+      return `
+      <div class="item">
+        <div class="item-head">
+          <div>
+            <div class="item-name">${esc(it.name)}</div>
+            <div class="item-tags">
+              <span class="tag">${CAT_LABEL[it.cat]}</span>
+              <span class="tag ${it.cond}">${COND_LABEL[it.cond]}</span>
+              ${it.rank?`<span class="tag">順位 ${Number(it.rank).toLocaleString()}位</span>`:''}
+              ${it.sellers?`<span class="tag">出品${it.sellers}件</span>`:''}
+            </div>
+          </div>
+          <button class="btn-danger" onclick="removeItem(${it.id})">削除</button>
+        </div>
+        <div class="calc-box">
+          <div class="slider-row"><span>⚡早さ重視</span>
+            <input type="range" min="0" max="100" value="${it.priority}" oninput="updateItem(${it.id},{priority:Number(this.value)})">
+            <span>💰高値重視</span>
+          </div>
+          <div class="result-row">
+            <div class="result"><div class="result-value">¥${r.price.toLocaleString()}</div><div class="result-label">提案価格</div></div>
+            <div class="result"><div class="result-value days">約${r.days}日</div><div class="result-label">売却目安</div></div>
+          </div>
+        </div>
+        ${it.memo?`<div style="font-size:12px;color:#9999b8;margin-bottom:8px">${esc(it.memo)}</div>`:''}
+        <div class="field"><label>ショップ用 画像URL（任意）</label><input value="${esc(it.image||'')}" placeholder="https://..." onchange="updateItem(${it.id},{image:this.value})"></div>
+        <div class="item-foot">
+          <label class="chk-row"><input type="checkbox" ${it.forSale?'checked':''} onchange="updateItem(${it.id},{forSale:this.checked})"> 出品する（ショップに掲載）</label>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  const forSaleItems = items.filter(i=>i.forSale);
+  const total = forSaleItems.reduce((s,it)=>s+calc(it,it.priority).price,0);
+  document.getElementById('summary').innerHTML = `
+    <div class="result"><div class="result-value">${items.length}</div><div class="result-label">登録商品数</div></div>
+    <div class="result"><div class="result-value">${forSaleItems.length}</div><div class="result-label">出品予定</div></div>
+    <div class="result"><div class="result-value">¥${total.toLocaleString()}</div><div class="result-label">合計予想金額</div></div>
+  `;
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function exportData(){
+  const forSaleItems = items.filter(i=>i.forSale);
+  const out = forSaleItems.map(it=>{
+    const r = calc(it, it.priority);
+    return {
+      name: it.name,
+      cat: it.cat,
+      cond: COND_LABEL[it.cond],
+      price: r.price,
+      days: r.days,
+      memo: it.memo||'',
+      image: it.image||'',
+      status: '販売中'
+    };
+  });
+  const code = 'const ITEMS = ' + JSON.stringify(out, null, 2) + ';';
+  document.getElementById('export-out').value = code;
+  const msg = document.getElementById('copy-msg');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(code).then(()=>{
+      msg.style.display='block';
+      setTimeout(()=>msg.style.display='none', 4000);
+    }).catch(()=>{});
+  }
+}
+
+render();
+</script>
+</body>
+</html>
