@@ -931,7 +931,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260806-1';
+const APP_BUILD='20260806-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1813,7 +1813,12 @@ function setStatus(s){
       spotHistory:spotChangeHistory.length>1?spotChangeHistory.slice():null
     };
     manualWaitStartTime=null;manualWaitAddr=null;
-    currentSpotSelection=null;
+    // 同じ乗り場（羽田プール）に留まったまま連続でお客様を乗せる場合、実車ボタンを
+    // 押すたびに号選択をリセットしてしまうと、毎回チップを押し直さない限り
+    // 次の乗車の乗り場情報が空欄になってしまう。実際にプールから離れていない場合は
+    // 選択状態を維持し、次の乗車にもそのまま引き継がれるようにする
+    const staysInPool=checkpoints.some(c=>c.spots&&c.spots.length>0&&cpInside[c.id]);
+    if(!staysInPool)currentSpotSelection=null;
     spotChangeHistory=[];
     // 曜日・時間帯別の待機時間統計に記録する（月末リセットの対象外で累計し続ける）
     recordSpotWaitStat(boardSpot,waitMins,Date.now());
@@ -1831,7 +1836,7 @@ function setStatus(s){
     // ここでチェックポイントの滞在状態（次回また新規到着として扱われるように）をリセットする
     const hCpAll=checkpoints.find(c=>c.spots&&c.spots.length>0);
     const arrStr=(hCpAll&&hCpAll.arrivalTimeStr)||'−';
-    if(hCpAll){hCpAll.currentSpot=null;hCpAll.arrivalTimeStr=null;hCpAll.poolModalHandled=false;}
+    if(hCpAll&&!staysInPool){hCpAll.currentSpot=null;hCpAll.arrivalTimeStr=null;hCpAll.poolModalHandled=false;}
     if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
     renderSpotRow();
     hidePoolPanel();hidePoolHistory();syncPoolPanel();
@@ -1841,6 +1846,7 @@ function setStatus(s){
       saveWaitHistory(spotLabel,arrStr,nowStr,waitSec);
     }
     resetWait();
+    saveAppState(); // 号選択の維持/リセット状態を、リロードをまたいでも正しく復元できるよう保存し直す
   }
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
     const fallbackBoardTs=jitsushaStart; // 実車開始時刻を、乗車時刻の保険として保持
