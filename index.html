@@ -931,7 +931,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260807-2';
+const APP_BUILD='20260807-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1338,7 +1338,7 @@ function _attachGPSWatch(){
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
     if(autoFollow&&!followPeerId&&leafletMap)panMapTo(()=>leafletMap.setView([myLat,myLng]));
     pushMyPosition(false);
-    checkGeofences(myLat,myLng);
+    checkGeofences(myLat,myLng,isFirstFix);
     // GPS初回フィックス時：プール内なら列選択モーダルを表示（表示可否はshowPoolLaneModal内で判定）
     if(isFirstFix){
       const cp=checkpoints.find(c=>c.id==='haneda');
@@ -2602,13 +2602,17 @@ function clearWaitHistory(){
   
 const CP_TRANSITION_DEBOUNCE_MS=10000; // 出勤直後などGPSが不安定な時に、短時間で入退場を繰り返し反転させない
 let pendingDepartureTimer={};
-function checkGeofences(lat,lng){
+function checkGeofences(lat,lng,isFirstFix){
   const now=Date.now();
   checkpoints.forEach(cp=>{
     if(!cp.enabled||cp.lat===null)return;
     const dist=haversine(lat,lng,cp.lat,cp.lng);
-    const wasInside=cpInside[cp.id]||false;
     const nowInside=dist<=cp.radius;
+    // 再読み込み後のGPS初回フィックスでは、cpInsideがまだ空のため、実際にはずっと
+    // 滞在し続けていても「今初めて到着した」と誤検知してしまう。初回だけは
+    // 到着・出発イベントを発火させず、現在地から見た本当の在圏状況をそのまま記憶する
+    if(isFirstFix){cpInside[cp.id]=nowInside;return;}
+    const wasInside=cpInside[cp.id]||false;
     if(nowInside===wasInside){
       // 内側に戻った場合は、確認待ちの退場判定をキャンセルする
       // （バックグラウンド復帰直後のGPS精度低下等による「通過」の誤検知を防ぐ）
