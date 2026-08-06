@@ -931,7 +931,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260807-5';
+const APP_BUILD='20260807-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3293,7 +3293,7 @@ let spotDestStats={}; // {spot:{ward:count}}。月末リセットの対象外で
 function renderSpotDestTable(){
   const el=document.getElementById('spotdest-table');
   if(!el)return;
-  const spots=['1号','2号','3号','4号'];
+  const spots=['1号','2号','3号','4号','国際線'];
   const columns=spots.map(s=>{
     const wards=spotDestStats[s]||{};
     return Object.entries(wards).map(([ward,count])=>({ward,count})).sort((a,b)=>b.count-a.count);
@@ -3323,7 +3323,7 @@ function normHourForSort(h){return h<11?h+24:h;}
 function renderSpotWaitStats(){
   const el=document.getElementById('spotwait-table');
   if(!el)return;
-  const spots=['1号','2号','3号','4号'];
+  const spots=['1号','2号','3号','4号','国際線'];
   const dayOrder=['月','火','水','木','金','土','日'];
   let html='';
   spots.forEach(spot=>{
