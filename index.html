@@ -931,7 +931,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260807-4';
+const APP_BUILD='20260807-5';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1845,8 +1845,9 @@ function setStatus(s){
       const wm=(waitMins&&waitMins>0)?waitMins:0;
       const wh=Math.floor(wm/60),wmm=wm%60;
       const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
+      const spotPhrase=boardSpot==='国際線'?'羽田空港国際線乗り場':`${boardSpot}乗り場`;
       db.ref('chat').push({uid:myId,name,
-        text:`🚕【自動】${name}さんが${boardSpot}乗り場を出発しました。（待機時間${waitStr}）`,
+        text:`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,
         time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true});
     }
     // 待機タイマー・号選択の停止は実車ボタンを押した時点で確定するため、
@@ -2662,6 +2663,14 @@ function checkGeofences(lat,lng,isFirstFix){
   });
 }
 
+// チェックポイント名から、押し忘れ検知で使う乗り場ラベル（1号〜4号／国際線）を判定する
+function spotLabelFromCheckpointName(name){
+  if(!name)return null;
+  const m=name.match(/^([1-4])号乗り場$/);
+  if(m)return m[1]+'号';
+  if(name.includes('国際線'))return '国際線';
+  return null;
+}
 function onDeparture(cp){
   // 待機タイマー・号選択・列移動履歴の停止は実車ボタンを押した時だけと決めているため、
   // チェックポイントのGPS上の退場（一時的にエリアを外れただけの場合も含む）では
@@ -2673,11 +2682,12 @@ function onDeparture(cp){
   // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
   sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
   toast(cp.icon+' '+cp.name+' を出発しました');
-  // 「1号乗り場」〜「4号乗り場」というチェックポイントから、実車ボタンを押さないまま
-  // 出発した場合は、押し忘れとみなして自動的に実車状態にする（乗り場・待機時間も記録される）
-  const spotMatch=cp.name&&cp.name.match(/^([1-4])号乗り場$/);
-  if(spotMatch&&isDuty&&!testMode&&currentStatus!=='jitsusha'){
-    currentSpotSelection=spotMatch[1]+'号';
+  // 「1号乗り場」〜「4号乗り場」「国際線第3/4プール」等のチェックポイントから、
+  // 実車ボタンを押さないまま出発した場合は、押し忘れとみなして自動的に実車状態にする
+  // （乗り場・待機時間も記録される）
+  const spotLabel=spotLabelFromCheckpointName(cp.name);
+  if(spotLabel&&isDuty&&!testMode&&currentStatus!=='jitsusha'){
+    currentSpotSelection=spotLabel;
     if(cp.arrivalTimeStr){
       const [ah,am]=cp.arrivalTimeStr.split(':').map(Number);
       const nowD=new Date();
