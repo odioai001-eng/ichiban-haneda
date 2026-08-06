@@ -931,7 +931,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260806-2';
+const APP_BUILD='20260807-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3596,15 +3596,13 @@ function renderCPs(){
       </div>
       <div class="cp-coords">${cp.lat!==null?`${cp.lat.toFixed(5)}, ${cp.lng.toFixed(5)}`:'位置が未設定です'}</div>
       <div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:12px;color:var(--muted)">通知範囲（半径）</span>
-          <span style="font-size:13px;font-weight:700;color:var(--cyan)" id="cp-radius-val-${i}">${cp.radius}m</span>
-        </div>
-        <input type="range" min="10" max="1000" step="10" value="${cp.radius}"
-          style="width:100%;margin-bottom:0;padding:0;background:transparent;border:none"
-          oninput="updateCPRadius(${i},this.value)">
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px">
-          <span>10m</span><span>500m</span><span>1000m</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button onclick="stepCPRadius(${i},-10)" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;font-weight:700;line-height:1;cursor:pointer">－</button>
+            <span style="font-size:14px;font-weight:700;color:var(--cyan);min-width:52px;text-align:center" id="cp-radius-val-${i}">${cp.radius}m</span>
+            <button onclick="stepCPRadius(${i},10)" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;font-weight:700;line-height:1;cursor:pointer">＋</button>
+          </div>
         </div>
       </div>
       <div style="display:flex;gap:7px;flex-wrap:wrap">
@@ -3617,7 +3615,13 @@ function renderCPs(){
     </div>`).join('');
 }
 
-function updateCPRadius(i,val){checkpoints[i].radius=parseInt(val);document.getElementById('cp-radius-val-'+i).textContent=val+'m';saveCPs();}
+function stepCPRadius(i,delta){
+  const cp=checkpoints[i];if(!cp)return;
+  cp.radius=Math.max(10,Math.min(1000,(cp.radius||10)+delta));
+  const el=document.getElementById('cp-radius-val-'+i);
+  if(el)el.textContent=cp.radius+'m';
+  saveCPs();
+}
 function toggleCP(i){checkpoints[i].enabled=!checkpoints[i].enabled;saveCPs();renderCPs();toast(checkpoints[i].name+' 通知'+(checkpoints[i].enabled?'ON':'OFF'));}
 function setCPFromGPS(i){if(myLat===null){toast('⚠️ GPSを取得できていません');return;}checkpoints[i].lat=myLat;checkpoints[i].lng=myLng;saveCPs();renderCPs();toast('✅ '+checkpoints[i].name+' の位置を登録');}
 function openCPEdit(i){
