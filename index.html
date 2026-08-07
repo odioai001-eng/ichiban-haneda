@@ -297,6 +297,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
     </div>
+    <!-- 国際線2列移動の間隔ログ（国際線チップの真下、右寄せ） -->
+    <div id="intl-move-log" style="display:none;font-size:10px;color:var(--cyan);text-align:right;margin-top:3px;word-break:break-all"></div>
     <!-- Row 4: 総列数 -->
     <div id="pool-info-row" style="display:grid;grid-template-columns:56px repeat(4,1fr);gap:6px;width:100%;align-items:stretch">
       <div style="font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap;
@@ -931,7 +933,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260807-6';
+const APP_BUILD='20260807-7';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -958,6 +960,7 @@ let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
 let poolMoves=[],poolLocks={},poolLockTimer=null,myLastAction=null;
 let poolProgress={};
+let intlPoolMoves=[]; // 国際線2列移動の記録 {ts,uid,name}
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
 let chatReadMap={};
 let posHistory=[],stopState=null,bearingBeforeStop=null;
@@ -1850,6 +1853,10 @@ function setStatus(s){
         text:`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,
         time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true});
     }
+    // 国際線乗り場からの出発（実車ボタン・押し忘れ検知のいずれも）は、本人にも通知する
+    if(boardSpot==='国際線'){
+      sendNotif('✈️ 国際線乗り場を出発しました。','','intl-board-depart');
+    }
     // 待機タイマー・号選択の停止は実車ボタンを押した時点で確定するため、
     // ここでチェックポイントの滞在状態（次回また新規到着として扱われるように）をリセットする
     const hCpAll=checkpoints.find(c=>c.spots&&c.spots.length>0);
@@ -1971,6 +1978,12 @@ function connectFirebase(config){
       if(poolMoves.length>200)poolMoves.shift();
       renderPoolChart();
       if(poolPanelOpen)refreshPoolHistory(null);
+    });
+    db.ref('intl_pool_moves').limitToLast(50).on('child_added',snap=>{
+      const m=snap.val();if(!m)return;
+      intlPoolMoves.push(m);intlPoolMoves.sort((a,b)=>a.ts-b.ts);
+      if(intlPoolMoves.length>50)intlPoolMoves.shift();
+      renderIntlMoveLog();
     });
     db.ref('pool_locks').on('value',snap=>{
       poolLocks=snap.val()||{};
@@ -2664,11 +2677,21 @@ function checkGeofences(lat,lng,isFirstFix){
 }
 
 // チェックポイント名から、押し忘れ検知で使う乗り場ラベル（1号〜4号／国際線）を判定する
+// 国際線は、第4プール（予備）を経由して第3プール（メイン）の終点＝乗り場でお客様を乗せる
+// 運用のため、実車の自動判定は「第3プールからの出発」だけを対象にする
+// （第4プールからの出発は、まだ乗せておらず単に本プールへ進んだだけのため対象外）
 function spotLabelFromCheckpointName(name){
   if(!name)return null;
   const m=name.match(/^([1-4])号乗り場$/);
   if(m)return m[1]+'号';
-  if(name.includes('国際線'))return '国際線';
+  if(name.includes('国際線')&&name.includes('第3'))return '国際線';
+  return null;
+}
+// 国際線プールの到着通知は、通常のチェックポイントとは異なる文言を使う
+function intlPoolArrivalText(cp){
+  if(!cp.name)return null;
+  if(cp.name.includes('国際線第4プール'))return '国際線第４プールに到着しました。';
+  if(cp.name.includes('国際線第3プール'))return '国際線第３プールに到着しました。';
   return null;
 }
 function onDeparture(cp){
@@ -2726,9 +2749,10 @@ function onArrival(cp,dist){
     const stillInside=haversine(myLat,myLng,cp.lat,cp.lng)<=cp.radius;
     if(!stillInside)return; // 60秒後にはもう外にいれば、通過とみなして通知しない
     // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
-    sendNotif(cp.icon+' '+cp.name+' に到着',`到着時刻 ${timeStr}`,'taxi-'+cp.id);
+    const intlArrivalText=intlPoolArrivalText(cp);
+    sendNotif(intlArrivalText||(cp.icon+' '+cp.name+' に到着'),`到着時刻 ${timeStr}`,'taxi-'+cp.id);
     if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
-    toast(cp.icon+' '+cp.name+' 到着！');
+    toast(intlArrivalText||(cp.icon+' '+cp.name+' 到着！'));
   },60000);
   renderSpotRow();
 }
@@ -2766,7 +2790,7 @@ function renderSpotRow(){
   const wrap=document.getElementById('spot-chips-wrap');
   if(!hCp||!hCp.spots||!hCp.spots.length){el.innerHTML='';if(wrap)wrap.style.display='none';return;}
   if(wrap)wrap.style.display='grid';
-  syncPoolPanel();renderPoolChart();renderPoolButtons();
+  syncPoolPanel();renderPoolChart();renderPoolButtons();renderIntlMoveLog();
 
   const chipHtml=s=>{
     const sel=currentSpotSelection===s;
@@ -4373,6 +4397,29 @@ function recordProgress(spot,amount){
   toast(`✅ ${spot} +${amount} を記録しました`);
 }
 
+// 国際線は基本2列ずつしか動かないため、+1/+2のような内訳ではなく、
+// 「押してから何分経ったか」を並べて移動スピードの目安にする
+function recordIntlPoolMove(){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  if(testMode){toast('🧪 テストモード中は仲間と共有されるデータを変更できません');return;}
+  const name=localStorage.getItem('taxi_name')||'自分';
+  db.ref('intl_pool_moves').push({ts:Date.now(),uid:myId,name});
+  toast('✈️ 国際線 2列移動を記録しました');
+}
+function renderIntlMoveLog(){
+  const el=document.getElementById('intl-move-log');
+  if(!el)return;
+  const todayStr=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const today=intlPoolMoves
+    .filter(m=>new Date(m.ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'})===todayStr)
+    .sort((a,b)=>a.ts-b.ts);
+  if(today.length<2){el.style.display='none';el.textContent='';return;}
+  const intervals=[];
+  for(let i=1;i<today.length;i++)intervals.push(Math.max(0,Math.round((today[i].ts-today[i-1].ts)/60000)));
+  el.style.display='block';
+  el.textContent='国際線2列移動の間隔: '+intervals.map(v=>v+'分').join('、');
+}
+
 const LANE_MODAL_COUNTS={'1号':8,'2号':11,'3号':10,'4号':9};
 let laneModalSpot=null,laneModalLane=null;
 function showPoolLaneModal(){
@@ -4931,6 +4978,7 @@ window.addEventListener('load',()=>{
     <button id="pool-btn-3号_2" onclick="recordProgress('3号',2)" class="pool-btn">3号 +2</button>
     <button id="pool-btn-4号_2" onclick="recordProgress('4号',2)" class="pool-btn">4号 +2</button>
   </div>
+  <button onclick="recordIntlPoolMove()" class="pool-btn" style="width:100%;margin-bottom:8px">✈️ 国際線 2列移動</button>
   <!-- 取り消しボタン -->
   <button id="pool-undo-btn" onclick="undoPoolMove()" style="display:none;width:100%;margin-bottom:8px;
     padding:7px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
