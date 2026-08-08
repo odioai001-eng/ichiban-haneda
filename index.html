@@ -933,7 +933,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260807-7';
+const APP_BUILD='20260808-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2642,7 +2642,20 @@ function checkGeofences(lat,lng,isFirstFix){
     // 再読み込み後のGPS初回フィックスでは、cpInsideがまだ空のため、実際にはずっと
     // 滞在し続けていても「今初めて到着した」と誤検知してしまう。初回だけは
     // 到着・出発イベントを発火させず、現在地から見た本当の在圏状況をそのまま記憶する
-    if(isFirstFix){cpInside[cp.id]=nowInside;return;}
+    if(isFirstFix){
+      // バックグラウンド強制終了等でリロードが発生し、選択済みだった乗り場から
+      // 実際にはすでに出発していた場合、通常の出発イベントが一度も発火しないまま
+      // 「最初から外にいた」ことにされてしまい、実車ボタンの押し忘れ検知が
+      // 素通りしてしまう。選択中の乗り場から出ていたことが分かった時点で、
+      // 通常の出発処理（押し忘れ検知含む）を即座に行う
+      const spotLabel=spotLabelFromCheckpointName(cp.name);
+      if(!nowInside&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&spotLabel&&spotLabel===currentSpotSelection){
+        cpInside[cp.id]=false;
+        onDeparture(cp);
+        return;
+      }
+      cpInside[cp.id]=nowInside;return;
+    }
     const wasInside=cpInside[cp.id]||false;
     if(nowInside===wasInside){
       // 内側に戻った場合は、確認待ちの退場判定をキャンセルする
