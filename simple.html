@@ -77,9 +77,32 @@ label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
   text-align:center;font-size:13px;font-weight:700;cursor:pointer;
   padding:10px 14px calc(10px + env(safe-area-inset-top,0px))}
 .sync-status{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
+.setup-screen{display:none;position:fixed;inset:0;background:var(--bg);z-index:5000;
+  align-items:center;justify-content:center;padding:24px;overflow-y:auto}
+.setup-screen.open{display:flex}
+.setup-box{background:var(--surface);border-radius:16px;padding:22px;width:100%;max-width:420px;
+  border:1px solid var(--border);margin:auto}
+.setup-box h2{font-size:18px;font-weight:700;margin-bottom:6px}
+.setup-box p{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6}
 </style>
 </head>
 <body>
+
+<div class="setup-screen" id="setup-screen">
+  <div class="setup-box">
+    <h2>ようこそ 👋</h2>
+    <p>出退勤の記録と個人の売上管理だけのシンプルなアプリです。まずは名前を入力してください。</p>
+    <label>名前</label>
+    <input type="text" id="setup-name" placeholder="例: 高橋">
+    <label>同期コード（任意）</label>
+    <input type="text" id="setup-sync-code" placeholder="例: 好きな文字列・数字">
+    <p style="margin-bottom:10px">以前このアプリや別の端末で使ったことがある場合は、その時の同期コードを入力して「復元して始める」を押してください。初めて使う方は空欄のまま「新規に始める」でOKです。</p>
+    <div class="btn-row">
+      <button class="btn btn-p btn-full" onclick="completeSetup(false)">🆕 新規に始める</button>
+      <button class="btn btn-g btn-full" onclick="completeSetup(true)">🔄 コードのデータを復元して始める</button>
+    </div>
+  </div>
+</div>
 
 <div class="hdr">
   <div class="hdr-title" id="hdr-name">出退勤・売上管理</div>
@@ -189,7 +212,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-1';
+const APP_BUILD='20260808-2';
 
 let db=null;
 function tryFirebase(){
@@ -574,6 +597,55 @@ function restoreFromSync(){
   });
 }
 
+// ===== 初回起動時の設定画面（新規の人向け） =====
+function checkFirstRun(){
+  if(localStorage.getItem('simple_setup_done')==='1')return;
+  const hasData=localStorage.getItem('taxi_name')||localStorage.getItem('taxi_shift_log')||localStorage.getItem('taxi_fare_log');
+  if(hasData){
+    // 既にこの端末にデータがある（既存アプリの利用者など）場合は、案内を出さずそのまま使わせる
+    localStorage.setItem('simple_setup_done','1');
+    return;
+  }
+  document.getElementById('setup-screen').classList.add('open');
+}
+function finishSetup(){
+  localStorage.setItem('simple_setup_done','1');
+  loadSettingsInputs();renderAll();loadDutyState();
+  const savedCode=localStorage.getItem('simple_sync_code');
+  document.getElementById('sync-status').textContent=savedCode?'同期コード設定済み: '+savedCode:'同期コード未設定（この端末だけで記録されます）';
+  document.getElementById('setup-screen').classList.remove('open');
+}
+function completeSetup(restore){
+  const name=document.getElementById('setup-name').value.trim();
+  const code=document.getElementById('setup-sync-code').value.trim();
+  if(restore){
+    if(!code){toast('⚠️ 復元するには同期コードを入力してください');return;}
+    if(!db){toast('⚠️ サーバーに接続できません。しばらくしてから再度お試しください');return;}
+    db.ref('simple_backup/'+encodeURIComponent(code)).once('value',snap=>{
+      const v=snap.val();
+      if(!v){toast('⚠️ このコードのデータが見つかりません');return;}
+      localStorage.setItem('simple_sync_code',code);
+      localStorage.setItem('taxi_name',v.name||name||'');
+      localStorage.setItem('taxi_shift_log',JSON.stringify(v.shiftLog||[]));
+      localStorage.setItem('taxi_fare_log',JSON.stringify(v.fareLog||[]));
+      localStorage.setItem('taxi_carry_fare',v.carryFare||'0');
+      localStorage.setItem('taxi_carry_hours',v.carryHours||'0');
+      localStorage.setItem('taxi_carry_days',v.carryDays||'0');
+      if(v.targetDays)localStorage.setItem('taxi_target_days',v.targetDays);
+      if(v.targetAmount)localStorage.setItem('taxi_target_amount',v.targetAmount);
+      finishSetup();
+      toast('✅ 前回までのデータを復元しました');
+    });
+    return;
+  }
+  if(!name){toast('⚠️ 名前を入力してください');return;}
+  localStorage.setItem('taxi_name',name);
+  if(code)localStorage.setItem('simple_sync_code',code);
+  finishSetup();
+  if(code)pushSync();
+  toast('✅ ようこそ！さっそく出勤ボタンから記録を始められます');
+}
+
 // ===== 更新チェック =====
 async function checkForUpdate(){
   if(location.protocol==='file:')return;
@@ -601,6 +673,7 @@ function init(){
   renderAll();
   const code=localStorage.getItem('simple_sync_code');
   if(code)document.getElementById('sync-status').textContent='同期コード設定済み: '+code;
+  checkFirstRun();
   setTimeout(checkForUpdate,4000);
   setInterval(checkForUpdate,5*60*1000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkForUpdate();});
