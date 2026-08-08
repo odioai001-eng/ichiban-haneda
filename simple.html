@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>出退勤・売上管理（簡易版）</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="出退勤・売上（簡易）">
+<meta name="mobile-web-app-capable" content="yes">
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d0d1a;--surface:#161628;--surface2:#1e1e35;--border:#2a2a4a;
+  --text:#e8e8f4;--muted:#7878a0;--accent:#4f8ef7;
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#a855f7;--cyan:#06b6d4;
+  --gold:#fbbf24;--hh:54px;
+}
+html,body{min-height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:var(--bg);color:var(--text);max-width:480px;margin:0 auto;position:relative;padding-bottom:40px}
+.hdr{position:sticky;top:0;width:100%;height:calc(var(--hh) + env(safe-area-inset-top,0px));
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);
+  background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding-left:14px;padding-right:14px;z-index:1000}
+.hdr-title{font-size:15px;font-weight:700;letter-spacing:.3px;line-height:1.15}
+.duty-btn{padding:8px 16px;border-radius:20px;border:none;font-size:13px;font-weight:700;cursor:pointer;transition:all .2s}
+.duty-btn.on{background:var(--green);color:#fff}
+.duty-btn.off{background:var(--red);color:#fff}
+.duty-btn:active{transform:scale(.95)}
+.wrap{padding:14px}
+.sec{font-size:11px;font-weight:700;color:var(--muted);margin:16px 0 8px;
+  text-transform:uppercase;letter-spacing:.8px;display:flex;justify-content:space-between;align-items:center}
+.sec:first-child{margin-top:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+.timer-big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:1px;color:var(--gold);text-align:center}
+.duty-lbl{text-align:center;font-size:13px;color:var(--muted);margin-bottom:6px}
+.btn{padding:9px 14px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.btn:active{transform:scale(.95)}
+.btn-p{background:var(--accent);color:#fff}
+.btn-d{background:var(--red);color:#fff}
+.btn-s{background:var(--green);color:#fff}
+.btn-g{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn-full{width:100%}
+input,textarea,select{width:100%;padding:9px 12px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:8px;color:var(--text);
+  font-size:14px;margin-bottom:9px;-webkit-appearance:none;font-family:inherit}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+.row2{display:flex;justify-content:space-between;align-items:center;padding:3px 0;margin-bottom:4px}
+.rl{font-size:12px;color:var(--muted)}
+.rv{font-size:13px;font-weight:600}
+.entry-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+.entry-row:last-child{border-bottom:none}
+.entry-main{flex:1;font-size:12px}
+.entry-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+  padding:4px 8px;font-size:11px;cursor:pointer}
+.toast{position:fixed;top:calc(var(--hh) + env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);
+  background:rgba(30,30,60,.95);color:#fff;padding:7px 18px;border-radius:20px;
+  font-size:13px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s;
+  max-width:280px;text-align:center;border:1px solid var(--border)}
+.toast.show{opacity:1}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+  z-index:2000;align-items:flex-end;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:18px 18px 0 0;padding:18px;
+  width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between}
+.mc{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+#update-banner{position:fixed;left:0;right:0;top:0;z-index:99999;background:var(--accent);color:#fff;
+  text-align:center;font-size:13px;font-weight:700;cursor:pointer;
+  padding:10px 14px calc(10px + env(safe-area-inset-top,0px))}
+.sync-status{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title" id="hdr-name">出退勤・売上管理</div>
+  <button id="duty-btn" class="duty-btn off" onclick="toggleDuty()">出勤する</button>
+</div>
+
+<div class="wrap">
+
+  <div class="sec">乗務状況</div>
+  <div class="card">
+    <div class="duty-lbl" id="duty-label">休み中</div>
+    <div class="timer-big" id="duty-elapsed">00:00:00</div>
+  </div>
+
+  <div class="sec">今月の実績</div>
+  <div class="card" id="work-stats-out"></div>
+
+  <div class="sec">目標設定
+    <button class="entry-btn" onclick="toggleBox('target-box')">編集</button>
+  </div>
+  <div class="card" id="target-box" style="display:none">
+    <label>今月の目標出勤日数</label>
+    <input type="number" id="s-target-days" inputmode="numeric" placeholder="例: 20">
+    <label>今月の目標売上（税抜）</label>
+    <input type="number" id="s-target-amount" inputmode="numeric" placeholder="例: 600000">
+    <button class="btn btn-p btn-full" onclick="saveTargetSettings()">✅ 保存</button>
+  </div>
+
+  <div class="sec">繰越（前システム等からの引継ぎ分）
+    <button class="entry-btn" onclick="toggleBox('carry-box')">編集</button>
+  </div>
+  <div class="card" id="carry-box" style="display:none">
+    <label>繰越 売上（税抜・円）</label>
+    <input type="number" id="s-carry-fare" inputmode="numeric" placeholder="0">
+    <label>繰越 時間（時:分。例 85:30）</label>
+    <input type="text" id="s-carry-hours" placeholder="0:00">
+    <label>繰越 日数</label>
+    <input type="number" id="s-carry-days" inputmode="numeric" placeholder="0">
+    <div class="btn-row">
+      <button class="btn btn-p" onclick="saveCarrySettings()">✅ 保存</button>
+      <button class="btn btn-g" onclick="clearCarrySettings()">🗑 クリア</button>
+    </div>
+  </div>
+
+  <div class="sec">出退勤記録
+    <button class="entry-btn" onclick="toggleBox('shift-add-box')">＋手動追加</button>
+  </div>
+  <div class="card" id="shift-add-box" style="display:none">
+    <label>日付</label>
+    <input type="date" id="sl-date">
+    <label>出勤時刻</label>
+    <input type="time" id="sl-start">
+    <label>退勤時刻</label>
+    <input type="time" id="sl-end">
+    <button class="btn btn-p btn-full" onclick="saveManualShift()">✅ この記録を追加</button>
+  </div>
+  <div class="card" id="shift-entries-list"></div>
+
+  <div class="sec">運賃入力</div>
+  <div class="card">
+    <label>運賃（税込・円）</label>
+    <input type="number" id="fare-input" inputmode="numeric" placeholder="例: 3300">
+    <label>自腹高速代（円・任意）</label>
+    <input type="number" id="toll-input" inputmode="numeric" placeholder="0">
+    <button class="btn btn-p btn-full" onclick="saveFareEntry()">✅ 記録する</button>
+  </div>
+
+  <div class="sec">売上</div>
+  <div class="card" id="sales-stats-out"></div>
+
+  <div class="sec">本日の運賃記録</div>
+  <div class="card" id="fare-entries-list"></div>
+
+  <div class="sec">端末間同期・バックアップ</div>
+  <div class="card">
+    <label>名前</label>
+    <input type="text" id="s-name" placeholder="例: 高橋">
+    <label>同期コード（他の端末にも同じコードを入力すると同じデータが見られます）</label>
+    <input type="text" id="s-sync-code" placeholder="例: 好きな文字列・数字">
+    <div class="btn-row">
+      <button class="btn btn-p" onclick="saveSyncSettings()">✅ 保存してこの端末のデータを送信</button>
+      <button class="btn btn-g" onclick="restoreFromSync()">🔄 このコードのデータを復元</button>
+    </div>
+    <div class="sync-status" id="sync-status">同期コード未設定（この端末だけで記録されます）</div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div class="overlay" id="duty-end-overlay">
+  <div class="modal">
+    <h3>退勤<button class="mc" onclick="closeDutyEndModal()">✕</button></h3>
+    <label>退勤時刻（空欄なら現在時刻）</label>
+    <input type="time" id="duty-end-time">
+    <button class="btn btn-p btn-full" onclick="confirmEndDuty()">✅ 退勤する</button>
+  </div>
+</div>
+
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBkvfkNDnPW2jBmdWXYol52DyKwE6fDSSU",
+  authDomain: "ichiban-hanedateam.firebaseapp.com",
+  databaseURL: "https://ichiban-hanedateam-default-rtdb.firebaseio.com",
+  projectId: "ichiban-hanedateam",
+  storageBucket: "ichiban-hanedateam.firebasestorage.app",
+  messagingSenderId: "775194714893",
+  appId: "1:775194714893:web:b89446b29ddbc8213a0644"
+};
+const APP_BUILD='20260808-1';
+
+let db=null;
+function tryFirebase(){
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db=firebase.database();
+  }catch(e){}
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+function toggleBox(id){
+  const el=document.getElementById(id);
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+function pad(n){return String(n).padStart(2,'0');}
+function toHMS(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return`${pad(h)}:${pad(m)}:${pad(sec)}`;}
+
+// ===== 出退勤 =====
+let isDuty=false,dutyStart=null,dutyInterval=null;
+
+function loadDutyState(){
+  const raw=localStorage.getItem('simple_duty_state');
+  if(!raw)return;
+  let st;try{st=JSON.parse(raw);}catch(e){return;}
+  if(!st.isDuty)return;
+  isDuty=true;dutyStart=new Date(st.dutyStartTs);
+  const btn=document.getElementById('duty-btn');
+  btn.textContent='退勤する';btn.className='duty-btn on';
+  document.getElementById('duty-label').textContent='乗務中';
+  startDutyTimer();
+}
+function saveDutyState(){
+  localStorage.setItem('simple_duty_state',JSON.stringify({isDuty,dutyStartTs:dutyStart?dutyStart.getTime():null}));
+}
+function startDutyTimer(){
+  if(dutyInterval)clearInterval(dutyInterval);
+  dutyInterval=setInterval(()=>{
+    if(!dutyStart)return;
+    document.getElementById('duty-elapsed').textContent=toHMS(Math.floor((Date.now()-dutyStart.getTime())/1000));
+  },1000);
+}
+function toggleDuty(){
+  if(!isDuty){
+    isDuty=true;dutyStart=new Date();
+    const btn=document.getElementById('duty-btn');
+    btn.textContent='退勤する';btn.className='duty-btn on';
+    document.getElementById('duty-label').textContent='乗務中';
+    document.getElementById('duty-elapsed').textContent='00:00:00';
+    startDutyTimer();
+    saveDutyState();
+    toast('✅ 出勤しました');
+  }else{
+    document.getElementById('duty-end-time').value='';
+    document.getElementById('duty-end-overlay').classList.add('open');
+  }
+}
+function closeDutyEndModal(){document.getElementById('duty-end-overlay').classList.remove('open');}
+function confirmEndDuty(){
+  const timeVal=document.getElementById('duty-end-time').value;
+  document.getElementById('duty-end-overlay').classList.remove('open');
+  let endTs=Date.now();
+  if(timeVal&&dutyStart){
+    const [eh,em]=timeVal.split(':').map(Number);
+    const baseNow=new Date();
+    let endDate=new Date(baseNow.getFullYear(),baseNow.getMonth(),baseNow.getDate(),eh,em,0);
+    if(endDate.getTime()<dutyStart.getTime())endDate=new Date(endDate.getTime()+24*3600*1000);
+    endTs=endDate.getTime();
+  }
+  if(dutyStart){
+    const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+    shiftLog.push({
+      dateStr:new Date(dutyStart.getTime()).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}),
+      startTs:dutyStart.getTime(),endTs,
+      durationSec:Math.floor((endTs-dutyStart.getTime())/1000)+1800
+    });
+    localStorage.setItem('taxi_shift_log',JSON.stringify(shiftLog));
+  }
+  isDuty=false;dutyStart=null;
+  if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
+  const btn=document.getElementById('duty-btn');
+  btn.textContent='出勤する';btn.className='duty-btn off';
+  document.getElementById('duty-label').textContent='休み中';
+  document.getElementById('duty-elapsed').textContent='00:00:00';
+  saveDutyState();
+  renderAll();
+  pushSync();
+  toast('✅ 退勤しました');
+}
+
+// ===== 目標・繰越 =====
+const MONTHLY_TARGET_HOURS=0; // このアプリでは時間の目安表示は行わず、日数・売上のみを目標にする
+function getCarryover(){
+  return {
+    fare:parseInt(localStorage.getItem('taxi_carry_fare')||'0')||0,
+    hours:parseFloat(localStorage.getItem('taxi_carry_hours')||'0')||0,
+    days:parseInt(localStorage.getItem('taxi_carry_days')||'0')||0
+  };
+}
+function parseClockHours(str){
+  str=(str||'').trim();
+  if(!str)return 0;
+  const m=str.match(/^(\d+)[:：](\d{1,2})$/);
+  if(m)return Math.round((parseInt(m[1],10)+parseInt(m[2],10)/60)*100)/100;
+  const f=parseFloat(str);
+  return isNaN(f)?0:f;
+}
+function formatClockHours(h){
+  h=h||0;
+  const hh=Math.floor(h);
+  const mm=Math.round((h-hh)*60);
+  return `${hh}:${pad(mm)}`;
+}
+function saveCarrySettings(){
+  const fare=parseInt(document.getElementById('s-carry-fare').value)||0;
+  const hours=parseClockHours(document.getElementById('s-carry-hours').value);
+  const days=parseInt(document.getElementById('s-carry-days').value)||0;
+  localStorage.setItem('taxi_carry_fare',fare);
+  localStorage.setItem('taxi_carry_hours',hours);
+  localStorage.setItem('taxi_carry_days',days);
+  toast('✅ 繰越を保存しました');
+  renderAll();pushSync();
+}
+function clearCarrySettings(){
+  if(!confirm('繰越の設定をクリアしますか？'))return;
+  localStorage.removeItem('taxi_carry_fare');
+  localStorage.removeItem('taxi_carry_hours');
+  localStorage.removeItem('taxi_carry_days');
+  loadSettingsInputs();
+  toast('🗑 繰越をクリアしました');
+  renderAll();pushSync();
+}
+function saveTargetSettings(){
+  localStorage.setItem('taxi_target_days',document.getElementById('s-target-days').value);
+  localStorage.setItem('taxi_target_amount',document.getElementById('s-target-amount').value);
+  toast('✅ 目標を保存しました');
+  renderAll();pushSync();
+}
+function loadSettingsInputs(){
+  document.getElementById('s-name').value=localStorage.getItem('taxi_name')||'';
+  document.getElementById('s-sync-code').value=localStorage.getItem('simple_sync_code')||'';
+  document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
+  document.getElementById('s-target-amount').value=localStorage.getItem('taxi_target_amount')||'';
+  document.getElementById('s-carry-fare').value=localStorage.getItem('taxi_carry_fare')||'';
+  document.getElementById('s-carry-hours').value=formatClockHours(parseFloat(localStorage.getItem('taxi_carry_hours'))||0);
+  document.getElementById('s-carry-days').value=localStorage.getItem('taxi_carry_days')||'';
+}
+
+// ===== 出退勤記録一覧 =====
+function getMonthShifts(){
+  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  const now=new Date();
+  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+  return log.filter(s=>s.startTs>=monthStart);
+}
+function renderWorkStats(){
+  const out=document.getElementById('work-stats-out');
+  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
+  const targetAmount=parseInt(localStorage.getItem('taxi_target_amount')||'0');
+  const carry=getCarryover();
+  const shifts=getMonthShifts();
+  const workedDays=shifts.length+carry.days;
+  const workedSec=shifts.reduce((a,s)=>a+(s.durationSec||0),0);
+  const workedHours=workedSec/3600+carry.hours;
+  const remainDays=Math.max(targetDays-workedDays,0);
+  const monthFare=getMonthFareExTax()+carry.fare;
+  const remainAmount=Math.max(targetAmount-monthFare,0);
+  out.innerHTML=`
+    <div class="row2"><span class="rl">今月の実績</span><span class="rv">${workedDays}日 / ${workedHours.toFixed(1)}時間</span></div>
+    <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${targetDays>0?remainDays+'日':'-'}</span></div>
+    <div class="row2"><span class="rl">今月の売上（税抜・繰越込み）</span><span class="rv" style="color:var(--green)">¥${monthFare.toLocaleString()}</span></div>
+    <div class="row2"><span class="rl">目標まで残り</span><span class="rv" style="color:var(--gold)">${targetAmount>0?'¥'+remainAmount.toLocaleString():'-'}</span></div>
+  `;
+  renderShiftEntries();
+}
+function renderShiftEntries(){
+  const el=document.getElementById('shift-entries-list');
+  const shifts=getMonthShifts().slice().sort((a,b)=>b.startTs-a.startTs);
+  if(!shifts.length){el.innerHTML='<div style="font-size:12px;color:var(--muted)">今月の記録はありません</div>';return;}
+  el.innerHTML=shifts.map(s=>{
+    const h=(s.durationSec/3600).toFixed(1);
+    return `<div class="entry-row">
+      <div class="entry-main">
+        <span style="color:var(--muted)">${s.dateStr}</span>
+        <span style="font-weight:700;color:var(--gold);margin-left:6px">${h}時間</span>
+      </div>
+      <button class="entry-btn" onclick="editShiftEntry(${s.startTs})">編集</button>
+      <button class="entry-btn" style="color:var(--red)" onclick="deleteShiftEntry(${s.startTs})">削除</button>
+    </div>`;
+  }).join('');
+}
+function saveManualShift(){
+  const dateVal=document.getElementById('sl-date').value;
+  const startVal=document.getElementById('sl-start').value;
+  const endVal=document.getElementById('sl-end').value;
+  if(!dateVal||!startVal||!endVal){toast('⚠️ 日付・出勤時刻・退勤時刻を全て入力してください');return;}
+  const [y,m,d]=dateVal.split('-').map(Number);
+  const [sh,sm]=startVal.split(':').map(Number);
+  const [eh,em]=endVal.split(':').map(Number);
+  const startDate=new Date(y,m-1,d,sh,sm,0);
+  let endDate=new Date(y,m-1,d,eh,em,0);
+  if(endDate.getTime()<=startDate.getTime())endDate=new Date(endDate.getTime()+24*3600*1000);
+  const startTs=startDate.getTime();
+  const endTs=endDate.getTime();
+  const durationSec=Math.floor((endTs-startTs)/1000)+1800;
+  const dateStr=startDate.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  log.push({dateStr,startTs,endTs,durationSec});
+  localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+  renderAll();pushSync();
+  toast('✅ 出勤・退勤記録を保存しました');
+  document.getElementById('sl-start').value='';
+  document.getElementById('sl-end').value='';
+}
+function editShiftEntry(startTs){
+  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  const idx=log.findIndex(s=>s.startTs===startTs);
+  if(idx<0)return;
+  const curHours=(log[idx].durationSec/3600).toFixed(1);
+  const newHours=prompt('勤務時間（時間、小数で入力可）',curHours);
+  if(newHours===null)return;
+  const h=parseFloat(newHours);
+  if(isNaN(h)||h<0){toast('⚠️ 数値を入力してください');return;}
+  log[idx].durationSec=Math.round(h*3600);
+  log[idx].endTs=log[idx].startTs+log[idx].durationSec*1000;
+  localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+  toast('✅ 記録を更新しました');
+  renderAll();pushSync();
+}
+function deleteShiftEntry(startTs){
+  if(!confirm('この勤務記録を削除しますか？'))return;
+  let log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  log=log.filter(s=>s.startTs!==startTs);
+  localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+  toast('🗑 記録を削除しました');
+  renderAll();pushSync();
+}
+
+// ===== 運賃・売上 =====
+function exTax(fare){return Math.round((fare||0)/1.1);}
+function getTodayShiftFareEntries(){
+  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  if(isDuty&&dutyStart)return log.filter(e=>(e.ts||0)>=dutyStart.getTime());
+  const todayStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+  return log.filter(e=>e.dateStr===todayStr);
+}
+function getMonthFareExTax(){
+  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  const now=new Date();
+  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+  return log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+exTax(e.fare||0),0);
+}
+function saveFareEntry(){
+  const fare=parseInt(document.getElementById('fare-input').value)||0;
+  const toll=parseInt(document.getElementById('toll-input').value)||0;
+  if(!fare&&!toll){toast('⚠️ 運賃または高速代を入力してください');return;}
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  log.push({ts:now.getTime(),dateStr,fare,toll});
+  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+  document.getElementById('fare-input').value='';
+  document.getElementById('toll-input').value='';
+  toast('✅ 運賃を記録しました');
+  renderAll();pushSync();
+}
+function editFareEntry(ts){
+  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  const idx=log.findIndex(e=>e.ts===ts);
+  if(idx<0)return;
+  const newFare=prompt('運賃（税込・円）',log[idx].fare||0);
+  if(newFare===null)return;
+  const newToll=prompt('自腹高速代（円）',log[idx].toll||0);
+  if(newToll===null)return;
+  log[idx].fare=parseInt(newFare)||0;
+  log[idx].toll=parseInt(newToll)||0;
+  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+  toast('✅ 記録を更新しました');
+  renderAll();pushSync();
+}
+function deleteFareEntry(ts){
+  if(!confirm('この運賃記録を削除しますか？'))return;
+  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  log=log.filter(e=>e.ts!==ts);
+  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+  toast('🗑 記録を削除しました');
+  renderAll();pushSync();
+}
+function renderSalesStats(){
+  const out=document.getElementById('sales-stats-out');
+  const carry=getCarryover();
+  const todayEntries=getTodayShiftFareEntries();
+  const sum=(arr,key)=>arr.reduce((a,e)=>a+(e[key]||0),0);
+  const sumFareExTax=(arr)=>arr.reduce((a,e)=>a+exTax(e.fare||0),0);
+  out.innerHTML=`
+    <div class="row2"><span class="rl">本日の売上（税抜）</span><span class="rv" style="color:var(--green)">¥${sumFareExTax(todayEntries).toLocaleString()}</span></div>
+    <div class="row2"><span class="rl">本日の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(todayEntries,'toll').toLocaleString()}</span></div>
+    <div class="row2"><span class="rl">今月の売上（税抜・繰越込み）</span><span class="rv" style="color:var(--green)">¥${(getMonthFareExTax()+carry.fare).toLocaleString()}</span></div>
+  `;
+  renderFareEntries();
+}
+function renderFareEntries(){
+  const el=document.getElementById('fare-entries-list');
+  const todayEntries=getTodayShiftFareEntries().sort((a,b)=>b.ts-a.ts);
+  if(!todayEntries.length){el.innerHTML='<div style="font-size:12px;color:var(--muted)">本日の記録はありません</div>';return;}
+  el.innerHTML=todayEntries.map(e=>{
+    const timeStr=new Date(e.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="entry-row">
+      <div class="entry-main">
+        <span style="color:var(--muted)">${timeStr}</span>
+        ${e.fare?`<span style="font-weight:700;color:var(--green);margin-left:6px">¥${e.fare.toLocaleString()}</span>`:''}
+        ${e.toll?`<span style="color:var(--red);margin-left:6px">高速¥${e.toll.toLocaleString()}</span>`:''}
+      </div>
+      <button class="entry-btn" onclick="editFareEntry(${e.ts})">編集</button>
+      <button class="entry-btn" style="color:var(--red)" onclick="deleteFareEntry(${e.ts})">削除</button>
+    </div>`;
+  }).join('');
+}
+
+function renderAll(){
+  renderWorkStats();
+  renderSalesStats();
+  const name=localStorage.getItem('taxi_name');
+  document.getElementById('hdr-name').textContent=name?name+'さん':'出退勤・売上管理';
+}
+
+// ===== 端末間同期（Firebaseバックアップ） =====
+function syncPath(){
+  const code=(localStorage.getItem('simple_sync_code')||'').trim();
+  return code?'simple_backup/'+encodeURIComponent(code):null;
+}
+function saveSyncSettings(){
+  const name=document.getElementById('s-name').value.trim();
+  const code=document.getElementById('s-sync-code').value.trim();
+  localStorage.setItem('taxi_name',name);
+  localStorage.setItem('simple_sync_code',code);
+  renderAll();
+  if(!code){document.getElementById('sync-status').textContent='同期コード未設定（この端末だけで記録されます）';toast('✅ 保存しました');return;}
+  pushSync(()=>{
+    document.getElementById('sync-status').textContent='最終送信: '+new Date().toLocaleString('ja-JP');
+    toast('✅ 保存してサーバーに送信しました');
+  });
+}
+function pushSync(cb){
+  const path=syncPath();
+  if(!path||!db)return;
+  const snapshot={
+    name:localStorage.getItem('taxi_name')||'',
+    shiftLog:JSON.parse(localStorage.getItem('taxi_shift_log')||'[]'),
+    fareLog:JSON.parse(localStorage.getItem('taxi_fare_log')||'[]'),
+    carryFare:localStorage.getItem('taxi_carry_fare')||'0',
+    carryHours:localStorage.getItem('taxi_carry_hours')||'0',
+    carryDays:localStorage.getItem('taxi_carry_days')||'0',
+    targetDays:localStorage.getItem('taxi_target_days')||'',
+    targetAmount:localStorage.getItem('taxi_target_amount')||'',
+    updatedTs:Date.now()
+  };
+  db.ref(path).set(snapshot,()=>{if(cb)cb();});
+}
+function restoreFromSync(){
+  const code=document.getElementById('s-sync-code').value.trim();
+  if(!code){toast('⚠️ 同期コードを入力してください');return;}
+  if(!db){toast('⚠️ Firebase未接続です');return;}
+  if(!confirm('サーバー側のデータでこの端末を上書きします。よろしいですか？'))return;
+  db.ref('simple_backup/'+encodeURIComponent(code)).once('value',snap=>{
+    const v=snap.val();
+    if(!v){toast('⚠️ このコードのデータが見つかりません');return;}
+    localStorage.setItem('simple_sync_code',code);
+    if(v.name)localStorage.setItem('taxi_name',v.name);
+    localStorage.setItem('taxi_shift_log',JSON.stringify(v.shiftLog||[]));
+    localStorage.setItem('taxi_fare_log',JSON.stringify(v.fareLog||[]));
+    localStorage.setItem('taxi_carry_fare',v.carryFare||'0');
+    localStorage.setItem('taxi_carry_hours',v.carryHours||'0');
+    localStorage.setItem('taxi_carry_days',v.carryDays||'0');
+    if(v.targetDays)localStorage.setItem('taxi_target_days',v.targetDays);
+    if(v.targetAmount)localStorage.setItem('taxi_target_amount',v.targetAmount);
+    loadSettingsInputs();renderAll();
+    document.getElementById('sync-status').textContent='復元完了: '+new Date(v.updatedTs||Date.now()).toLocaleString('ja-JP');
+    toast('✅ サーバーのデータを復元しました');
+  });
+}
+
+// ===== 更新チェック =====
+async function checkForUpdate(){
+  if(location.protocol==='file:')return;
+  try{
+    const res=await fetch(location.pathname+'?_cb='+Date.now(),{cache:'no-store'});
+    if(!res.ok)return;
+    const html=await res.text();
+    const m=html.match(/const APP_BUILD=['"]([^'"]+)['"]/);
+    if(m&&m[1]&&m[1]!==APP_BUILD)showUpdateBanner();
+  }catch(e){}
+}
+function showUpdateBanner(){
+  if(document.getElementById('update-banner'))return;
+  const b=document.createElement('div');
+  b.id='update-banner';
+  b.textContent='🔄 アプリの更新があります。タップして最新の状態に更新してください';
+  b.onclick=()=>location.reload();
+  document.body.appendChild(b);
+}
+
+function init(){
+  tryFirebase();
+  loadSettingsInputs();
+  loadDutyState();
+  renderAll();
+  const code=localStorage.getItem('simple_sync_code');
+  if(code)document.getElementById('sync-status').textContent='同期コード設定済み: '+code;
+  setTimeout(checkForUpdate,4000);
+  setInterval(checkForUpdate,5*60*1000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkForUpdate();});
+}
+init();
+</script>
+</body>
+</html>
