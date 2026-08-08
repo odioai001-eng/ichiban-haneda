@@ -233,8 +233,8 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
     <h3>退勤<button class="mc" onclick="closeClockOut()">✕</button></h3>
     <label>退勤時刻</label>
     <input type="time" id="co-end-time">
-    <label>勤務時間（時間）</label>
-    <input type="number" id="co-hours" inputmode="decimal" step="0.1">
+    <label>勤務時間</label>
+    <input type="text" id="co-hours" placeholder="例: 12時間30分">
     <label>本日の税抜き売上（円）</label>
     <input type="number" id="co-fare" inputmode="numeric" placeholder="例: 45000">
     <label>自腹高速代（円）</label>
@@ -253,7 +253,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-13';
+const APP_BUILD='20260808-14';
 // 今月の目標時間は個別設定せず、固定値として扱う
 const MONTHLY_TARGET_HOURS_FIXED=288;
 
@@ -275,6 +275,16 @@ function fmtHM(hours){
   const h=Math.floor(hours);
   const m=Math.round((hours-h)*60);
   return `${h}時間${pad(m)}分`;
+}
+function parseHM(str){
+  str=(str||'').trim();
+  if(!str)return 0;
+  const m=str.match(/^(\d+)\s*時間\s*(\d{1,2})\s*分?$/);
+  if(m)return parseInt(m[1],10)+parseInt(m[2],10)/60;
+  const m2=str.match(/^(\d+)[:：](\d{1,2})$/);
+  if(m2)return parseInt(m2[1],10)+parseInt(m2[2],10)/60;
+  const f=parseFloat(str);
+  return isNaN(f)?0:f;
 }
 
 function switchTab(name){
@@ -403,14 +413,14 @@ function editDailyLog(startTs){
   const log=JSON.parse(localStorage.getItem('simple_daily_log')||'[]');
   const idx=log.findIndex(e=>e.startTs===startTs);
   if(idx<0)return;
-  const newHours=prompt('勤務時間（時間）',(log[idx].durationSec/3600).toFixed(1));
+  const newHours=prompt('勤務時間（例: 12時間30分）',fmtHM(log[idx].durationSec/3600));
   if(newHours===null)return;
   const newFare=prompt('本日の税抜き売上（円）',log[idx].fare||0);
   if(newFare===null)return;
   const newToll=prompt('自腹高速代（円）',log[idx].toll||0);
   if(newToll===null)return;
-  const h=parseFloat(newHours);
-  if(!isNaN(h)&&h>=0){
+  const h=parseHM(newHours);
+  if(h>0){
     log[idx].durationSec=Math.round(h*3600);
     log[idx].endTs=log[idx].startTs+log[idx].durationSec*1000;
   }
@@ -550,7 +560,7 @@ function openClockOutModal(){
   const now=new Date();
   document.getElementById('co-end-time').value=`${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const hrs=dutyStart?Math.max((now.getTime()-dutyStart.getTime())/3600000,0):0;
-  document.getElementById('co-hours').value=hrs.toFixed(1);
+  document.getElementById('co-hours').value=fmtHM(hrs);
   document.getElementById('co-fare').value='';
   document.getElementById('co-toll').value='';
   document.getElementById('clockout-overlay').classList.add('open');
@@ -558,7 +568,7 @@ function openClockOutModal(){
 function closeClockOut(){document.getElementById('clockout-overlay').classList.remove('open');}
 function confirmClockOut(){
   const timeVal=document.getElementById('co-end-time').value;
-  const hoursVal=parseFloat(document.getElementById('co-hours').value);
+  const hoursVal=parseHM(document.getElementById('co-hours').value);
   const fare=parseInt(document.getElementById('co-fare').value)||0;
   const toll=parseInt(document.getElementById('co-toll').value)||0;
   if(!fare&&!confirm('本日の売上が0円ですが、このまま退勤しますか？'))return;
@@ -570,7 +580,7 @@ function confirmClockOut(){
     if(d.getTime()<dutyStart.getTime())d=new Date(d.getTime()+24*3600*1000);
     endTs=d.getTime();
   }
-  const durationSec=(!isNaN(hoursVal)&&hoursVal>=0)
+  const durationSec=hoursVal>0
     ?Math.round(hoursVal*3600)
     :Math.max(0,Math.floor((endTs-dutyStart.getTime())/1000));
   const log=JSON.parse(localStorage.getItem('simple_daily_log')||'[]');
