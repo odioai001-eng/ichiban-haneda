@@ -253,7 +253,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-9';
+const APP_BUILD='20260808-10';
 // 今月の目標時間は個別設定せず、固定値として扱う
 const MONTHLY_TARGET_HOURS_FIXED=288;
 
@@ -271,6 +271,11 @@ function toast(msg){
 }
 function pad(n){return String(n).padStart(2,'0');}
 function fmtTime(d){return d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
+function fmtHM(hours){
+  const h=Math.floor(hours);
+  const m=Math.round((hours-h)*60);
+  return `${h}時間${pad(m)}分`;
+}
 
 function switchTab(name){
   ['duty','sales','settings'].forEach(t=>{
@@ -367,9 +372,9 @@ function renderSalesTab(){
   out.innerHTML=`
     <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${targetDays>0?remainDays+'日':'-'}</span></div>
     <div class="row2"><span class="rl">合計（今月の売上）</span><span class="rv" style="color:var(--green)">¥${totalFare.toLocaleString()}</span></div>
-    <div class="row2"><span class="rl">時間（今月の合計勤務時間）</span><span class="rv">${totalHours.toFixed(1)}時間</span></div>
+    <div class="row2"><span class="rl">時間（今月の合計勤務時間）</span><span class="rv">${fmtHM(totalHours)}</span></div>
     <div class="row2"><span class="rl">平均金額（1日あたり）</span><span class="rv" style="color:var(--cyan)">${workedDays>0?'¥'+avgAmount.toLocaleString():'-'}</span></div>
-    <div class="row2"><span class="rl">1日あたりの営業時間</span><span class="rv" style="color:var(--cyan)">${workedDays>0?avgHours.toFixed(1)+'時間':'-'}</span></div>
+    <div class="row2"><span class="rl">1日あたりの営業時間</span><span class="rv" style="color:var(--cyan)">${workedDays>0?fmtHM(avgHours):'-'}</span></div>
     <div class="row2"><span class="rl">1日あたりの目標金額</span><span class="rv" style="color:var(--gold)">${targetDays>0?'¥'+perDayTarget.toLocaleString():'-'}</span></div>
   `;
   renderDailyLogEntries();
@@ -379,11 +384,11 @@ function renderDailyLogEntries(){
   const logs=getMonthLogs().slice().sort((a,b)=>b.startTs-a.startTs);
   if(!logs.length){el.innerHTML='<div style="font-size:22px;color:var(--muted)">今月の記録はありません</div>';return;}
   el.innerHTML=logs.map(e=>{
-    const h=(e.durationSec/3600).toFixed(1);
+    const h=fmtHM(e.durationSec/3600);
     return `<div class="entry-row">
       <div class="entry-main">
         <span style="color:var(--muted)">${e.dateStr}</span>
-        <span style="font-weight:700;color:var(--gold);margin-left:6px">${h}時間</span>
+        <span style="font-weight:700;color:var(--gold);margin-left:6px">${h}</span>
         <span style="font-weight:700;color:var(--green);margin-left:6px">¥${(e.fare||0).toLocaleString()}</span>
         ${e.toll?`<span style="color:var(--red);margin-left:6px">高速¥${e.toll.toLocaleString()}</span>`:''}
       </div>
