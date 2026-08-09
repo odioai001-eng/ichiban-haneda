@@ -163,6 +163,8 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
     <div class="card">
       <label>今月の出勤予定日数</label>
       <input type="number" id="s-target-days" inputmode="numeric" placeholder="例: 20">
+      <label>今月の合計勤務時間</label>
+      <input type="number" id="s-target-hours" inputmode="decimal" step="0.5" placeholder="288">
       <label>今月の目標金額（税抜）</label>
       <input type="number" id="s-target-amount" inputmode="numeric" placeholder="例: 600000">
       <button class="btn btn-p btn-full" onclick="saveTargetSettings()">✅ 保存</button>
@@ -255,9 +257,8 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-15';
-// 今月の目標時間は個別設定せず、固定値として扱う
-const MONTHLY_TARGET_HOURS_FIXED=288;
+const APP_BUILD='20260808-16';
+const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
 function tryFirebase(){
@@ -343,6 +344,7 @@ function clearCarrySettings(){
 }
 function saveTargetSettings(){
   localStorage.setItem('taxi_target_days',document.getElementById('s-target-days').value);
+  localStorage.setItem('simple_target_hours',document.getElementById('s-target-hours').value);
   localStorage.setItem('taxi_target_amount',document.getElementById('s-target-amount').value);
   toast('✅ 目標を保存しました');
   renderAll();pushSync();
@@ -351,6 +353,7 @@ function loadSettingsInputs(){
   document.getElementById('s-name').value=localStorage.getItem('taxi_name')||'';
   document.getElementById('s-sync-code').value=localStorage.getItem('simple_sync_code')||'';
   document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
+  document.getElementById('s-target-hours').value=localStorage.getItem('simple_target_hours')||String(DEFAULT_TARGET_HOURS);
   document.getElementById('s-target-amount').value=localStorage.getItem('taxi_target_amount')||'';
   document.getElementById('s-carry-fare').value=localStorage.getItem('taxi_carry_fare')||'';
   document.getElementById('s-carry-toll').value=localStorage.getItem('taxi_carry_toll')||'';
@@ -522,7 +525,7 @@ function setPlanHours(hours){
   updateConfirmEnabled();
 }
 function planByDailyShare(){
-  const targetHours=MONTHLY_TARGET_HOURS_FIXED;
+  const targetHours=parseFloat(localStorage.getItem('simple_target_hours'))||DEFAULT_TARGET_HOURS;
   const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0')||0;
   const carry=getCarryover();
   const logs=getMonthLogs();
@@ -640,6 +643,7 @@ function pushSync(cb){
     carryHours:localStorage.getItem('taxi_carry_hours')||'0',
     carryDays:localStorage.getItem('taxi_carry_days')||'0',
     targetDays:localStorage.getItem('taxi_target_days')||'',
+    targetHours:localStorage.getItem('simple_target_hours')||'',
     targetAmount:localStorage.getItem('taxi_target_amount')||'',
     updatedTs:Date.now()
   };
@@ -653,6 +657,7 @@ function applyRemoteSnapshot(v,fallbackName){
   localStorage.setItem('taxi_carry_hours',v.carryHours||'0');
   localStorage.setItem('taxi_carry_days',v.carryDays||'0');
   if(v.targetDays)localStorage.setItem('taxi_target_days',v.targetDays);
+  if(v.targetHours)localStorage.setItem('simple_target_hours',v.targetHours);
   if(v.targetAmount)localStorage.setItem('taxi_target_amount',v.targetAmount);
 }
 function restoreFromSync(){
