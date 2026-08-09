@@ -257,7 +257,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-17';
+const APP_BUILD='20260808-18';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -525,6 +525,7 @@ function setPlanHours(hours){
   document.getElementById('ci-plan-disp').textContent=`${h}時間${pad(m)}分`;
   updateConfirmEnabled();
 }
+const FINAL_DAY_RESERVE_HOURS=15;
 function planByDailyShare(){
   const targetHours=parseFloat(localStorage.getItem('simple_target_hours'))||DEFAULT_TARGET_HOURS;
   const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0')||0;
@@ -534,7 +535,11 @@ function planByDailyShare(){
   const workedHours=logs.reduce((a,e)=>a+(e.durationSec||0),0)/3600+carry.hours;
   const remainDays=Math.max(targetDays-workedDays,0);
   const remainHours=Math.max(targetHours-workedHours,0);
-  const planHours=remainDays>0?remainHours/remainDays:remainHours;
+  // 最終日には15時間分を残しておき、それ以外の残り日数で均等に割る
+  // （今日が最後の1日の場合は、残り時間をそのまま丸ごと本日に割り当てる）
+  let planHours;
+  if(remainDays>1)planHours=Math.max(remainHours-FINAL_DAY_RESERVE_HOURS,0)/(remainDays-1);
+  else planHours=remainHours;
   document.getElementById('ci-endtime-picker').style.display='none';
   setPlanHours(planHours);
 }
