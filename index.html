@@ -358,7 +358,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span id="online-count" style="color:var(--cyan)">仲間0人</span>
   </div>
   <!-- オートフォロー -->
-  <button class="map-ctrl-btn" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:104px">🎯</button>
+  <button class="map-ctrl-btn on" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:104px">🎯</button>
   <button id="abure-row" onclick="recordAbure()"
     style="position:absolute;left:8px;bottom:94px;z-index:500;
       padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
@@ -935,11 +935,11 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260809-5';
+const APP_BUILD='20260810-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
-let autoFollow=false;
+let autoFollow=true;
 let followPeerId=null;
 let programmaticPan=false; // オートフォローによる自動パン中は、dragstartを誤検知させない
 function panMapTo(fn){
