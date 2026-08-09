@@ -935,7 +935,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260809-4';
+const APP_BUILD='20260809-5';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3420,6 +3420,24 @@ function editTripFare(ts){
  }
 }
 
+function editTripWait(ts){
+ const idx=destinations.findIndex(d=>d.ts===ts);
+ if(idx<0)return;
+ const cur=destinations[idx].waitMins||0;
+ const val=prompt('待機時間（分）※誤作動等で記録が違う場合の手動修正用',cur);
+ if(val===null)return;
+ const mins=parseInt(val)||0;
+ destinations[idx].waitMins=mins>0?mins:null;
+ delete destinations[idx].waitMinsStr; // 手入力した分数を優先して表示させる
+ saveDests();renderDests();
+ if(db&&isRankingOptedIn()){
+  db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
+   snap.forEach(child=>child.ref.update({waitMins:destinations[idx].waitMins,waitMinsStr:null}));
+  });
+ }
+ toast('✅ 待機時間を更新しました');
+}
+
 function deleteTripFare(ts){
  if(!confirm('この運賃を削除しますか？'))return;
  const idx=destinations.findIndex(d=>d.ts===ts);
@@ -4131,7 +4149,10 @@ function buildDestEntryHtml(d,numMap){
         <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
         <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
       </div>
-      ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
+      <div style="font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px">
+        <span style="flex:1">${waitStr||'待機時間未記録'}</span>
+        <button onclick="editTripWait(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
+      </div>
       ${d.fare?`<div style="margin-top:5px;display:flex;align-items:center;gap:8px">
         <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${d.fare.toLocaleString()}</div>
         <button onclick="editTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
