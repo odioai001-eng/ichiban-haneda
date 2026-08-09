@@ -257,7 +257,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-16';
+const APP_BUILD='20260808-17';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -387,8 +387,9 @@ function renderSalesTab(){
   const totalHours=logs.reduce((a,e)=>a+(e.durationSec||0),0)/3600+carry.hours;
   const remainDays=Math.max(targetDays-workedDays,0);
   const avgAmount=workedDays>0?Math.round(totalFare/workedDays):0;
-  // 30分の加算分は、今月の出勤予定日数×30分を合計勤務時間に加えてから平均する
-  const avgHours=workedDays>0?(totalHours+targetDays*0.5)/workedDays:0;
+  // 30分の加算分は、実績の出勤日数(記録件数)×30分を合計勤務時間に加えてから平均する
+  // （目標日数を基準にすると、月の前半など実績が少ない時期に数値が大きくズレるため）
+  const avgHours=workedDays>0?(totalHours+logs.length*0.5)/workedDays:0;
   const perDayTarget=targetDays>0?Math.round(targetAmount/targetDays):0;
   out.innerHTML=`
     <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${targetDays>0?remainDays+'日':'-'}</span></div>
