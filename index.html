@@ -934,7 +934,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260809-1';
+const APP_BUILD='20260809-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1245,7 +1245,7 @@ async function toggleEventVenues(){
     const coords=VENUE_COORDS[v.name];
     if(!coords)return;
     plotted++;
-    L.circle(coords,{radius:130,color:'#fbbf24',weight:2,fillColor:'#fbbf24',fillOpacity:.22}).addTo(eventVenueLayer);
+    L.circle(coords,{radius:70,color:'#fbbf24',weight:2,fillColor:'#fbbf24',fillOpacity:.22}).addTo(eventVenueLayer);
     const labelHtml=v.endTimeText?`<div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);
         white-space:nowrap;background:rgba(13,13,26,.85);color:#fbbf24;font-size:11px;font-weight:700;
         padding:1px 6px;border-radius:6px;border:1px solid #fbbf24">終演${esc(v.endTimeText)}</div>`:'';
