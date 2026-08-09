@@ -381,6 +381,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報" style="bottom:200px;right:8px">🚦</button>
   <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索" style="bottom:250px;right:8px">💴</button>
   <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ" style="bottom:300px;right:8px">🎤</button>
+  <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト" style="bottom:400px;right:8px">🎪</button>
   <!-- 移動記録ボタン（仲間ボタンの左） -->
   <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
     right:8px;bottom:350px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
@@ -933,7 +934,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260808-2';
+const APP_BUILD='20260809-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1149,6 +1150,120 @@ function showUpdateBanner(){
 function syncZoomCtrlVisibility(visible){
   const zc=document.getElementById('zoom-ctrl');
   if(zc)zc.style.display=visible?'flex':'none';
+}
+
+// event_hub.html（イベント終演ハブ）に載っている会場名→座標の対応表。
+// event_hub.html自体には緯度経度が無いため、地図にハイライト表示するための
+// 補助データとしてここに用意する。event_hub.htmlに新しい会場が追加された場合、
+// 名前が一致しないとハイライトされないため、ここにも追記が必要になる
+const VENUE_COORDS={
+  '東京国際フォーラム ホールA':[35.6773,139.7631],
+  '歌舞伎座':[35.6693,139.7671],
+  '新橋演舞場':[35.6669,139.7644],
+  'EX THEATER ROPPONGI':[35.6631,139.7301],
+  '新宿PIT INN':[35.6929,139.7006],
+  '東京ドーム':[35.7056,139.7519],
+  '上野恩賜公園一帯':[35.7141,139.7744],
+  '両国国技館':[35.6968,139.7930],
+  '豊洲PIT':[35.6553,139.7936],
+  '有明アリーナ':[35.6432,139.7936],
+  '東京ガーデンシアター':[35.6461,139.7967],
+  '有明四季劇場':[35.6350,139.7930],
+  'Zepp Haneda（TOKYO）':[35.5563,139.7239],
+  'Bunkamuraオーチャードホール':[35.6595,139.6979],
+  'NHKホール':[35.6644,139.6982],
+  '国立代々木競技場 第一体育館':[35.6702,139.6952],
+  'LINE CUBE SHIBUYA（渋谷公会堂）':[35.6639,139.6959],
+  'ホテルニューオータニ東京 鶴の間':[35.6797,139.7357],
+  '日本武道館':[35.6939,139.7503],
+  '東京シティエアターミナル（T-CAT）':[35.6924,139.7876],
+  '明治座':[35.6947,139.7847],
+  '浜松町駅（東京モノレール羽田空港線）':[35.6553,139.7570],
+  'サントリーホール':[35.6712,139.7357],
+  'グランドプリンスホテル新高輪 国際館パミール':[35.6357,139.7343],
+  '品川プリンスホテル ステラボール':[35.6285,139.7387],
+  '秩父宮ラグビー場':[35.6739,139.7196],
+  '東京オペラシティ コンサートホール':[35.6858,139.6858],
+  '国立競技場':[35.6780,139.7150],
+  '明治神宮野球場':[35.6746,139.7168],
+  '日本青年館ホール':[35.6772,139.7168],
+  '東京ビッグサイト':[35.6300,139.7930],
+  '新国立劇場':[35.6836,139.6853],
+  'ワーナー ブラザース スタジオツアー東京':[35.7539,139.5232]
+};
+// event_hub.htmlの「🎫 本日開催している会場」セクションだけを読み取り、
+// 会場名・アイコン・終演目安の時刻テキストを取り出す（同じオリジンなのでfetchで取得可能）
+async function fetchTodayEventVenues(){
+  if(location.protocol==='file:')return [];
+  try{
+    const res=await fetch('event_hub.html?_cb='+Date.now(),{cache:'no-store'});
+    if(!res.ok)return [];
+    const html=await res.text();
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    const cats=[...doc.querySelectorAll('.cat')];
+    const todayCat=cats.find(c=>c.textContent.includes('本日開催している会場'));
+    if(!todayCat)return [];
+    const venues=[];
+    let el=todayCat.nextElementSibling;
+    while(el&&!el.classList.contains('cat')){
+      if(el.classList.contains('card')){
+        const name=el.querySelector('.venue-name');
+        const icon=el.querySelector('.venue-icon');
+        const time=el.querySelector('.stat-value.time');
+        if(name)venues.push({
+          name:name.textContent.trim(),
+          icon:icon?icon.textContent.trim():'🎫',
+          endTimeText:time?time.textContent.trim():''
+        });
+      }
+      el=el.nextElementSibling;
+    }
+    return venues;
+  }catch(e){return [];}
+}
+let eventVenueLayer=null,eventVenuesShown=false;
+async function toggleEventVenues(){
+  const btn=document.getElementById('event-venue-btn');
+  if(eventVenuesShown){
+    if(eventVenueLayer)leafletMap.removeLayer(eventVenueLayer);
+    eventVenuesShown=false;
+    if(btn)btn.classList.remove('on');
+    return;
+  }
+  if(btn)btn.classList.add('on');
+  toast('🎪 本日開催中の会場を読み込み中…');
+  const venues=await fetchTodayEventVenues();
+  if(!venues.length){
+    toast('⚠️ 本日開催の会場情報が取得できませんでした');
+    if(btn)btn.classList.remove('on');
+    return;
+  }
+  if(!eventVenueLayer)eventVenueLayer=L.layerGroup();
+  eventVenueLayer.clearLayers();
+  let plotted=0;
+  venues.forEach(v=>{
+    const coords=VENUE_COORDS[v.name];
+    if(!coords)return;
+    plotted++;
+    L.circle(coords,{radius:130,color:'#fbbf24',weight:2,fillColor:'#fbbf24',fillOpacity:.22}).addTo(eventVenueLayer);
+    const labelHtml=v.endTimeText?`<div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);
+        white-space:nowrap;background:rgba(13,13,26,.85);color:#fbbf24;font-size:11px;font-weight:700;
+        padding:1px 6px;border-radius:6px;border:1px solid #fbbf24">終演${esc(v.endTimeText)}</div>`:'';
+    const icon=L.divIcon({
+      html:`<div style="position:relative;width:60px;height:30px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;width:38px;height:38px;border-radius:50%;background:rgba(251,191,36,.35);animation:pulse 1.6s infinite"></div>
+        <div style="position:relative;background:#fbbf24;border:2px solid #fff;border-radius:50%;
+          width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+          font-size:14px;box-shadow:0 0 8px rgba(251,191,36,.8)">${v.icon}</div>
+        ${labelHtml}
+      </div>`,
+      className:'',iconAnchor:[30,13]
+    });
+    L.marker(coords,{icon}).bindPopup(`<b>${v.icon} ${esc(v.name)}</b>${v.endTimeText?`<br>終演目安: ${esc(v.endTimeText)}`:''}`).addTo(eventVenueLayer);
+  });
+  eventVenueLayer.addTo(leafletMap);
+  eventVenuesShown=true;
+  toast(`🎪 本日開催中の会場 ${plotted}件を地図に表示しました`);
 }
 
 function initMap(){
