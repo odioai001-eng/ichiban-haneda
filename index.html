@@ -81,6 +81,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .gps-dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0}
 .gps-dot.on{background:var(--green);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes blinkRed{0%,49%{opacity:1}50%,100%{opacity:.15}}
 .locate-me-btn{position:absolute;bottom:52px;right:8px;z-index:500;
   background:var(--surface);color:var(--text);border:1px solid var(--border);
   border-radius:50%;width:44px;height:44px;cursor:pointer;
@@ -934,7 +935,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260809-2';
+const APP_BUILD='20260809-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1221,11 +1222,60 @@ async function fetchTodayEventVenues(){
     return venues;
   }catch(e){return [];}
 }
-let eventVenueLayer=null,eventVenuesShown=false;
+// 「19:30頃」「〜21時頃」「20:00」のような終演目安のテキストから、本日の時刻として
+// 読み取れる場合だけ時刻（ミリ秒）を返す。「未定」「時刻未定」等は null を返す
+function parseEndTimeToday(text){
+  if(!text)return null;
+  let h,mm;
+  let m=text.match(/(\d{1,2}):(\d{2})/);
+  if(m){h=parseInt(m[1],10);mm=parseInt(m[2],10);}
+  else{
+    m=text.match(/(\d{1,2})\s*時/);
+    if(!m)return null;
+    h=parseInt(m[1],10);mm=0;
+  }
+  if(h>23||mm>59)return null;
+  const now=new Date();
+  return new Date(now.getFullYear(),now.getMonth(),now.getDate(),h,mm,0).getTime();
+}
+// 終演時刻の15分前〜1時間後の間だけ「まもなく／ちょうど終演」として強調する
+function isVenueEndingSoon(endTs){
+  if(!endTs)return false;
+  const now=Date.now();
+  return now>=(endTs-15*60000)&&now<=(endTs+60*60000);
+}
+let eventVenueLayer=null,eventVenuesShown=false,eventVenuesData=[],eventVenueRefreshTimer=null;
+function renderEventVenueLayer(){
+  if(!eventVenueLayer)return;
+  eventVenueLayer.clearLayers();
+  eventVenuesData.forEach(v=>{
+    const coords=VENUE_COORDS[v.name];
+    if(!coords)return;
+    const ending=isVenueEndingSoon(v.endTs);
+    const color=ending?'#ef4444':'#fbbf24';
+    L.circle(coords,{radius:70,color,weight:2,fillColor:color,fillOpacity:.22}).addTo(eventVenueLayer);
+    const labelHtml=v.endTimeText?`<div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);
+        white-space:nowrap;background:rgba(13,13,26,.85);color:${color};font-size:11px;font-weight:700;
+        padding:1px 6px;border-radius:6px;border:1px solid ${color}">終演${esc(v.endTimeText)}</div>`:'';
+    const icon=L.divIcon({
+      html:`<div style="position:relative;width:60px;height:30px;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;width:38px;height:38px;border-radius:50%;background:${ending?'rgba(239,68,68,.45)':'rgba(251,191,36,.35)'};
+          animation:${ending?'blinkRed .8s infinite':'pulse 1.6s infinite'}"></div>
+        <div style="position:relative;background:${color};border:2px solid #fff;border-radius:50%;
+          width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+          font-size:14px;box-shadow:0 0 8px ${ending?'rgba(239,68,68,.9)':'rgba(251,191,36,.8)'}">${v.icon}</div>
+        ${labelHtml}
+      </div>`,
+      className:'',iconAnchor:[30,13]
+    });
+    L.marker(coords,{icon}).bindPopup(`<b>${v.icon} ${esc(v.name)}</b>${v.endTimeText?`<br>終演目安: ${esc(v.endTimeText)}`:''}${ending?'<br><b style="color:#ef4444">まもなく／ちょうど終演</b>':''}`).addTo(eventVenueLayer);
+  });
+}
 async function toggleEventVenues(){
   const btn=document.getElementById('event-venue-btn');
   if(eventVenuesShown){
     if(eventVenueLayer)leafletMap.removeLayer(eventVenueLayer);
+    if(eventVenueRefreshTimer){clearInterval(eventVenueRefreshTimer);eventVenueRefreshTimer=null;}
     eventVenuesShown=false;
     if(btn)btn.classList.remove('on');
     return;
@@ -1238,32 +1288,16 @@ async function toggleEventVenues(){
     if(btn)btn.classList.remove('on');
     return;
   }
+  eventVenuesData=venues.map(v=>({...v,endTs:parseEndTimeToday(v.endTimeText)}));
   if(!eventVenueLayer)eventVenueLayer=L.layerGroup();
-  eventVenueLayer.clearLayers();
-  let plotted=0;
-  venues.forEach(v=>{
-    const coords=VENUE_COORDS[v.name];
-    if(!coords)return;
-    plotted++;
-    L.circle(coords,{radius:70,color:'#fbbf24',weight:2,fillColor:'#fbbf24',fillOpacity:.22}).addTo(eventVenueLayer);
-    const labelHtml=v.endTimeText?`<div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);
-        white-space:nowrap;background:rgba(13,13,26,.85);color:#fbbf24;font-size:11px;font-weight:700;
-        padding:1px 6px;border-radius:6px;border:1px solid #fbbf24">終演${esc(v.endTimeText)}</div>`:'';
-    const icon=L.divIcon({
-      html:`<div style="position:relative;width:60px;height:30px;display:flex;align-items:center;justify-content:center">
-        <div style="position:absolute;width:38px;height:38px;border-radius:50%;background:rgba(251,191,36,.35);animation:pulse 1.6s infinite"></div>
-        <div style="position:relative;background:#fbbf24;border:2px solid #fff;border-radius:50%;
-          width:26px;height:26px;display:flex;align-items:center;justify-content:center;
-          font-size:14px;box-shadow:0 0 8px rgba(251,191,36,.8)">${v.icon}</div>
-        ${labelHtml}
-      </div>`,
-      className:'',iconAnchor:[30,13]
-    });
-    L.marker(coords,{icon}).bindPopup(`<b>${v.icon} ${esc(v.name)}</b>${v.endTimeText?`<br>終演目安: ${esc(v.endTimeText)}`:''}`).addTo(eventVenueLayer);
-  });
+  renderEventVenueLayer();
   eventVenueLayer.addTo(leafletMap);
   eventVenuesShown=true;
+  const plotted=eventVenuesData.filter(v=>VENUE_COORDS[v.name]).length;
   toast(`🎪 本日開催中の会場 ${plotted}件を地図に表示しました`);
+  // 終演前後で色分け表示が切り替わるよう、1分ごとに再描画する
+  if(eventVenueRefreshTimer)clearInterval(eventVenueRefreshTimer);
+  eventVenueRefreshTimer=setInterval(renderEventVenueLayer,60000);
 }
 
 function initMap(){
