@@ -935,7 +935,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260809-3';
+const APP_BUILD='20260809-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1109,13 +1109,16 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   setTimeout(checkForUpdate,4000);
   setInterval(checkForUpdate,5*60*1000);
   document.addEventListener('visibilitychange',()=>{
-    if(document.hidden)return;
+    if(document.hidden){pageHiddenAt=Date.now();return;}
     checkForUpdate();
     // 他のアプリ・サイトに切り替えていた間はGPS取得やタイマーがOS側で一時停止されている
-    // ことが多く、復帰直後は位置情報が古いまま固まって見える。復帰のたびにGPS取得を
-    // 取り直し、その間に見逃した可能性のある乗り場の出発（実車ボタンの押し忘れ検知を
-    // 含む）も、次の1回の取得結果で捕捉し直す
-    if(isDuty){
+    // ことが多く、復帰直後は位置情報が古いまま固まって見える。ある程度の時間
+    // 離れていた場合だけGPS取得を取り直し、その間に見逃した可能性のある乗り場の
+    // 出発（実車ボタンの押し忘れ検知を含む）も捕捉し直す。ごく短時間の切り替え
+    // （通知を一瞬確認した等）まで毎回GPSを再取得すると、かえって不安定な
+    // 読み取り値で誤検知しやすくなるため対象外にする
+    const hiddenMs=pageHiddenAt?Date.now()-pageHiddenAt:0;
+    if(isDuty&&hiddenMs>8000){
       pendingCatchUpCheck=true;
       _restartGPS();
     }
@@ -1474,6 +1477,9 @@ let gpsLastUpdate=0,gpsStaleTimer=null,gpsRetryTimer=null,gpsWeakHeartbeat=null;
 // 他アプリ・他サイトから復帰した直後の1回だけ、初回GPSフィックスと同じ「見逃し出発」
 // 捕捉ロジック（checkGeofences内）を適用するためのフラグ
 let pendingCatchUpCheck=false;
+// 画面が非表示になった時刻。短時間の切り替えでは復帰時のGPS再取得・出発捕捉を
+// 行わないようにするための基準にする
+let pageHiddenAt=0;
 
 function startGPS(){
   if(!navigator.geolocation){toast('⚠️ GPS非対応');return;}
@@ -2814,11 +2820,23 @@ function checkGeofences(lat,lng,isFirstFix){
       // 実際にはすでに出発していた場合、通常の出発イベントが一度も発火しないまま
       // 「最初から外にいた」ことにされてしまい、実車ボタンの押し忘れ検知が
       // 素通りしてしまう。選択中の乗り場から出ていたことが分かった時点で、
-      // 通常の出発処理（押し忘れ検知含む）を即座に行う
+      // 出発の可能性ありとして捕捉するが、復帰直後の1回だけのGPS読み取りは
+      // 精度が不安定なことが多く、これだけで即座に確定すると「まだ乗り場にいるのに
+      // 出発しましたと誤通知される」誤作動が頻発する。他の出発判定と同様に、
+      // 数秒後の位置でもう一度確認してから確定する
       const spotLabel=spotLabelFromCheckpointName(cp.name);
       if(!nowInside&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&spotLabel&&spotLabel===currentSpotSelection){
-        cpInside[cp.id]=false;
-        onDeparture(cp);
+        const cpId=cp.id;
+        cpInside[cpId]=nowInside;
+        setTimeout(()=>{
+          if(myLat===null||myLng===null)return;
+          if(currentSpotSelection!==spotLabel)return; // 確認中に乗り場選択が変わっていたら対象外
+          if(currentStatus==='jitsusha')return; // 既に別経路で実車済みなら何もしない
+          const d2=haversine(myLat,myLng,cp.lat,cp.lng);
+          if(d2<=cp.radius){cpInside[cpId]=true;return;} // 実際にはまだ圏内だった（誤検知）
+          cpInside[cpId]=false;
+          onDeparture(cp);
+        },10000);
         return;
       }
       cpInside[cp.id]=nowInside;return;
