@@ -257,7 +257,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-21';
+const APP_BUILD='20260808-22';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -537,9 +537,9 @@ function computeDailyPlanHours(){
   const workedDays=logs.length+carry.days;
   const workedHours=logs.reduce((a,e)=>a+(e.durationSec||0),0)/3600+carry.hours;
   const remainDays=Math.max(targetDays-workedDays,0);
-  // 残り必要時間から、実績出勤日数×30分を先に差し引いてから、最終日の予約枠の計算に進む
-  // （繰越日数は毎回の記録ではないため対象外）
-  const remainHours=Math.max(targetHours-workedHours-logs.length*0.5,0);
+  // 残り必要時間から、今月の出勤予定日数×30分（月全体の見込み分）を先に差し引いてから、
+  // 最終日の予約枠の計算に進む
+  const remainHours=Math.max(targetHours-workedHours-targetDays*0.5,0);
   if(remainDays>1)return Math.max(remainHours-FINAL_DAY_RESERVE_HOURS,0)/(remainDays-1);
   return remainHours;
 }
