@@ -172,6 +172,8 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
     <div class="card">
       <label>繰越 売上（税抜・円）</label>
       <input type="number" id="s-carry-fare" inputmode="numeric" placeholder="0">
+      <label>繰越 自腹高速代（円）</label>
+      <input type="number" id="s-carry-toll" inputmode="numeric" placeholder="0">
       <label>繰越 時間（時:分。例 85:30）</label>
       <input type="text" id="s-carry-hours" placeholder="0:00">
       <label>繰越 日数</label>
@@ -253,7 +255,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-14';
+const APP_BUILD='20260808-15';
 // 今月の目標時間は個別設定せず、固定値として扱う
 const MONTHLY_TARGET_HOURS_FIXED=288;
 
@@ -298,6 +300,7 @@ function switchTab(name){
 function getCarryover(){
   return {
     fare:parseInt(localStorage.getItem('taxi_carry_fare')||'0')||0,
+    toll:parseInt(localStorage.getItem('taxi_carry_toll')||'0')||0,
     hours:parseFloat(localStorage.getItem('taxi_carry_hours')||'0')||0,
     days:parseInt(localStorage.getItem('taxi_carry_days')||'0')||0
   };
@@ -318,9 +321,11 @@ function formatClockHours(h){
 }
 function saveCarrySettings(){
   const fare=parseInt(document.getElementById('s-carry-fare').value)||0;
+  const toll=parseInt(document.getElementById('s-carry-toll').value)||0;
   const hours=parseClockHours(document.getElementById('s-carry-hours').value);
   const days=parseInt(document.getElementById('s-carry-days').value)||0;
   localStorage.setItem('taxi_carry_fare',fare);
+  localStorage.setItem('taxi_carry_toll',toll);
   localStorage.setItem('taxi_carry_hours',hours);
   localStorage.setItem('taxi_carry_days',days);
   toast('✅ 繰越を保存しました');
@@ -329,6 +334,7 @@ function saveCarrySettings(){
 function clearCarrySettings(){
   if(!confirm('繰越の設定をクリアしますか？'))return;
   localStorage.removeItem('taxi_carry_fare');
+  localStorage.removeItem('taxi_carry_toll');
   localStorage.removeItem('taxi_carry_hours');
   localStorage.removeItem('taxi_carry_days');
   loadSettingsInputs();
@@ -347,6 +353,7 @@ function loadSettingsInputs(){
   document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
   document.getElementById('s-target-amount').value=localStorage.getItem('taxi_target_amount')||'';
   document.getElementById('s-carry-fare').value=localStorage.getItem('taxi_carry_fare')||'';
+  document.getElementById('s-carry-toll').value=localStorage.getItem('taxi_carry_toll')||'';
   document.getElementById('s-carry-hours').value=formatClockHours(parseFloat(localStorage.getItem('taxi_carry_hours'))||0);
   document.getElementById('s-carry-days').value=localStorage.getItem('taxi_carry_days')||'';
   const code=localStorage.getItem('simple_sync_code');
@@ -373,7 +380,7 @@ function renderSalesTab(){
   const logs=getMonthLogs();
   const workedDays=logs.length+carry.days;
   const totalFare=logs.reduce((a,e)=>a+(e.fare||0),0)+carry.fare;
-  const totalToll=logs.reduce((a,e)=>a+(e.toll||0),0);
+  const totalToll=logs.reduce((a,e)=>a+(e.toll||0),0)+carry.toll;
   const totalHours=logs.reduce((a,e)=>a+(e.durationSec||0),0)/3600+carry.hours;
   const remainDays=Math.max(targetDays-workedDays,0);
   const avgAmount=workedDays>0?Math.round(totalFare/workedDays):0;
@@ -629,6 +636,7 @@ function pushSync(cb){
     name:localStorage.getItem('taxi_name')||'',
     dailyLog:JSON.parse(localStorage.getItem('simple_daily_log')||'[]'),
     carryFare:localStorage.getItem('taxi_carry_fare')||'0',
+    carryToll:localStorage.getItem('taxi_carry_toll')||'0',
     carryHours:localStorage.getItem('taxi_carry_hours')||'0',
     carryDays:localStorage.getItem('taxi_carry_days')||'0',
     targetDays:localStorage.getItem('taxi_target_days')||'',
@@ -641,6 +649,7 @@ function applyRemoteSnapshot(v,fallbackName){
   localStorage.setItem('taxi_name',v.name||fallbackName||'');
   localStorage.setItem('simple_daily_log',JSON.stringify(v.dailyLog||[]));
   localStorage.setItem('taxi_carry_fare',v.carryFare||'0');
+  localStorage.setItem('taxi_carry_toll',v.carryToll||'0');
   localStorage.setItem('taxi_carry_hours',v.carryHours||'0');
   localStorage.setItem('taxi_carry_days',v.carryDays||'0');
   if(v.targetDays)localStorage.setItem('taxi_target_days',v.targetDays);
