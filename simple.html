@@ -257,7 +257,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-22';
+const APP_BUILD='20260808-23';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -392,12 +392,12 @@ function renderSalesTab(){
   const perDayTarget=targetDays>0?Math.round(targetAmount/targetDays):0;
   out.innerHTML=`
     <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${targetDays>0?remainDays+'日':'-'}</span></div>
+    <div class="row2"><span class="rl">1日あたりの目標金額</span><span class="rv" style="color:var(--gold)">${targetDays>0?'¥'+perDayTarget.toLocaleString():'-'}</span></div>
+    <div class="row2"><span class="rl">1日あたりの営業時間</span><span class="rv" style="color:var(--cyan)">${targetDays>0?fmtHM(avgHours):'-'}</span></div>
+    <div class="row2"><span class="rl">平均金額（1日あたり）</span><span class="rv" style="color:var(--cyan)">${workedDays>0?'¥'+avgAmount.toLocaleString():'-'}</span></div>
     <div class="row2"><span class="rl">今月の売り上げ（税抜き）</span><span class="rv" style="color:var(--green)">¥${totalFare.toLocaleString()}</span></div>
     <div class="row2"><span class="rl">今月の自腹高速代</span><span class="rv" style="color:var(--red)">¥${totalToll.toLocaleString()}</span></div>
     <div class="row2"><span class="rl">今月の合計勤務時間</span><span class="rv">${fmtHM(totalHours)}</span></div>
-    <div class="row2"><span class="rl">平均金額（1日あたり）</span><span class="rv" style="color:var(--cyan)">${workedDays>0?'¥'+avgAmount.toLocaleString():'-'}</span></div>
-    <div class="row2"><span class="rl">1日あたりの営業時間</span><span class="rv" style="color:var(--cyan)">${targetDays>0?fmtHM(avgHours):'-'}</span></div>
-    <div class="row2"><span class="rl">1日あたりの目標金額</span><span class="rv" style="color:var(--gold)">${targetDays>0?'¥'+perDayTarget.toLocaleString():'-'}</span></div>
   `;
   renderDailyLogEntries();
 }
