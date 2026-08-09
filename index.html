@@ -935,17 +935,14 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-1';
+const APP_BUILD='20260810-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
 let autoFollow=true;
 let followPeerId=null;
-let programmaticPan=false; // オートフォローによる自動パン中は、dragstartを誤検知させない
 function panMapTo(fn){
-  programmaticPan=true;
   fn();
-  setTimeout(()=>{programmaticPan=false;},700);
 }
 const TILE_DEFS={
   osm:    {url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',          sub:['a','b','c']},
@@ -1310,25 +1307,9 @@ function initMap(){
   syncZoomCtrlVisibility(document.getElementById('page-map').classList.contains('active'));
   const hIcon=L.divIcon({html:`<div style="background:#4f8ef7;border:3px solid #fff;border-radius:50%;width:16px;height:16px;box-shadow:0 0 8px rgba(79,142,247,.6)"></div>`,className:'',iconAnchor:[8,8]});
   L.marker([35.5494,139.7798],{icon:hIcon}).bindPopup('<b>✈️ 羽田空港</b>').addTo(leafletMap);
-  let dragStartPx=null;
-  leafletMap.on('dragstart',()=>{
-    // ズームレベルによらず「実際に画面上で指を動かした距離」で判定するため、
-    // 緯度経度の実距離ではなく画面ピクセル座標で開始位置を記録する
-    dragStartPx=programmaticPan?null:leafletMap.latLngToContainerPoint(leafletMap.getCenter());
-  });
-  leafletMap.on('dragend',()=>{
-    if(!dragStartPx)return;
-    const endPx=leafletMap.latLngToContainerPoint(leafletMap.getCenter());
-    const movedPx=Math.hypot(endPx.x-dragStartPx.x,endPx.y-dragStartPx.y);
-    dragStartPx=null;
-    // わずかな揺れ・誤タッチ（タップ時の指のブレ等）では解除せず、
-    // 画面上である程度意図的に動かした時だけオートフォローを解除する
-    if(movedPx<40)return;
-    autoFollow=false;
-    followPeerId=null;
-    const btn=document.getElementById('follow-btn');
-    if(btn){btn.classList.remove('on');btn.title='オートフォロー';}
-  });
+  // オートフォロー・仲間フォローのON/OFFは、ボタン操作などの明示的な操作でのみ
+  // 切り替える。地図を手動でドラッグしても自動でOFFにはしない
+  // （ONにしたらONのまま、OFFにしたらOFFのままであるべき、という単純な仕様のため）
 }
 
 function gpsAgeDot(ageSec){
@@ -2212,6 +2193,15 @@ function pushMyPosition(gpsWeak=false){
   });
 }
 setInterval(()=>{if(isDuty)pushMyPosition();},5000);
+// 仲間フォロー中の地図追従を、特定のイベント（Firebaseのchild_changed・自分のGPS更新）の
+// タイミングだけに頼らず、一定間隔で必ず最新位置に合わせ直すことで確実に効かせる
+// （非番中で自分のGPSが動いていない時にフォローしても、この仕組みだけで追従できる）
+setInterval(()=>{
+  if(followPeerId&&leafletMap){
+    const pd=driverData[followPeerId];
+    if(pd&&pd.lat&&pd.lng)panMapTo(()=>leafletMap.panTo([Number(pd.lat),Number(pd.lng)],{animate:true,duration:0.5}));
+  }
+},2000);
 
 function makeDriverRow(id, d, isMe){
   const age=Date.now()-(d.ts||0);
