@@ -950,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-8';
+const APP_BUILD='20260810-9';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2880,6 +2880,11 @@ function clearWaitHistory(){
   
   
 const CP_TRANSITION_DEBOUNCE_MS=10000; // 出勤直後などGPSが不安定な時に、短時間で入退場を繰り返し反転させない
+// 出発の最終確認時だけ、半径ちょうどではなく少し余裕を持たせて判定する（ヒステリシス）。
+// 乗り場の境界線上に停車していると、GPSのわずかなブレだけで「半径のすぐ外」判定が
+// 出たり消えたりしやすく、それだけで出発（実車化）が確定してしまう誤作動があったため
+const DEPARTURE_CONFIRM_BUFFER_M=25;
+const DEPARTURE_CONFIRM_MS=90000; // 誤作動対策のため60秒→90秒に延長
 let pendingDepartureTimer={};
 function checkGeofences(lat,lng,isFirstFix){
   const now=Date.now();
@@ -2919,17 +2924,18 @@ function checkGeofences(lat,lng,isFirstFix){
       cpInside[cp.id]=true;
       onArrival(cp,Math.round(dist));
     } else {
-      // 退場は即確定せず、1分後も実際に外側のままなら確定する（一瞬だけ外れた「通過」は無視する）
+      // 退場は即確定せず、90秒後も実際に半径+余裕分の外側のままなら確定する
+      // （一瞬だけ外れた「通過」や、境界線上でのGPSのブレによる誤作動を無視する）
       if(pendingDepartureTimer[cp.id])return;
       pendingDepartureTimer[cp.id]=setTimeout(()=>{
         delete pendingDepartureTimer[cp.id];
         if(myLat===null||myLng===null)return;
         const d2=haversine(myLat,myLng,cp.lat,cp.lng);
-        if(d2<=cp.radius)return; // 1分後には戻っていた（誤検知）
+        if(d2<=cp.radius+DEPARTURE_CONFIRM_BUFFER_M)return; // 境界付近だった（誤検知）
         cpLastTransitionTs[cp.id]=Date.now();
         cpInside[cp.id]=false;
         onDeparture(cp);
-      },60000);
+      },DEPARTURE_CONFIRM_MS);
     }
   });
 }
