@@ -950,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-10';
+const APP_BUILD='20260811-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2975,9 +2975,14 @@ function onDeparture(cp){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
   if(cp.stopNotifyTimer){clearTimeout(cp.stopNotifyTimer);cp.stopNotifyTimer=null;}
-  // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
-  sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
-  toast(cp.icon+' '+cp.name+' を出発しました');
+  // 到着通知と同様、今回の滞在で1分以上の停止が確認できていた場合のみ出発通知を送る
+  // （通過しただけで到着通知が出なかった場合、出発通知だけ届くのは不自然なため）
+  if(cp.stopConfirmed){
+    // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
+    sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
+    toast(cp.icon+' '+cp.name+' を出発しました');
+  }
+  cp.stopConfirmed=false;
   // 「1号乗り場」〜「4号乗り場」「国際線第3/4プール」等のチェックポイントから、
   // 実車ボタンを押さないまま出発した場合は、押し忘れとみなして自動的に実車状態にする
   // （乗り場・待機時間も記録される）
@@ -3005,6 +3010,7 @@ function onArrival(cp,dist){
   if(isFreshStay){
     currentSpotSelection=null;
     cp.arrivalTimeStr=timeStr;
+    cp.stopConfirmed=false; // 今回の滞在で1分以上の停止が確認できたかどうか（出発通知の可否に使う）
   }
   if(cp.id==='haneda')showPoolLaneModal();
   if(arrivalAutoTimer)clearTimeout(arrivalAutoTimer);
@@ -3021,6 +3027,7 @@ function onArrival(cp,dist){
     if(!isDuty||myLat===null||myLng===null)return;
     const stillInside=haversine(myLat,myLng,cp.lat,cp.lng)<=cp.radius;
     if(!stillInside)return; // 60秒後にはもう外にいれば、通過とみなして通知しない
+    cp.stopConfirmed=true; // 出発時の通知可否の判定に使う
     // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
     const intlArrivalText=intlPoolArrivalText(cp);
     sendNotif(intlArrivalText||(cp.icon+' '+cp.name+' に到着'),`到着時刻 ${timeStr}`,'taxi-'+cp.id);
