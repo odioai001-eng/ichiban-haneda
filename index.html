@@ -950,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260811-2';
+const APP_BUILD='20260811-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1227,10 +1227,12 @@ async function fetchTodayEventVenues(){
         const name=el.querySelector('.venue-name');
         const icon=el.querySelector('.venue-icon');
         const time=el.querySelector('.stat-value.time');
+        const eventName=el.querySelector('.event-name');
         if(name)venues.push({
           name:name.textContent.trim(),
           icon:icon?icon.textContent.trim():'🎫',
-          endTimeText:time?time.textContent.trim():''
+          endTimeText:time?time.textContent.trim():'',
+          eventTitle:eventName?eventName.textContent.trim():''
         });
       }
       el=el.nextElementSibling;
@@ -1284,7 +1286,7 @@ function renderEventVenueLayer(){
       </div>`,
       className:'',iconAnchor:[30,13]
     });
-    L.marker(coords,{icon}).bindPopup(`<b>${v.icon} ${esc(v.name)}</b>${v.endTimeText?`<br>終演目安: ${esc(v.endTimeText)}`:''}${ending?'<br><b style="color:#ef4444">まもなく／ちょうど終演</b>':''}`).addTo(eventVenueLayer);
+    L.marker(coords,{icon}).bindPopup(`<b>${v.icon} ${esc(v.name)}</b>${v.eventTitle?`<br>${esc(v.eventTitle)}`:''}${v.endTimeText?`<br>終演目安: ${esc(v.endTimeText)}`:''}${ending?'<br><b style="color:#ef4444">まもなく／ちょうど終演</b>':''}`).addTo(eventVenueLayer);
   });
 }
 async function toggleEventVenues(){
