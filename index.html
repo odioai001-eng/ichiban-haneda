@@ -935,7 +935,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-2';
+const APP_BUILD='20260810-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3099,7 +3099,17 @@ function getTodayShiftFareEntries(){
     // 出勤中は、暦日ではなく「出勤してからの累計」を本日分として扱う（夜勤で日付をまたいでもリセットされない）
     return log.filter(e=>(e.ts||0)>=dutyStart.getTime());
   }
-  // 退勤中は、直近の目安として「今日の日付」でフォールバック表示
+  // 退勤後は、直近に完了した出退勤（出勤〜退勤）の時間帯そのものに絞る。
+  // 「今日の日付」でフォールバックすると、日をまたいだ夜勤の翌日に確認した時や
+  // 日付が変わった瞬間に表示がリセットされてしまうため、暦日ではなく実際の
+  // 出勤〜退勤の時刻を基準にする
+  const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  if(shiftLog.length){
+    // 手動追加した過去分のシフトが後から配列に追加されている場合もあるため、
+    // 配列の並び順ではなく退勤時刻(endTs)が最も新しいものを直近の勤務とする
+    const last=shiftLog.reduce((a,b)=>(!a||b.endTs>a.endTs)?b:a,null);
+    return log.filter(e=>(e.ts||0)>=last.startTs&&(e.ts||0)<=last.endTs);
+  }
   const todayStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
   return log.filter(e=>e.dateStr===todayStr);
 }
