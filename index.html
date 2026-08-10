@@ -950,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-9';
+const APP_BUILD='20260810-10';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2482,7 +2482,16 @@ function recordSpotWaitStat(boardSpot,waitMins,boardTs){
 function openWaitStartModal(){
   // タイマーが既に動いている場合は、その開始時刻を修正できるようにする
   // （一度スタートすると二度と開けなくなり、後から時刻を訂正できなかったため）
-  const base=waitInterval?new Date(waitStart):new Date();
+  let base;
+  if(waitInterval){
+    base=new Date(waitStart);
+  }else{
+    // 何らかの理由で待機タイマーの状態がリセットされてしまっていても、
+    // 号を選択した時刻が別枠で記録されていれば、それを初期値として提案する
+    // （現在時刻からあまりに離れた古い記録は誤って使わないよう、16時間以内のみ対象）
+    const lastSelectTs=parseInt(localStorage.getItem('taxi_last_spot_select_ts')||'0',10);
+    base=(lastSelectTs&&(Date.now()-lastSelectTs)<16*3600*1000)?new Date(lastSelectTs):new Date();
+  }
   const hh=String(base.getHours()).padStart(2,'0');
   const mm=String(base.getMinutes()).padStart(2,'0');
   const timeInput=document.getElementById('wait-start-time');
@@ -3027,6 +3036,9 @@ function selectSpot(spotName){
   // 号選択チップから直接選んだ場合も、到着ポップアップ経由の選択と同様に
   // 「対応済み」として扱い、GPSのブレで到着判定が再発火しても消えないようにする
   hCp.poolModalHandled=true;
+  // 万一この後に状態がリセットされてしまっても、「⏱ 待機開始」ボタンで復元の
+  // 目安にできるよう、号を選んだ時刻を常に別枠で記録しておく
+  localStorage.setItem('taxi_last_spot_select_ts',String(Date.now()));
   currentSpotSelection=spotName;
   const fullSpot='東京都大田区羽田空港'+currentSpotSelection+'乗り場';
   hCp.currentSpot=fullSpot;
