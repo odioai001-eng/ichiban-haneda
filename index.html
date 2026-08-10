@@ -935,7 +935,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-3';
+const APP_BUILD='20260810-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3241,10 +3241,20 @@ function updateDailyBar(){
  }
  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0');
  const targetAmount=parseInt(localStorage.getItem('taxi_target_amount')||'0');
- const dailyTarget=targetDays>0?targetAmount/targetDays:0;
- if(targetAmtEl)targetAmtEl.textContent=dailyTarget>0?`¥${Math.round(dailyTarget).toLocaleString()}`:'-';
  // 目標金額は税抜きで入力されているため、比較する売上側も税抜きに変換して揃える
  const todaySales=getTodayShiftFareEntries().reduce((a,e)=>a+exTax(e.fare||0),0);
+ // 本日の目標 = (今月の目標金額 − 前日までの売上) ÷ 残り出勤日数
+ const carryForTarget=getCarryover();
+ const monthStartForTarget=new Date(new Date().getFullYear(),new Date().getMonth(),1).getTime();
+ const fareLogForTarget=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const monthSalesAll=fareLogForTarget.filter(e=>(e.ts||0)>=monthStartForTarget).reduce((a,e)=>a+exTax(e.fare||0),0)+carryForTarget.fare;
+ const salesBeforeToday=monthSalesAll-todaySales;
+ const workedDaysBeforeToday=getMonthShifts().length+carryForTarget.days;
+ const remainDaysForTarget=targetDays-workedDaysBeforeToday;
+ const dailyTarget=targetDays>0
+  ?(remainDaysForTarget>0?(targetAmount-salesBeforeToday)/remainDaysForTarget:Math.max(targetAmount-salesBeforeToday,0))
+  :0;
+ if(targetAmtEl)targetAmtEl.textContent=dailyTarget>0?`¥${Math.round(dailyTarget).toLocaleString()}`:'-';
  if(dailyTarget>0){
   const remainAmt=dailyTarget-todaySales;
   if(remainAmt>0){
