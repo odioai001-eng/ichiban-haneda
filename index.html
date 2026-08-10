@@ -950,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-5';
+const APP_BUILD='20260810-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1117,6 +1117,7 @@ function loadCPsFromFirebase(){
 function init(){
 loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory(); renderTeamDests(); initMap(); initLocalChat(); tryFirebase();
   restoreAppState(); // リロード後の状態復元
+  restoreFollowState(); // オートフォロー・仲間フォローの状態復元（出退勤に関わらず常に）
   if(localStorage.getItem('taxi_wakelock')==='1')toggleWakeLock(); // スリープ防止を復元
   setTimeout(checkForUpdate,4000);
   setInterval(checkForUpdate,5*60*1000);
@@ -1399,6 +1400,7 @@ function updatePeerMarker(id,d){
       const fb=document.getElementById('follow-btn');
       if(fb){fb.classList.add('on');fb.title='フォロー中: '+(d.name||'仲間');}
       leafletMap.setView([d.lat,d.lng],16);
+      saveFollowState();
     });
     peerMarkers[id]=m;
   }
@@ -1414,6 +1416,7 @@ function centerOnMe(){
   const btn=document.getElementById('follow-btn');
   if(btn)btn.classList.add('on');
   leafletMap.setView([myLat,myLng],15);
+  saveFollowState();
 }
 
 function toggleAutoFollow(){
@@ -1425,6 +1428,7 @@ function toggleAutoFollow(){
     if(btn){btn.classList.add('on');btn.title='オートフォロー（自分）';}
     if(myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);
     toast('🎯 自分をフォロー中');
+    saveFollowState();
     return;
   }
   autoFollow=!autoFollow;
@@ -1432,6 +1436,7 @@ function toggleAutoFollow(){
   if(btn){btn.classList.toggle('on',autoFollow);btn.title='オートフォロー';}
   if(autoFollow&&myLat&&leafletMap)leafletMap.setView([myLat,myLng],15);
   toast('🎯 オートフォロー '+(autoFollow?'ON':'OFF'));
+  saveFollowState();
 }
 
 function followPeer(id){
@@ -1446,6 +1451,7 @@ function followPeer(id){
   showPage('map',document.querySelector('.nb[onclick*="map"]'));
   setTimeout(()=>leafletMap.setView([d.lat,d.lng],16),150);
   toast('🎯 '+(d.name||'仲間')+'をフォロー中');
+  saveFollowState();
 }
 
 
@@ -1887,6 +1893,24 @@ function saveAppState(){
     spotChangeHistory
   }));
 }
+// オートフォロー・仲間フォローの状態は、出退勤の状態とは別に常に保存・復元する
+// （非番中に地図を見ている時にフォローしていても、再読み込みで消えないように）
+function saveFollowState(){
+  localStorage.setItem('taxi_follow_state',JSON.stringify({autoFollow,followPeerId}));
+}
+function restoreFollowState(){
+  const raw=localStorage.getItem('taxi_follow_state');
+  if(!raw)return;
+  let st;try{st=JSON.parse(raw);}catch(e){return;}
+  if(typeof st.autoFollow==='boolean')autoFollow=st.autoFollow;
+  const fb=document.getElementById('follow-btn');
+  if(st.followPeerId){
+    followPeerId=st.followPeerId;
+    if(fb){fb.classList.add('on');fb.title='フォロー中: '+((driverData[followPeerId]&&driverData[followPeerId].name)||'仲間');}
+  }else if(fb){
+    fb.classList.toggle('on',autoFollow);
+  }
+}
 
 function restoreAppState(){
   const raw=localStorage.getItem('taxi_runtime_state');
@@ -2282,6 +2306,7 @@ function focusDriver(id){
   if(btn)btn.classList.remove('on');
   leafletMap.setView([d.lat,d.lng],16);
   toggleDriverPanel();
+  saveFollowState();
 }
 function focusDriverFromList(id){
   const d=driverData[id];
@@ -2294,6 +2319,7 @@ function focusDriverFromList(id){
   setTimeout(()=>{
     leafletMap.setView([d.lat,d.lng],16);
   },150);
+  saveFollowState();
 }
 
 function toggleDriverDests(id){
@@ -3114,6 +3140,10 @@ function startWaitAt(cp,spotName,dist,timeStr){
       const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
     },1000);
     if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:spotName});
+    // GPS到着による自動スタートの場合、これまでここでsaveAppState()が呼ばれておらず、
+    // 直後（最大15秒間）にアプリが再読み込みされると待機タイマーの開始情報が
+    // 保存されておらずリセットされたように見えていたため、開始直後に必ず保存する
+    saveAppState();
   }
 }
 
