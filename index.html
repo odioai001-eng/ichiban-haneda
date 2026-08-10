@@ -950,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-7';
+const APP_BUILD='20260810-8';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2891,29 +2891,14 @@ function checkGeofences(lat,lng,isFirstFix){
     // 滞在し続けていても「今初めて到着した」と誤検知してしまう。初回だけは
     // 到着・出発イベントを発火させず、現在地から見た本当の在圏状況をそのまま記憶する
     if(isFirstFix){
-      // バックグラウンド強制終了等でリロードが発生し、選択済みだった乗り場から
-      // 実際にはすでに出発していた場合、通常の出発イベントが一度も発火しないまま
-      // 「最初から外にいた」ことにされてしまい、実車ボタンの押し忘れ検知が
-      // 素通りしてしまう。選択中の乗り場から出ていたことが分かった時点で、
-      // 出発の可能性ありとして捕捉するが、復帰直後の1回だけのGPS読み取りは
-      // 精度が不安定なことが多く、これだけで即座に確定すると「まだ乗り場にいるのに
-      // 出発しましたと誤通知される」誤作動が頻発する。他の出発判定と同様に、
-      // 数秒後の位置でもう一度確認してから確定する
-      const spotLabel=spotLabelFromCheckpointName(cp.name);
-      if(!nowInside&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&spotLabel&&spotLabel===currentSpotSelection){
-        const cpId=cp.id;
-        cpInside[cpId]=nowInside;
-        setTimeout(()=>{
-          if(myLat===null||myLng===null)return;
-          if(currentSpotSelection!==spotLabel)return; // 確認中に乗り場選択が変わっていたら対象外
-          if(currentStatus==='jitsusha')return; // 既に別経路で実車済みなら何もしない
-          const d2=haversine(myLat,myLng,cp.lat,cp.lng);
-          if(d2<=cp.radius){cpInside[cpId]=true;return;} // 実際にはまだ圏内だった（誤検知）
-          cpInside[cpId]=false;
-          onDeparture(cp);
-        },10000);
-        return;
-      }
+      // アプリの再読み込み・他アプリからの復帰直後は、GPSの精度が一時的に
+      // 悪いことが多く、実際にはまだ乗り場にいるのに「圏外に出た」という
+      // 誤った読み取りが起きやすい。以前はこの1回の読み取りをもとに
+      // 「出発した」とみなして自動実車化していたが、復帰のたびに誤って
+      // 実車になってしまう不具合が繰り返し起きたため、この初回フィックスでは
+      // 出発判定を一切行わず、現在地から見た在圏状況をそのまま記憶するだけに留める。
+      // 本当に乗り場を出発していた場合は、この直後の通常のGPS監視
+      // （60秒間圏外が続いた時点で確定する既存のロジック）で確実に検知される
       cpInside[cp.id]=nowInside;return;
     }
     const wasInside=cpInside[cp.id]||false;
