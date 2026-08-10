@@ -950,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260811-1';
+const APP_BUILD='20260811-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2977,7 +2977,8 @@ function onDeparture(cp){
   if(cp.stopNotifyTimer){clearTimeout(cp.stopNotifyTimer);cp.stopNotifyTimer=null;}
   // 到着通知と同様、今回の滞在で1分以上の停止が確認できていた場合のみ出発通知を送る
   // （通過しただけで到着通知が出なかった場合、出発通知だけ届くのは不自然なため）
-  if(cp.stopConfirmed){
+  const hadConfirmedStop=!!cp.stopConfirmed;
+  if(hadConfirmedStop){
     // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
     sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
     toast(cp.icon+' '+cp.name+' を出発しました');
@@ -2985,9 +2986,10 @@ function onDeparture(cp){
   cp.stopConfirmed=false;
   // 「1号乗り場」〜「4号乗り場」「国際線第3/4プール」等のチェックポイントから、
   // 実車ボタンを押さないまま出発した場合は、押し忘れとみなして自動的に実車状態にする
-  // （乗り場・待機時間も記録される）
+  // （乗り場・待機時間も記録される）。ここも同じ「1分以上の停止が確認できた場合のみ」
+  // に揃え、素通りしただけで実車になってしまわないようにする
   const spotLabel=spotLabelFromCheckpointName(cp.name);
-  if(spotLabel&&isDuty&&!testMode&&currentStatus!=='jitsusha'){
+  if(spotLabel&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&hadConfirmedStop){
     currentSpotSelection=spotLabel;
     if(cp.arrivalTimeStr){
       const [ah,am]=cp.arrivalTimeStr.split(':').map(Number);
