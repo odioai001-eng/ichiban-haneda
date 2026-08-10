@@ -281,7 +281,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <!-- Row 2: 待機開始・タイマー・リセット -->
     <div style="display:flex;align-items:center;gap:6px;width:100%">
-      <div onclick="startWaitManual()"
+      <div onclick="openWaitStartModal()"
         style="padding:7px 10px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
         background:rgba(79,142,247,.22);color:var(--accent);border:2px solid var(--accent);
         backdrop-filter:blur(6px);white-space:nowrap;flex-shrink:0">⏱ 待機開始</div>
@@ -835,6 +835,21 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
 </div>
 
+<div id="wait-start-confirm-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
+    <div style="text-align:center;font-size:16px;font-weight:700;margin-bottom:18px">待機開始時刻を確認してください</div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">待機開始時刻</div>
+      <input id="wait-start-time" type="text" inputmode="none" readonly placeholder="例: 18:00" onclick="openTimeKeypad('wait-start-time')"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="cancelStartWait()" class="btn btn-g" style="flex:1">キャンセル</button>
+      <button onclick="confirmStartWait()" class="btn btn-p" style="flex:1">⏱ スタート</button>
+    </div>
+  </div>
+</div>
+
 <div id="duty-end-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--surface);border-radius:20px;padding:36px 24px 28px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6);text-align:center">
     <div style="font-size:40px;margin-bottom:16px">🌙</div>
@@ -935,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260810-4';
+const APP_BUILD='20260810-5';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2438,9 +2453,36 @@ function recordSpotWaitStat(boardSpot,waitMins,boardTs){
   const hour=d.getHours();
   db.ref(`spot_wait_stats/${boardSpot}/${day}/${hour}`).push(waitMins);
 }
-function startWaitManual(){
+function openWaitStartModal(){
   if(waitInterval){toast('⏱ タイマーはすでに動いています');return;}
-  manualWaitStartTime=Date.now();
+  const now=new Date();
+  const hh=String(now.getHours()).padStart(2,'0');
+  const mm=String(now.getMinutes()).padStart(2,'0');
+  const timeInput=document.getElementById('wait-start-time');
+  if(timeInput)timeInput.value=`${hh}:${mm}`;
+  document.getElementById('wait-start-confirm-modal').style.display='flex';
+}
+function cancelStartWait(){
+  document.getElementById('wait-start-confirm-modal').style.display='none';
+}
+function confirmStartWait(){
+  const timeVal=document.getElementById('wait-start-time').value;
+  document.getElementById('wait-start-confirm-modal').style.display='none';
+  let startTs=Date.now();
+  const m=timeVal&&timeVal.match(/^(\d{1,2}):(\d{2})$/);
+  if(m){
+    const now=new Date();
+    let startDate=new Date(now.getFullYear(),now.getMonth(),now.getDate(),parseInt(m[1],10),parseInt(m[2],10),0);
+    // 指定時刻が未来になってしまう場合は、日をまたいだ前日の待機開始とみなす
+    if(startDate.getTime()>Date.now())startDate=new Date(startDate.getTime()-24*3600*1000);
+    startTs=startDate.getTime();
+  }
+  startWaitManual(startTs);
+}
+function startWaitManual(startTs){
+  if(waitInterval){toast('⏱ タイマーはすでに動いています');return;}
+  const st=startTs||Date.now();
+  manualWaitStartTime=st;
   manualWaitAddr=null;
   spotChangeHistory=[];
   // 号チップ未選択状態にリセット
@@ -2451,8 +2493,7 @@ function startWaitManual(){
   if(myLat!==null){
     reverseGeocode(myLat,myLng).then(addr=>{manualWaitAddr=addr;saveAppState();});
   }
-  const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
-  waitStart=Date.now();waitSec=0;
+  waitStart=st;waitSec=Math.max(0,Math.floor((Date.now()-st)/1000));
   if(waitInterval)clearInterval(waitInterval);
   waitInterval=setInterval(()=>{
     waitSec=Math.floor((Date.now()-waitStart)/1000);
@@ -2460,7 +2501,11 @@ function startWaitManual(){
     document.getElementById('wait-timer').textContent=t;
     const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
   },1000);
-  if(db&&isDuty&&!testMode)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:null});
+  // 開始時刻を過去に指定した場合、次のtickまで00:00:00のまま見えないよう即座に反映する
+  const tNow=toHMS(waitSec);
+  const wtEl=document.getElementById('wait-timer');if(wtEl)wtEl.textContent=tNow;
+  const mtEl=document.getElementById('map-wait-timer');if(mtEl)mtEl.textContent=tNow;
+  if(db&&isDuty&&!testMode)db.ref('drivers/'+myId).update({waitSince:st,waitSpot:null});
   renderSpotRow();
   saveAppState();
   toast('⏱ 待機タイマー スタート');
