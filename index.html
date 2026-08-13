@@ -950,7 +950,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260811-3';
+const APP_BUILD='20260813-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2014,11 +2014,23 @@ function setStatus(s){
     jitsushaStart=Date.now();
     // 号選択・待機時間は、リセットする前に確定させておく
     const boardSpot=currentSpotSelection;
-    // 待機時間を計算してboardInfoに保存（プール到着からの待機タイマーを優先し、
-    // 手動「待機開始」ボタンのみで始めた場合はそちらの時刻を使う）
-    const waitMinsFromPool=(waitInterval)?Math.round(waitSec/60):null;
-    const waitMins=(waitMinsFromPool&&waitMinsFromPool>0)?waitMinsFromPool:
-      (manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null);
+    // 待機時間は「国内線プールに入った時刻」から実車ボタンを押すまでの総経過時間とする。
+    // 〇号ボタンを押した時刻や、プール到着から2分後に自動で始まる待機タイマーの
+    // 開始時刻ではなく、実際にGPSでプールに到着した時刻（cpArriveTs、リロードを
+    // またいでも保持される）を基準にすることで、号ボタンを押すのが遅れた場合や
+    // 押し忘れて自動検知された場合でも同じ基準で待機時間を計算する
+    const poolCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
+    const poolArriveTs=poolCp?cpArriveTs[poolCp.id]:null;
+    let waitMins;
+    if(boardSpot&&poolArriveTs){
+      waitMins=Math.round((Date.now()-poolArriveTs)/60000);
+    } else {
+      // プール到着時刻が取れない場合（プール外での待機など）は、従来通り
+      // 待機タイマー・手動「待機開始」ボタンの時刻を使う
+      const waitMinsFromPool=(waitInterval)?Math.round(waitSec/60):null;
+      waitMins=(waitMinsFromPool&&waitMinsFromPool>0)?waitMinsFromPool:
+        (manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null);
+    }
     boardInfo={
       time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),
       lat:myLat,lng:myLng,
@@ -2897,6 +2909,25 @@ const CP_TRANSITION_DEBOUNCE_MS=10000; // 出勤直後などGPSが不安定な�
 const DEPARTURE_CONFIRM_BUFFER_M=25;
 const DEPARTURE_CONFIRM_MS=90000; // 誤作動対策のため60秒→90秒に延長
 let pendingDepartureTimer={};
+// チェックポイントに「実際に何時何分から」いるかを時刻(ms)で記録し、localStorageにも
+// 書き残しておく。国内線プール出発後にアプリを開き直すことが多く、その際は
+// checkGeofencesの初回フィックスがそのエリアに既に入っている状態から始まるため、
+// アプリ内のタイマーだけで「1分以上その場にいたか」を判定するとリロードのたびに
+// 経過時間が失われてしまう。到着時刻を保存しておき、実際の経過時間（＝停車では
+// なく、エリア内に居続けた時間）で判定することで、リロードをまたいでも
+// 1号〜4号乗り場に1分以上いてから出発すれば正しく実車の自動判定が効くようにする。
+const CP_STOP_CONFIRM_MS=60000;
+function loadCpArriveTs(){
+  try{return JSON.parse(localStorage.getItem('taxi_cp_arrive_ts')||'{}');}catch(e){return {};}
+}
+function saveCpArriveTs(){
+  localStorage.setItem('taxi_cp_arrive_ts',JSON.stringify(cpArriveTs));
+}
+let cpArriveTs=loadCpArriveTs();
+function cpHasStayed1Min(cp){
+  const ts=cpArriveTs[cp.id];
+  return !!ts&&(Date.now()-ts)>=CP_STOP_CONFIRM_MS;
+}
 function checkGeofences(lat,lng,isFirstFix){
   const now=Date.now();
   checkpoints.forEach(cp=>{
@@ -2915,7 +2946,10 @@ function checkGeofences(lat,lng,isFirstFix){
       // 出発判定を一切行わず、現在地から見た在圏状況をそのまま記憶するだけに留める。
       // 本当に乗り場を出発していた場合は、この直後の通常のGPS監視
       // （60秒間圏外が続いた時点で確定する既存のロジック）で確実に検知される
-      cpInside[cp.id]=nowInside;return;
+      cpInside[cp.id]=nowInside;
+      // 圏外から始まった場合、前回セッションで消し忘れた到着時刻が残っていれば掃除する
+      if(!nowInside&&cpArriveTs[cp.id]){delete cpArriveTs[cp.id];saveCpArriveTs();}
+      return;
     }
     const wasInside=cpInside[cp.id]||false;
     if(nowInside===wasInside){
@@ -2933,6 +2967,7 @@ function checkGeofences(lat,lng,isFirstFix){
     if(nowInside){
       cpLastTransitionTs[cp.id]=now;
       cpInside[cp.id]=true;
+      cpArriveTs[cp.id]=now;saveCpArriveTs();
       onArrival(cp,Math.round(dist));
     } else {
       // 退場は即確定せず、90秒後も実際に半径+余裕分の外側のままなら確定する
@@ -2945,7 +2980,10 @@ function checkGeofences(lat,lng,isFirstFix){
         if(d2<=cp.radius+DEPARTURE_CONFIRM_BUFFER_M)return; // 境界付近だった（誤検知）
         cpLastTransitionTs[cp.id]=Date.now();
         cpInside[cp.id]=false;
+        // onDeparture内で「1分以上滞在したか」の判定にcpArriveTsを使うため、
+        // 消去はonDepartureの呼び出しが終わった後に行う
         onDeparture(cp);
+        delete cpArriveTs[cp.id];saveCpArriveTs();
       },DEPARTURE_CONFIRM_MS);
     }
   });
@@ -2978,8 +3016,11 @@ function onDeparture(cp){
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
   if(cp.stopNotifyTimer){clearTimeout(cp.stopNotifyTimer);cp.stopNotifyTimer=null;}
   // 到着通知と同様、今回の滞在で1分以上の停止が確認できていた場合のみ出発通知を送る
-  // （通過しただけで到着通知が出なかった場合、出発通知だけ届くのは不自然なため）
-  const hadConfirmedStop=!!cp.stopConfirmed;
+  // （通過しただけで到着通知が出なかった場合、出発通知だけ届くのは不自然なため）。
+  // cp.stopConfirmedは60秒後のsetTimeoutで立てるためリロードを挟むと失われるが、
+  // cpArriveTs（到着時刻を保存し、実際の経過時間で判定）はリロードをまたいでも
+  // 生き残るため、どちらか一方でも「1分以上滞在」を確認できていれば停止とみなす
+  const hadConfirmedStop=!!cp.stopConfirmed||cpHasStayed1Min(cp);
   if(hadConfirmedStop){
     // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
     sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
