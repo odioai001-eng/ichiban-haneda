@@ -955,7 +955,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-10';
+const APP_BUILD='20260813-11';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1360,7 +1360,7 @@ function renderStationLayer(){
       </div>`,
       className:'',iconAnchor:[22,13]
     });
-    L.marker(coords,{icon}).bindPopup(`<b>🚉 ${esc(name)}</b><br>地下鉄以外（JR・私鉄）の主要駅`).addTo(stationLayer);
+    L.marker(coords,{icon}).bindPopup(esc(name)).addTo(stationLayer);
   });
 }
 function toggleStations(){
