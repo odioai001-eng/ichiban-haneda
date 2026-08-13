@@ -428,6 +428,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <div class="page" id="page-ranking">
 <div class="pc">
   <div class="sec">🏆 本日の売り上げランキング（本人）</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
   <div class="card"><div id="rank-today-personal"></div></div>
   <div class="sec" style="margin-top:18px">🏆 本日の売り上げランキング（グループ）</div>
   <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
@@ -436,8 +437,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
   <div class="card"><div id="rank-month-group"></div></div>
   <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（本人）</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
   <div class="card"><div id="rank-alltime-personal"></div></div>
   <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（グループ）</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
   <div class="card"><div id="rank-alltime-group"></div></div>
 </div>
 </div>
@@ -950,7 +953,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-1';
+const APP_BUILD='20260813-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2753,7 +2756,7 @@ function renderRankTodayPersonal(){
   const bizEnd=bizStart+24*3600*1000;
   const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0&&(d.ts||0)>=bizStart&&(d.ts||0)<bizEnd).slice().sort((a,b)=>(b.fare||0)-(a.fare||0));
   el.innerHTML=trips.length
-    ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),d.fare,adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
+    ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),exTax(d.fare),adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の記録がありません</div>';
 }
 // ② 本日の売り上げランキング（グループ・送先売上の合計）
@@ -2848,7 +2851,7 @@ function buildRankTripCardHtml(d,rank,driverLabel){
       <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
     </div>
     ${waitStr?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
-    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${(d.fare||0).toLocaleString()}</div>
+    <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${exTax(d.fare).toLocaleString()}</div>
   </div>`;
 }
 function renderRankAllTimePersonal(){
