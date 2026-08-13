@@ -953,7 +953,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-3';
+const APP_BUILD='20260813-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2141,6 +2141,7 @@ function connectFirebase(config){
     db.ref('spot_wait_stats').on('value',snap=>{
       spotWaitStats=snap.val()||{};
       renderSpotWaitStats();
+      cleanupBadSpotWaitStats();
     });
     // 参加申請の通知は、過去に管理者PINでログインしたことがある端末にのみローカル通知する
     // （全ドライバーの端末にブロードキャストされるのを防ぐため、Firebase側は全員が購読しつつ、
@@ -2486,10 +2487,14 @@ function recordSpotDestStat(boardSpot,alightAddr){
 }
 
 const DOW_JP=['日','月','火','水','木','金','土'];
+// 200分（約3時間20分）以上の待機時間は、実車ボタンの押し忘れ等によるGPS誤検知の
+// 異常値とみなし、乗り場別の待機時間統計には記録しない
+const SPOT_WAIT_STAT_MAX_MINS=200;
 // 曜日・時間帯別の待機時間統計に記録する（team_destsとは別パスのため月末リセットの対象外）
 // 時間帯は「待機を始めた時刻（実車ボタンを押した時刻から待機時間を差し引いた時刻）」の時を使う
 function recordSpotWaitStat(boardSpot,waitMins,boardTs){
   if(!db||!boardSpot||!waitMins||waitMins<=0)return;
+  if(waitMins>=SPOT_WAIT_STAT_MAX_MINS)return;
   const arrivalTs=boardTs-waitMins*60000;
   const d=new Date(arrivalTs);
   const day=DOW_JP[d.getDay()];
@@ -3713,6 +3718,26 @@ function renderSpotDestTable(){
 }
 
 let spotWaitStats={}; // {spot:{day:{hour:{pushKey:waitMins}}}}。月末リセットの対象外で累計し続ける
+
+// 過去に記録された、実車ボタンの押し忘れ等によるSPOT_WAIT_STAT_MAX_MINS分（200分）
+// 以上の異常値をサーバー側からも削除する（記録時点でのガードはrecordSpotWaitStat側）
+function cleanupBadSpotWaitStats(){
+  if(!db)return;
+  Object.keys(spotWaitStats||{}).forEach(spot=>{
+    const dayData=spotWaitStats[spot]||{};
+    Object.keys(dayData).forEach(day=>{
+      const hours=dayData[day]||{};
+      Object.keys(hours).forEach(hour=>{
+        const entries=hours[hour]||{};
+        Object.keys(entries).forEach(key=>{
+          if((entries[key]||0)>=SPOT_WAIT_STAT_MAX_MINS){
+            db.ref(`spot_wait_stats/${spot}/${day}/${hour}/${key}`).remove();
+          }
+        });
+      });
+    });
+  });
+}
 
 // 営業時間帯（11時始まり〜翌1時）の並び順で時刻を比較するための正規化
 function normHourForSort(h){return h<11?h+24:h;}
