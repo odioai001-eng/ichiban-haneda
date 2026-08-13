@@ -383,6 +383,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索" style="bottom:250px;right:8px">💴</button>
   <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ" style="bottom:300px;right:8px">🎤</button>
   <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト" style="bottom:400px;right:8px">🎪</button>
+  <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）" style="bottom:450px;right:8px">🚉</button>
   <!-- 移動記録ボタン（仲間ボタンの左） -->
   <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
     right:8px;bottom:350px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
@@ -953,7 +954,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-7';
+const APP_BUILD='20260813-8';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1319,6 +1320,62 @@ async function toggleEventVenues(){
   // 終演前後で色分け表示が切り替わるよう、1分ごとに再描画する
   if(eventVenueRefreshTimer)clearInterval(eventVenueRefreshTimer);
   eventVenueRefreshTimer=setInterval(renderEventVenueLayer,60000);
+}
+
+// 最終電車後の営業用に、東京23区・武蔵野市・三鷹市にある地下鉄以外（JR・私鉄）の
+// 主要ターミナル駅をハイライトする。座標は概算のため、正確な乗り場位置は現地で確認すること
+const STATION_COORDS={
+  '新宿駅':[35.6896,139.7006],'渋谷駅':[35.6580,139.7016],'池袋駅':[35.7295,139.7109],
+  '東京駅':[35.6812,139.7671],'品川駅':[35.6285,139.7387],'上野駅':[35.7141,139.7774],
+  '秋葉原駅':[35.6984,139.7731],'新橋駅':[35.6665,139.7580],'有楽町駅':[35.6751,139.7631],
+  '恵比寿駅':[35.6467,139.7101],'五反田駅':[35.6262,139.7237],'目黒駅':[35.6339,139.7157],
+  '大崎駅':[35.6197,139.7284],'大森駅':[35.5885,139.7280],'蒲田駅':[35.5622,139.7161],
+  '大井町駅':[35.6058,139.7357],'田町駅':[35.6455,139.7476],'浜松町駅':[35.6553,139.7570],
+  '錦糸町駅':[35.6969,139.8138],'亀戸駅':[35.6971,139.8256],'北千住駅':[35.7486,139.8050],
+  '赤羽駅':[35.7773,139.7207],'田端駅':[35.7381,139.7610],'王子駅':[35.7533,139.7364],
+  '巣鴨駅':[35.7335,139.7394],'大塚駅':[35.7317,139.7285],'高田馬場駅':[35.7128,139.7038],
+  '中野駅':[35.7057,139.6656],'荻窪駅':[35.7043,139.6202],'練馬駅':[35.7376,139.6528],
+  '石神井公園駅':[35.7369,139.5993],'西新井駅':[35.7749,139.7961],'金町駅':[35.7660,139.8687],
+  '亀有駅':[35.7645,139.8471],'押上駅':[35.7107,139.8134],'御茶ノ水駅':[35.6994,139.7649],
+  '水道橋駅':[35.7020,139.7530],'飯田橋駅':[35.7020,139.7449],'市ヶ谷駅':[35.6912,139.7357],
+  '四ツ谷駅':[35.6859,139.7301],'代々木駅':[35.6832,139.7020],'原宿駅':[35.6702,139.7027],
+  '日暮里駅':[35.7280,139.7709],'西日暮里駅':[35.7320,139.7668],'三軒茶屋駅':[35.6437,139.6712],
+  '下北沢駅':[35.6613,139.6683],'自由が丘駅':[35.6076,139.6688],'二子玉川駅':[35.6113,139.6272],
+  '成城学園前駅':[35.6486,139.5975],'明大前駅':[35.6706,139.6544],
+  '吉祥寺駅':[35.7031,139.5798],'三鷹駅':[35.7028,139.5601],'武蔵境駅':[35.7000,139.5468]
+};
+let stationLayer=null,stationsShown=false;
+function renderStationLayer(){
+  if(!stationLayer)return;
+  stationLayer.clearLayers();
+  Object.entries(STATION_COORDS).forEach(([name,coords])=>{
+    const color='#38bdf8';
+    L.circle(coords,{radius:60,color,weight:2,fillColor:color,fillOpacity:.18}).addTo(stationLayer);
+    const icon=L.divIcon({
+      html:`<div style="position:relative;width:44px;height:26px;display:flex;align-items:center;justify-content:center">
+        <div style="position:relative;background:${color};border:2px solid #fff;border-radius:50%;
+          width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+          font-size:13px;box-shadow:0 0 6px rgba(56,189,248,.8)">🚉</div>
+      </div>`,
+      className:'',iconAnchor:[22,13]
+    });
+    L.marker(coords,{icon}).bindPopup(`<b>🚉 ${esc(name)}</b><br>地下鉄以外（JR・私鉄）の主要駅`).addTo(stationLayer);
+  });
+}
+function toggleStations(){
+  const btn=document.getElementById('station-btn');
+  if(stationsShown){
+    if(stationLayer)leafletMap.removeLayer(stationLayer);
+    stationsShown=false;
+    if(btn)btn.classList.remove('on');
+    return;
+  }
+  if(btn)btn.classList.add('on');
+  if(!stationLayer)stationLayer=L.layerGroup();
+  renderStationLayer();
+  stationLayer.addTo(leafletMap);
+  stationsShown=true;
+  toast(`🚉 地下鉄以外の主要駅 ${Object.keys(STATION_COORDS).length}件を地図に表示しました`);
 }
 
 function initMap(){
