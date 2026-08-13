@@ -384,6 +384,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ" style="bottom:300px;right:8px">🎤</button>
   <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト" style="bottom:400px;right:8px">🎪</button>
   <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）" style="bottom:450px;right:8px">🚉</button>
+  <button class="map-ctrl-btn" id="hotel-btn" onclick="toggleHotels()" title="羽田・成田行きが見込める主要ホテルを地図にハイライト" style="bottom:500px;right:8px">🏨</button>
   <!-- 移動記録ボタン（仲間ボタンの左） -->
   <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
     right:8px;bottom:350px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
@@ -954,7 +955,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-8';
+const APP_BUILD='20260813-9';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1376,6 +1377,66 @@ function toggleStations(){
   stationLayer.addTo(leafletMap);
   stationsShown=true;
   toast(`🚉 地下鉄以外の主要駅 ${Object.keys(STATION_COORDS).length}件を地図に表示しました`);
+}
+
+// 羽田・成田空港行きの需要が見込める、都内の大型ビジネス・シティホテルをハイライトする。
+// 座標は概算のため、正確な乗り場位置（正面玄関等）は現地で確認すること
+const HOTEL_COORDS={
+  '帝国ホテル東京':[35.6742,139.7595],'ザ・ペニンシュラ東京':[35.6748,139.7607],
+  'パレスホテル東京':[35.6851,139.7595],'アマン東京':[35.6870,139.7660],
+  'シャングリ・ラ東京':[35.6812,139.7660],'東京ステーションホテル':[35.6812,139.7671],
+  'ホテルグランヴィア東京':[35.6800,139.7660],'マンダリン オリエンタル 東京':[35.6855,139.7737],
+  'ロイヤルパークホテル':[35.6825,139.7827],'ホテルオークラ東京':[35.6689,139.7422],
+  'アンダーズ東京':[35.6666,139.7495],'東京エディション虎ノ門':[35.6683,139.7481],
+  'ザ・キャピトルホテル東急':[35.6748,139.7420],'ホテルニューオータニ東京':[35.6797,139.7357],
+  'グランドハイアット東京':[35.6604,139.7292],'ザ・リッツ・カールトン東京':[35.6664,139.7306],
+  'ANAインターコンチネンタルホテル東京':[35.6697,139.7376],'コンラッド東京':[35.6634,139.7614],
+  'ザ・プリンス パークタワー東京':[35.6551,139.7466],'パークハイアット東京':[35.6857,139.6900],
+  '京王プラザホテル':[35.6910,139.6944],'ヒルトン東京':[35.6913,139.6905],
+  '新宿プリンスホテル':[35.6947,139.7002],'ホテルセンチュリーサザンタワー':[35.6870,139.6996],
+  'セルリアンタワー東急ホテル':[35.6552,139.6982],'渋谷エクセルホテル東急':[35.6588,139.7016],
+  'ホテル雅叙園東京':[35.6335,139.7168],'東京マリオットホテル':[35.6328,139.7154],
+  'ウェスティンホテル東京':[35.6438,139.7178],'グランドプリンスホテル新高輪':[35.6357,139.7343],
+  '品川プリンスホテル':[35.6289,139.7392],'ストリングスホテル東京インターコンチネンタル':[35.6296,139.7387],
+  'ホテル日航東京':[35.6296,139.7793],'グランドニッコー東京台場':[35.6280,139.7766],
+  'ヒルトン東京お台場':[35.6270,139.7803],'東京ベイ有明ワシントンホテル':[35.6404,139.7930],
+  '浅草ビューホテル':[35.7135,139.7942],'両国ビューホテル':[35.6960,139.7930],
+  '東京ドームホテル':[35.7050,139.7524],'ホテル椿山荘東京':[35.7057,139.7266],
+  'ANAクラウンプラザホテル東京':[35.7018,139.7503],'シェラトン都ホテル東京':[35.6379,139.7315],
+  'ホテルメトロポリタン':[35.7285,139.7095],'サンシャインシティプリンスホテル':[35.7283,139.7185]
+};
+let hotelLayer=null,hotelsShown=false;
+function renderHotelLayer(){
+  if(!hotelLayer)return;
+  hotelLayer.clearLayers();
+  Object.entries(HOTEL_COORDS).forEach(([name,coords])=>{
+    const color='#a78bfa';
+    L.circle(coords,{radius:60,color,weight:2,fillColor:color,fillOpacity:.18}).addTo(hotelLayer);
+    const icon=L.divIcon({
+      html:`<div style="position:relative;width:44px;height:26px;display:flex;align-items:center;justify-content:center">
+        <div style="position:relative;background:${color};border:2px solid #fff;border-radius:50%;
+          width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+          font-size:13px;box-shadow:0 0 6px rgba(167,139,250,.8)">🏨</div>
+      </div>`,
+      className:'',iconAnchor:[22,13]
+    });
+    L.marker(coords,{icon}).bindPopup(`<b>🏨 ${esc(name)}</b><br>羽田・成田空港行きが見込める主要ホテル`).addTo(hotelLayer);
+  });
+}
+function toggleHotels(){
+  const btn=document.getElementById('hotel-btn');
+  if(hotelsShown){
+    if(hotelLayer)leafletMap.removeLayer(hotelLayer);
+    hotelsShown=false;
+    if(btn)btn.classList.remove('on');
+    return;
+  }
+  if(btn)btn.classList.add('on');
+  if(!hotelLayer)hotelLayer=L.layerGroup();
+  renderHotelLayer();
+  hotelLayer.addTo(leafletMap);
+  hotelsShown=true;
+  toast(`🏨 主要ホテル ${Object.keys(HOTEL_COORDS).length}件を地図に表示しました`);
 }
 
 function initMap(){
