@@ -953,7 +953,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-5';
+const APP_BUILD='20260813-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2862,7 +2862,7 @@ function buildRankTripCardHtml(d,rank,driverLabel){
 function renderRankAllTimePersonal(){
   const el=document.getElementById('rank-alltime-personal');
   if(!el)return;
-  const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0)).slice(0,50);
+  const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0)).slice(0,10);
   el.innerHTML=trips.length
     ?trips.map((d,i)=>buildRankTripCardHtml(d,i+1,null)).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
@@ -2882,7 +2882,7 @@ function renderRankAllTimeGroup(){
   });
   allTrips.sort((a,b)=>(b.fare||0)-(a.fare||0));
   el.innerHTML=allTrips.length
-    ?allTrips.slice(0,50).map((d,i)=>buildRankTripCardHtml(d,i+1,d.driverName||'不明')).join('')
+    ?allTrips.slice(0,10).map((d,i)=>buildRankTripCardHtml(d,i+1,d.driverName||'不明')).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
 }
 // 端末の入れ替え・localStorageクリア等でuidが変わると、同じ人の重複した行が
