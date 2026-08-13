@@ -953,7 +953,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-2';
+const APP_BUILD='20260813-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5299,9 +5299,9 @@ function pad(n){return String(n).padStart(2,'0');}
 function fmtTime(d){return d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 // 毎回入力する運賃は消費税10%込みの金額のため、売上の合計・平均・個別表示は
-// すべて税抜き（÷1.1・四捨五入）に変換してから使う。入力・編集画面は引き続き
-// レシート通りの税込み金額のまま扱う（ここでは変換しない）
-function exTax(fare){return Math.round((fare||0)/1.1);}
+// すべて税抜き（÷1.1・10円単位で四捨五入）に変換してから使う。入力・編集画面は
+// 引き続きレシート通りの税込み金額のまま扱う（ここでは変換しない）
+function exTax(fare){return Math.round((fare||0)/1.1/10)*10;}
 
 function formatWaitStr(mins,minsStr){
   if(minsStr)return `(待機${minsStr})`;
