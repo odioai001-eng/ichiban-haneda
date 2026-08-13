@@ -955,7 +955,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-12';
+const APP_BUILD='20260813-13';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2142,15 +2142,25 @@ function setStatus(s){
     // 押し忘れて自動検知された場合でも同じ基準で待機時間を計算する
     const poolCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
     const poolArriveTs=poolCp?cpArriveTs[poolCp.id]:null;
+    // 従来通りの待機タイマー・手動「待機開始」ボタンの時刻を使うフォールバック
+    // （国内線プール到着時刻・国際線の到着時刻のいずれも取れない場合に使う）
+    const legacyWaitMins=()=>{
+      const waitMinsFromPool=(waitInterval)?Math.round(waitSec/60):null;
+      return (waitMinsFromPool&&waitMinsFromPool>0)?waitMinsFromPool:
+        (manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null);
+    };
     let waitMins;
     if(boardSpot&&poolArriveTs){
       waitMins=Math.round((Date.now()-poolArriveTs)/60000);
+    } else if(boardSpot==='国際線'){
+      // 国際線は、第4プール（予備）に1分以上停止していればその到着時刻を、
+      // 素通りしていた場合は第3プール（本プール）への到着時刻を待機開始とする
+      const cp3=findIntlPoolCp('第3');
+      const intlStartTs=intlPool4ArriveTs||(cp3?cpArriveTs[cp3.id]:null);
+      intlPool4ArriveTs=null; // 使い終わったので次回の国際線待機のためにクリアしておく
+      waitMins=intlStartTs?Math.round((Date.now()-intlStartTs)/60000):legacyWaitMins();
     } else {
-      // プール到着時刻が取れない場合（プール外での待機など）は、従来通り
-      // 待機タイマー・手動「待機開始」ボタンの時刻を使う
-      const waitMinsFromPool=(waitInterval)?Math.round(waitSec/60):null;
-      waitMins=(waitMinsFromPool&&waitMinsFromPool>0)?waitMinsFromPool:
-        (manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null);
+      waitMins=legacyWaitMins();
     }
     boardInfo={
       time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),
@@ -3054,6 +3064,14 @@ function cpHasStayed1Min(cp){
   const ts=cpArriveTs[cp.id];
   return !!ts&&(Date.now()-ts)>=CP_STOP_CONFIRM_MS;
 }
+// 国際線第4プール（予備）に1分以上停止していた場合の、その到着時刻。
+// 素通りしただけの場合はnullのままにし、第3プール（本プール）への到着時刻を
+// 待機開始として使う（onDepartureで第4プールを出る時に確定させ、setStatusで
+// 実車になった時点で一度だけ読み取って使い切る）
+let intlPool4ArriveTs=null;
+function findIntlPoolCp(poolNum){
+  return checkpoints.find(c=>c.name&&c.name.includes('国際線')&&c.name.includes(poolNum));
+}
 function checkGeofences(lat,lng,isFirstFix){
   const now=Date.now();
   checkpoints.forEach(cp=>{
@@ -3143,16 +3161,28 @@ function onDeparture(cp){
   if(cp.stopNotifyTimer){clearTimeout(cp.stopNotifyTimer);cp.stopNotifyTimer=null;}
   // 到着通知と同様、今回の滞在で1分以上の停止が確認できていた場合のみ出発通知を送る
   // （通過しただけで到着通知が出なかった場合、出発通知だけ届くのは不自然なため）。
-  // cp.stopConfirmedは60秒後のsetTimeoutで立てるためリロードを挟むと失われるが、
-  // cpArriveTs（到着時刻を保存し、実際の経過時間で判定）はリロードをまたいでも
-  // 生き残るため、どちらか一方でも「1分以上滞在」を確認できていれば停止とみなす
-  const hadConfirmedStop=!!cp.stopConfirmed||cpHasStayed1Min(cp);
+  // 到着60秒後の時点で「まだ実際にそこにいたか」を見るcp.stopConfirmedは、本当に
+  // 停止したか（＝通過ではないか）を正確に判定できるが、リロードを挟むとその
+  // setTimeoutが失われて判定できなくなる。cpHasStayed1Min（到着時刻からの経過時間）
+  // は退出確定までの90秒待ちを含むため必ず1分を超えてしまい、通過との区別には使えない
+  // （出発通知の可否や号乗り場の押し忘れ検知など、通過かどうかを厳密に区別しなくてよい
+  // 用途でのみ、こちらをリロード対策のフォールバックとして使う）
+  const stayedOneMinAccurate=!!cp.stopConfirmed;
+  const hadConfirmedStop=stayedOneMinAccurate||cpHasStayed1Min(cp);
   if(hadConfirmedStop){
     // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
     sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
     toast(cp.icon+' '+cp.name+' を出発しました');
   }
   cp.stopConfirmed=false;
+  // 国際線第4プール（予備）を出る時点で、今回1分以上そこに停止していたかを確定させる。
+  // 停止していればその到着時刻を国際線の待機開始として引き継ぎ、素通りしただけなら
+  // null のままにして（第3プールの到着時刻を使う）、setStatus側で判定する。
+  // ここは「通過」と「停止」を正確に区別する必要があるため、必ず1分を超えてしまう
+  // cpHasStayed1Minではなく、実際の滞在確認であるstayedOneMinAccurateのみを使う
+  if(cp.name&&cp.name.includes('国際線')&&cp.name.includes('第4')){
+    intlPool4ArriveTs=stayedOneMinAccurate?cpArriveTs[cp.id]:null;
+  }
   // 「1号乗り場」〜「4号乗り場」「国際線第3/4プール」等のチェックポイントから、
   // 実車ボタンを押さないまま出発した場合は、押し忘れとみなして自動的に実車状態にする
   // （乗り場・待機時間も記録される）。ここも同じ「1分以上の停止が確認できた場合のみ」
