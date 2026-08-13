@@ -953,7 +953,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260813-6';
+const APP_BUILD='20260813-7';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2787,7 +2787,7 @@ function renderRankMonthGroup(){
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
   el.innerHTML=(list.length
     ?list.map((d,i)=>{
-      const days=d.monthDays||0,fare=d.monthFare||0;
+      const days=d.monthDays||0,fare=round10(d.monthFare||0);
       const fareForAvg=d.monthFareForAvg!=null?d.monthFareForAvg:fare;
       const avg=days>0?Math.round(fareForAvg/days):0;
       const sub=`1日平均 ¥${avg.toLocaleString()}（${days}日出勤）`;
@@ -5323,10 +5323,13 @@ function toHMS(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
 function pad(n){return String(n).padStart(2,'0');}
 function fmtTime(d){return d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// 10円単位で四捨五入する（手動修正・繰越などで加算された分は10円単位とは
+// 限らないため、売上金額を表示する箇所ではこれで揃える）
+function round10(n){return Math.round((n||0)/10)*10;}
 // 毎回入力する運賃は消費税10%込みの金額のため、売上の合計・平均・個別表示は
 // すべて税抜き（÷1.1・10円単位で四捨五入）に変換してから使う。入力・編集画面は
 // 引き続きレシート通りの税込み金額のまま扱う（ここでは変換しない）
-function exTax(fare){return Math.round((fare||0)/1.1/10)*10;}
+function exTax(fare){return round10((fare||0)/1.1);}
 
 function formatWaitStr(mins,minsStr){
   if(minsStr)return `(待機${minsStr})`;
