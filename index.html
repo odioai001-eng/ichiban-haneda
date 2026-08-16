@@ -3105,9 +3105,15 @@ function checkGeofences(lat,lng,isFirstFix){
       // 出発判定を一切行わず、現在地から見た在圏状況をそのまま記憶するだけに留める。
       // 本当に乗り場を出発していた場合は、この直後の通常のGPS監視
       // （60秒間圏外が続いた時点で確定する既存のロジック）で確実に検知される
+      const wasInsideBeforeReload=cpInside[cp.id]||false;
       cpInside[cp.id]=nowInside;
-      // 圏外から始まった場合、前回セッションで消し忘れた到着時刻が残っていれば掃除する
-      if(!nowInside&&cpArriveTs[cp.id]){delete cpArriveTs[cp.id];saveCpArriveTs();}
+      // 圏外から始まった場合、前回セッションで消し忘れた到着時刻が残っていれば掃除する。
+      // ただし、リロード直前まで滞在中だったと分かっている場合（restoreAppStateで
+      // 復元済み）は、〇号乗り場へ移動中に一時的に圏外にいるだけの可能性があるため、
+      // 到着時刻は消さずに残す（本当に出発した場合は、この直後の通常のGPS監視で
+      // 改めて確定する）。これにより、移動中にアプリの画面を開いても待機処理
+      // （待機時間の起点）が途切れないようにする
+      if(!nowInside&&!wasInsideBeforeReload&&cpArriveTs[cp.id]){delete cpArriveTs[cp.id];saveCpArriveTs();}
       return;
     }
     const wasInside=cpInside[cp.id]||false;
