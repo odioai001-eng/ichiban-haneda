@@ -2144,24 +2144,30 @@ function setStatus(s){
     const poolArriveTs=poolCp?cpArriveTs[poolCp.id]:null;
     // 従来通りの待機タイマー・手動「待機開始」ボタンの時刻を使うフォールバック
     // （国内線プール到着時刻・国際線の到着時刻のいずれも取れない場合に使う）
-    const legacyWaitMins=()=>{
-      const waitMinsFromPool=(waitInterval)?Math.round(waitSec/60):null;
-      return (waitMinsFromPool&&waitMinsFromPool>0)?waitMinsFromPool:
-        (manualWaitStartTime?Math.round((Date.now()-manualWaitStartTime)/60000):null);
+    const legacyWaitStartTs=()=>{
+      if(waitInterval&&waitStart)return waitStart;
+      return manualWaitStartTime||null;
     };
-    let waitMins;
+    // 待機時間の起点（waitStartTsUsed）：
+    // ① 号ボタンを押した／押し忘れて自動検知された、いずれの場合も「国内線プールに
+    //    入った時刻」(poolArriveTs) を起点にし、実車ボタンを押すまで（＝押し忘れの
+    //    場合は1分以上滞在後にエリアを出て自動的に実車扱いになった時刻まで）の
+    //    総経過時間とする。〇号ボタンを押した時刻や、プール到着から2分後に自動で
+    //    始まる待機タイマーの開始時刻は使わない
+    let waitStartTsUsed;
     if(boardSpot&&poolArriveTs){
-      waitMins=Math.round((Date.now()-poolArriveTs)/60000);
+      waitStartTsUsed=poolArriveTs;
     } else if(boardSpot==='国際線'){
       // 国際線は、第4プール（予備）に1分以上停止していればその到着時刻を、
       // 素通りしていた場合は第3プール（本プール）への到着時刻を待機開始とする
       const cp3=findIntlPoolCp('第3');
       const intlStartTs=intlPool4ArriveTs||(cp3?cpArriveTs[cp3.id]:null);
       intlPool4ArriveTs=null; // 使い終わったので次回の国際線待機のためにクリアしておく
-      waitMins=intlStartTs?Math.round((Date.now()-intlStartTs)/60000):legacyWaitMins();
+      waitStartTsUsed=intlStartTs||legacyWaitStartTs();
     } else {
-      waitMins=legacyWaitMins();
+      waitStartTsUsed=legacyWaitStartTs();
     }
+    const waitMins=waitStartTsUsed?Math.round((Date.now()-waitStartTsUsed)/60000):null;
     boardInfo={
       time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),
       lat:myLat,lng:myLng,
@@ -2198,15 +2204,24 @@ function setStatus(s){
     // 待機タイマー・号選択の停止は実車ボタンを押した時点で確定するため、
     // ここでチェックポイントの滞在状態（次回また新規到着として扱われるように）をリセットする
     const hCpAll=checkpoints.find(c=>c.spots&&c.spots.length>0);
-    const arrStr=(hCpAll&&hCpAll.arrivalTimeStr)||'−';
+    // 待機履歴の「🟢到着」表示も、上で計算した待機時間の起点（waitStartTsUsed）と
+    // 必ず一致させる（別々の値を使うと、到着〜出発の表示と⏱の経過時間がずれてしまうため）
+    const arrStr=waitStartTsUsed
+      ?new Date(waitStartTsUsed).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
+      :((hCpAll&&hCpAll.arrivalTimeStr)||'−');
     if(hCpAll&&!staysInPool){hCpAll.currentSpot=null;hCpAll.arrivalTimeStr=null;hCpAll.poolModalHandled=false;}
     if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
     renderSpotRow();
     hidePoolPanel();hidePoolHistory();syncPoolPanel();
-    if(waitInterval&&waitSec>0){
+    // 押し忘れの自動検知（onDeparture）では、実車化の直前にwaitIntervalが
+    // 止められているため、以前はここで待機履歴への記録がスキップされていた。
+    // waitStartTsUsedの有無で判定することで、押した場合／押し忘れた場合の
+    // どちらでも同じ基準で待機履歴に記録されるようにする
+    if(waitStartTsUsed){
       const nowStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
       const spotLabel=boardSpot||(hCpAll?hCpAll.name:'待機中');
-      saveWaitHistory(spotLabel,arrStr,nowStr,waitSec);
+      const elapsedSec=Math.max(0,Math.round((Date.now()-waitStartTsUsed)/1000));
+      if(elapsedSec>0)saveWaitHistory(spotLabel,arrStr,nowStr,elapsedSec);
     }
     resetWait();
     saveAppState(); // 号選択の維持/リセット状態を、リロードをまたいでも正しく復元できるよう保存し直す
