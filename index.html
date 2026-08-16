@@ -3077,7 +3077,14 @@ function saveCpArriveTs(){
 let cpArriveTs=loadCpArriveTs();
 function cpHasStayed1Min(cp){
   const ts=cpArriveTs[cp.id];
-  return !!ts&&(Date.now()-ts)>=CP_STOP_CONFIRM_MS;
+  if(!ts)return false;
+  // この関数はonDeparture内で「退場確定」した後に呼ばれるが、退場確定は
+  // 実際に圏外に出た瞬間からDEPARTURE_CONFIRM_MS（90秒）待ってから確定するため、
+  // Date.now()（＝呼び出し時点の時刻）は必ず到着時刻からDEPARTURE_CONFIRM_MS以上
+  // 離れてしまい、素通りしただけでも必ず1分以上に見えてしまう。実際にその場を
+  // 離れた時刻（≒Date.now()からDEPARTURE_CONFIRM_MS分を差し引いた時刻）を基準に
+  // 判定することで、本当に1分以上滞在したかどうかを正しく区別する
+  return (Date.now()-DEPARTURE_CONFIRM_MS-ts)>=CP_STOP_CONFIRM_MS;
 }
 // 国際線第4プール（予備）に1分以上停止していた場合の、その到着時刻。
 // 素通りしただけの場合はnullのままにし、第3プール（本プール）への到着時刻を
@@ -3184,10 +3191,9 @@ function onDeparture(cp){
   // （通過しただけで到着通知が出なかった場合、出発通知だけ届くのは不自然なため）。
   // 到着60秒後の時点で「まだ実際にそこにいたか」を見るcp.stopConfirmedは、本当に
   // 停止したか（＝通過ではないか）を正確に判定できるが、リロードを挟むとその
-  // setTimeoutが失われて判定できなくなる。cpHasStayed1Min（到着時刻からの経過時間）
-  // は退出確定までの90秒待ちを含むため必ず1分を超えてしまい、通過との区別には使えない
-  // （出発通知の可否や号乗り場の押し忘れ検知など、通過かどうかを厳密に区別しなくてよい
-  // 用途でのみ、こちらをリロード対策のフォールバックとして使う）
+  // setTimeoutが失われて判定できなくなる。cpHasStayed1Minは、退出確定までの
+  // DEPARTURE_CONFIRM_MS分の待ち時間を差し引いた上で到着時刻からの経過時間を見るため、
+  // リロードを挟んでも通過（1分未満の滞在）と本当の停止を正しく区別できる
   const stayedOneMinAccurate=!!cp.stopConfirmed;
   const hadConfirmedStop=stayedOneMinAccurate||cpHasStayed1Min(cp);
   if(hadConfirmedStop){
@@ -3199,8 +3205,9 @@ function onDeparture(cp){
   // 国際線第4プール（予備）を出る時点で、今回1分以上そこに停止していたかを確定させる。
   // 停止していればその到着時刻を国際線の待機開始として引き継ぎ、素通りしただけなら
   // null のままにして（第3プールの到着時刻を使う）、setStatus側で判定する。
-  // ここは「通過」と「停止」を正確に区別する必要があるため、必ず1分を超えてしまう
-  // cpHasStayed1Minではなく、実際の滞在確認であるstayedOneMinAccurateのみを使う
+  // ここは「通過」と「停止」をより厳密に区別したいため、リロードを挟んでいない
+  // 限り最も正確なstayedOneMinAccurateのみを使う（リロードを挟んだ場合はcpHasStayed1Min
+  // で代用可能だが、対象頻度が低いため簡潔さを優先しここでは使わない）
   if(cp.name&&cp.name.includes('国際線')&&cp.name.includes('第4')){
     intlPool4ArriveTs=stayedOneMinAccurate?cpArriveTs[cp.id]:null;
   }
