@@ -152,6 +152,18 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
   <div class="wrap">
     <div class="sec">今月のまとめ</div>
     <div class="card" id="sales-tab-out"></div>
+    <div class="sec">入力を忘れた日を追加</div>
+    <div class="card">
+      <label>日付</label>
+      <input type="date" id="ml-date">
+      <label>勤務時間（例: 12時間30分）</label>
+      <input type="text" id="ml-hours" placeholder="例: 12時間30分">
+      <label>その日の税抜き売上（円）</label>
+      <input type="number" id="ml-fare" inputmode="numeric" placeholder="例: 45000">
+      <label>自腹高速代（円）</label>
+      <input type="number" id="ml-toll" inputmode="numeric" placeholder="0">
+      <button class="btn btn-p btn-full" onclick="addManualDailyLog()">✅ この内容で追加する</button>
+    </div>
     <div class="sec">記録一覧</div>
     <div class="card" id="daily-log-list"></div>
   </div>
@@ -257,7 +269,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260808-23';
+const APP_BUILD='20260817-1';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -446,6 +458,35 @@ function deleteDailyLog(startTs){
   log=log.filter(e=>e.startTs!==startTs);
   localStorage.setItem('simple_daily_log',JSON.stringify(log));
   toast('🗑 記録を削除しました');
+  renderAll();pushSync();
+}
+// 出退勤の記録自体を忘れてしまった日は、通常の出勤→退勤の流れでは
+// 「今日」の記録しか作れないため、日付を指定して新規に1件追加できるようにする
+function addManualDailyLog(){
+  const dateVal=document.getElementById('ml-date').value;
+  if(!dateVal){toast('⚠️ 日付を入力してください');return;}
+  const hours=parseHM(document.getElementById('ml-hours').value);
+  const fare=parseInt(document.getElementById('ml-fare').value)||0;
+  const toll=parseInt(document.getElementById('ml-toll').value)||0;
+  if(hours<=0&&fare<=0){toast('⚠️ 勤務時間か売上のどちらかを入力してください');return;}
+  const [y,m,d]=dateVal.split('-').map(Number);
+  // 出退勤の具体的な時刻までは分からないことが多いため、その日の代表時刻として
+  // 正午を開始時刻とし、そこから勤務時間分を加えた時刻を終了時刻とする
+  const startTs=new Date(y,m-1,d,12,0,0).getTime();
+  const durationSec=Math.round(hours*3600);
+  const endTs=startTs+durationSec*1000;
+  const log=JSON.parse(localStorage.getItem('simple_daily_log')||'[]');
+  log.push({
+    ts:endTs,
+    dateStr:new Date(startTs).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}),
+    startTs,endTs,durationSec,fare,toll
+  });
+  localStorage.setItem('simple_daily_log',JSON.stringify(log));
+  toast(`✅ ${dateVal} の記録を追加しました`);
+  document.getElementById('ml-date').value='';
+  document.getElementById('ml-hours').value='';
+  document.getElementById('ml-fare').value='';
+  document.getElementById('ml-toll').value='';
   renderAll();pushSync();
 }
 
