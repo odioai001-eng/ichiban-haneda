@@ -1510,7 +1510,13 @@ function updatePeerMarker(id,d){
   if(id===myId)return;
   const age=Date.now()-(d.ts||0);
   const alive=age<5*60*1000;
-  const status=alive?(d.status||'kuusha'):'offline';
+  // 5分以上位置情報の更新が無い場合は、退勤したまま正常にレコードが
+  // 消えなかった（アプリの強制終了・通信断など）とみなし、グレーの
+  // 「オフライン」表示で残すのではなく、アイコンごと地図から消す。
+  // 出勤して位置情報の送信が再開されればupdatePeerMarkerが再び呼ばれ、
+  // 通常通りアイコンが表示される
+  if(!alive){removePeerMarker(id);return;}
+  const status=d.status||'kuusha';
   const ageSec=Math.floor(age/1000);
   const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)panMapTo(()=>leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5}));
