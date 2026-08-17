@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260817-2 -->
+<!-- v20260817-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -965,7 +965,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260817-2';
+const APP_BUILD='20260817-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1750,12 +1750,17 @@ function confirmEndDuty(){
   }
 
   isDuty=false;
+  // 仲間の地図から自分のアイコンをすぐに消すため、Firebaseからの削除を
+  // 最優先で行う。この後のシフト記録・ランキング反映処理でエラーが起きても、
+  // 削除自体はすでに実行済みなので巻き込まれない
+  if(db&&!testMode)db.ref('drivers/'+myId).remove();
   const btn=document.getElementById('duty-btn');
   const lbl=document.getElementById('duty-label');
   const offline=document.getElementById('map-offline');
   btn.textContent='出勤する';btn.className='duty-btn off';
   lbl.textContent='休み中';offline.classList.add('show');
   if(dutyStart&&!testMode){
+  try{
   const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
   shiftLog.push({
    dateStr:new Date(dutyStart.getTime()).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}),
@@ -1766,12 +1771,12 @@ function confirmEndDuty(){
   // 退勤時点で出勤日数・売上をグループランキングにも反映する
   // （これまでは運賃を記録し直すまで古い日数のまま残ってしまっていた）
   pushTeamSales();
+  }catch(e){console.error('退勤時のシフト記録に失敗しました',e);}
  }
 
   stopGPS();myLat=null;myLng=null;dutyStart=null;
   if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
   if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
-  if(db&&!testMode)db.ref('drivers/'+myId).remove();
   const wasTestMode=testMode;
   testMode=false;
   if(wasTestMode)toast('🧪 テストモードを終了しました');
