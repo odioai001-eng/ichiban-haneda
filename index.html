@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260818-12 -->
+<!-- v20260818-13 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -972,7 +972,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260818-12';
+const APP_BUILD='20260818-13';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3140,6 +3140,12 @@ const CP_TRANSITION_DEBOUNCE_MS=10000; // 出勤直後などGPSが不安定な�
 // 出たり消えたりしやすく、それだけで出発（実車化）が確定してしまう誤作動があったため
 const DEPARTURE_CONFIRM_BUFFER_M=25;
 const DEPARTURE_CONFIRM_MS=90000; // 誤作動対策のため60秒→90秒に延長
+// 国際線第3プールだけは、エリアを出てから60秒経過した時点で出発（実車化）を
+// 確定させる（お客様を乗せて出発する動きが早いため、他の乗り場より短く設定）
+function getDepartureConfirmMs(cp){
+  if(cp&&cp.name&&cp.name.includes('国際線')&&cp.name.includes('第3'))return 60000;
+  return DEPARTURE_CONFIRM_MS;
+}
 let pendingDepartureTimer={};
 // チェックポイントに「実際に何時何分から」いるかを時刻(ms)で記録し、localStorageにも
 // 書き残しておく。国内線プール出発後にアプリを開き直すことが多く、その際は
@@ -3160,12 +3166,12 @@ function cpHasStayed1Min(cp){
   const ts=cpArriveTs[cp.id];
   if(!ts)return false;
   // この関数はonDeparture内で「退場確定」した後に呼ばれるが、退場確定は
-  // 実際に圏外に出た瞬間からDEPARTURE_CONFIRM_MS（90秒）待ってから確定するため、
-  // Date.now()（＝呼び出し時点の時刻）は必ず到着時刻からDEPARTURE_CONFIRM_MS以上
-  // 離れてしまい、素通りしただけでも必ず1分以上に見えてしまう。実際にその場を
-  // 離れた時刻（≒Date.now()からDEPARTURE_CONFIRM_MS分を差し引いた時刻）を基準に
+  // 実際に圏外に出た瞬間から一定時間（通常90秒、国際線第3プールは60秒）待って
+  // から確定するため、Date.now()（＝呼び出し時点の時刻）は必ず到着時刻からその
+  // 分だけ離れてしまい、素通りしただけでも必ず1分以上に見えてしまう。実際に
+  // その場を離れた時刻（≒Date.now()からその待ち時間を差し引いた時刻）を基準に
   // 判定することで、本当に1分以上滞在したかどうかを正しく区別する
-  return (Date.now()-DEPARTURE_CONFIRM_MS-ts)>=CP_STOP_CONFIRM_MS;
+  return (Date.now()-getDepartureConfirmMs(cp)-ts)>=CP_STOP_CONFIRM_MS;
 }
 // 国際線第4プール（予備）に1分以上停止していた場合の、その到着時刻。
 // 素通りしただけの場合はnullのままにし、第3プール（本プール）への到着時刻を
@@ -3223,7 +3229,8 @@ function checkGeofences(lat,lng,isFirstFix){
       cpArriveTs[cp.id]=now;saveCpArriveTs();
       onArrival(cp,Math.round(dist));
     } else {
-      // 退場は即確定せず、90秒後も実際に半径+余裕分の外側のままなら確定する
+      // 退場は即確定せず、一定時間（通常90秒、国際線第3プールは60秒）後も
+      // 実際に半径+余裕分の外側のままなら確定する
       // （一瞬だけ外れた「通過」や、境界線上でのGPSのブレによる誤作動を無視する）
       if(pendingDepartureTimer[cp.id])return;
       pendingDepartureTimer[cp.id]=setTimeout(()=>{
@@ -3237,7 +3244,7 @@ function checkGeofences(lat,lng,isFirstFix){
         // 消去はonDepartureの呼び出しが終わった後に行う
         onDeparture(cp);
         delete cpArriveTs[cp.id];saveCpArriveTs();
-      },DEPARTURE_CONFIRM_MS);
+      },getDepartureConfirmMs(cp));
     }
   });
 }
