@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260818-11 -->
+<!-- v20260818-12 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -972,7 +972,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260818-11';
+const APP_BUILD='20260818-12';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4810,7 +4810,14 @@ let timeKeypadTargetId=null;
 function openTimeKeypad(inputId){
   timeKeypadTargetId=inputId;
   const el=document.getElementById(inputId);
-  document.getElementById('time-keypad-display').textContent=(el&&el.value)?el.value:'--:--';
+  if(el&&el.value){
+    document.getElementById('time-keypad-display').textContent=el.value;
+  }else{
+    // 未入力の場合は「--:--」ではなく、現在時刻を初期値として表示する
+    const now=new Date();
+    document.getElementById('time-keypad-display').textContent=
+      `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  }
   document.getElementById('time-keypad-overlay').classList.add('open');
 }
 function keypadPress(ch){
