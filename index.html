@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260818-1 -->
+<!-- v20260818-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -965,7 +965,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260818-1';
+const APP_BUILD='20260818-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1158,6 +1158,27 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   // 個別の操作で保存し忘れている状態がないよう、乗務中は定期的にも保存し直す
   // （閉じる→開き直すを何度繰り返しても進行状況が失われないようにするための保険）
   setInterval(()=>{if(isDuty)saveAppState();},15000);
+  // 同じ端末で複数タブ・ウィンドウを開いていた場合、あるタブで退勤しても
+  // 開きっぱなしの別タブは「出勤中」のまま5秒おきに位置情報を送信し続けてしまい、
+  // 仲間の地図・仲間リストからいつまでもアイコンが消えない原因になっていた。
+  // taxi_runtime_state（乗務中のみ保存され、退勤時に削除される）の変化を
+  // storageイベント（同一オリジンの他タブでの変更を検知できる）で捉え、
+  // 他のタブで退勤が行われたらこのタブの乗務状態も追従して終了させる
+  window.addEventListener('storage',e=>{
+    if(e.key==='taxi_runtime_state'&&!e.newValue&&isDuty){
+      isDuty=false;
+      stopGPS();myLat=null;myLng=null;dutyStart=null;
+      if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
+      if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
+      const btn=document.getElementById('duty-btn');
+      const lbl=document.getElementById('duty-label');
+      const offline=document.getElementById('map-offline');
+      if(btn){btn.textContent='出勤する';btn.className='duty-btn off';}
+      if(lbl)lbl.textContent='休み中';
+      if(offline)offline.classList.add('show');
+      toast('🔄 別のタブで退勤したため、このタブも乗務を終了しました');
+    }
+  });
 }
 
 // サーバー上のindex.htmlを取得し、APP_BUILDが変わっていれば「更新があります」バナーを出す
