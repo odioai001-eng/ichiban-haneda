@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260818-5 -->
+<!-- v20260818-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -519,6 +519,17 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       📍 位置情報の設定を開く（「常に許可」にしてください）
     </button>
   </div>
+  <div class="sec">📅 勤務時間管理</div>
+  <div class="card">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">自分の出勤・退勤時間の記録一覧です。押し忘れ・押し間違いがあった場合は、下の「編集」「削除」から直接修正できます。</div>
+   <label>今月の出勤予定日数</label>
+   <input type="number" id="s-target-days" placeholder="例: 12">
+   <label>今月の目標金額（円）</label>
+   <input type="number" id="s-target-amount" placeholder="例: 900000">
+   <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
+   <div id="work-stats-out" style="margin-top:10px"></div>
+   <div id="shift-entries-list" style="margin-top:10px"></div>
+  </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
       <input type="password" id="pin-input" placeholder="管理者PIN"
@@ -637,16 +648,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <button class="btn btn-d" onclick="deleteCarryover()" style="flex-shrink:0">🗑 リセット</button>
  </div>
  <div id="carryover-status" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
-</div>
-<div class="sec">📅 勤務時間管理</div>
-<div class="card">
- <label>今月の出勤予定日数</label>
- <input type="number" id="s-target-days" placeholder="例: 12">
- <label>今月の目標金額（円）</label>
- <input type="number" id="s-target-amount" placeholder="例: 900000">
- <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
- <div id="work-stats-out" style="margin-top:10px"></div>
- <div id="shift-entries-list" style="margin-top:10px"></div>
 </div>
 <div class="sec">💰 売上管理</div>
 <div class="card">
@@ -971,7 +972,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260818-5';
+const APP_BUILD='20260818-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
