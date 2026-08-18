@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260818-7 -->
+<!-- v20260818-8 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -972,7 +972,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260818-7';
+const APP_BUILD='20260818-8';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3768,13 +3768,27 @@ function editShiftEntry(startTs){
  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
  const idx=log.findIndex(s=>s.startTs===startTs);
  if(idx<0)return;
- const curHours=(log[idx].durationSec/3600).toFixed(1);
- const newHours=prompt('勤務時間（時間、小数で入力可）',curHours);
- if(newHours===null)return;
- const h=parseFloat(newHours);
- if(isNaN(h)||h<0){toast('⚠️ 数値を入力してください');return;}
- log[idx].durationSec=Math.round(h*3600);
- log[idx].endTs=log[idx].startTs+log[idx].durationSec*1000;
+ const cur=log[idx];
+ const curStartDate=new Date(cur.startTs);
+ const curStartStr=curStartDate.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+ const curEndStr=cur.endTs?new Date(cur.endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'';
+ const newStartVal=prompt(`出勤時刻（${cur.dateStr}、例: 09:00）`,curStartStr);
+ if(newStartVal===null)return;
+ const newEndVal=prompt('退勤時刻（例: 21:30。出勤時刻より前の場合は翌日扱いにします）',curEndStr);
+ if(newEndVal===null)return;
+ const sm=newStartVal.trim().match(/^(\d{1,2}):(\d{2})$/);
+ const em=newEndVal.trim().match(/^(\d{1,2}):(\d{2})$/);
+ if(!sm||!em){toast('⚠️ 時刻はHH:MM形式で入力してください');return;}
+ const y=curStartDate.getFullYear(),mo=curStartDate.getMonth(),d=curStartDate.getDate();
+ const newStartTs=new Date(y,mo,d,parseInt(sm[1],10),parseInt(sm[2],10),0).getTime();
+ let newEndTs=new Date(y,mo,d,parseInt(em[1],10),parseInt(em[2],10),0).getTime();
+ // 退勤時刻が出勤時刻以前になってしまう場合は、日をまたぐ夜勤とみなして翌日扱いにする
+ if(newEndTs<=newStartTs)newEndTs+=24*3600*1000;
+ log[idx].startTs=newStartTs;
+ log[idx].endTs=newEndTs;
+ // 通常の退勤処理・手動記録と同じ+30分ボーナスを適用
+ log[idx].durationSec=Math.floor((newEndTs-newStartTs)/1000)+1800;
+ log[idx].dateStr=new Date(newStartTs).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
  localStorage.setItem('taxi_shift_log',JSON.stringify(log));
  toast('✅ 記録を更新しました');
  renderWorkStats();
