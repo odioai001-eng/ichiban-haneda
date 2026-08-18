@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260818-2 -->
+<!-- v20260818-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -965,7 +965,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260818-2';
+const APP_BUILD='20260818-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1745,13 +1745,45 @@ function toggleDuty(){
     setTimeout(()=>document.getElementById('duty-car-num').focus(),200);
     return;
   }
-  // 退勤処理：まず退勤時刻の確認モーダルを表示（自分で時刻を指定できる）
+  // 退勤処理：仲間の地図・仲間リストから自分のアイコンを消す処理は、
+  // 退勤時刻の確認モーダルを表示するより前に、このボタンを押した瞬間に
+  // 即座に行う。モーダルでの確認・記録処理を待たせて消えるまでに間が
+  // 空いたり、モーダルの2回目のボタンを押し忘れて消えないままになる
+  // 事態を防ぐため
+  endDutyImmediate();
   const now=new Date();
   const hh=String(now.getHours()).padStart(2,'0');
   const mm=String(now.getMinutes()).padStart(2,'0');
   const timeInput=document.getElementById('duty-end-time');
   if(timeInput)timeInput.value=`${hh}:${mm}`;
   document.getElementById('duty-end-confirm-modal').style.display='flex';
+}
+
+// 仲間の地図・仲間リストから自分のアイコンを消すための、退勤処理のうち
+// 最優先で即座に行うべき部分だけを切り出したもの。この後の退勤時刻確認
+// モーダル（記録用の時刻を確認・修正するためのもの）を閉じ忘れたり、
+// 記録処理でエラーが起きたりしても、この処理自体はすでに完了している
+function endDutyImmediate(){
+  if(!isDuty)return;
+  isDuty=false;
+  if(db&&!testMode){
+    const myRef=db.ref('drivers/'+myId);
+    // レコード自体をremove()するだけでなく、ts（最終更新時刻）を明示的に
+    // 0にもしておく。remove()がFirebase側のルール等で万一失敗しても、
+    // 地図のピン・仲間リストはどちらもtsの新しさだけを見て「乗務中か」を
+    // 判定しているため、ts:0への更新さえ通れば確実に非表示になる
+    myRef.update({ts:0}).catch(e=>console.error('退勤時のFirebase更新(ts)に失敗しました',e));
+    myRef.remove().catch(e=>console.error('退勤時のFirebaseレコード削除に失敗しました',e));
+  }
+  stopGPS();myLat=null;myLng=null;
+  if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
+  if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
+  const btn=document.getElementById('duty-btn');
+  const lbl=document.getElementById('duty-label');
+  const offline=document.getElementById('map-offline');
+  if(btn){btn.textContent='出勤する';btn.className='duty-btn off';}
+  if(lbl)lbl.textContent='休み中';
+  if(offline)offline.classList.add('show');
 }
 
 function cancelEndDuty(){
@@ -1774,24 +1806,8 @@ function confirmEndDuty(){
     endTs=endDate.getTime();
   }
 
-  isDuty=false;
-  // 仲間の地図・仲間リストから自分のアイコンをすぐに消すため、Firebaseの
-  // 更新を最優先で行う。この後のシフト記録・ランキング反映処理でエラーが
-  // 起きても、この処理自体はすでに実行済みなので巻き込まれない。
-  // レコード自体をremove()するだけでなく、ts（最終更新時刻）を明示的に
-  // 0にもしておく。remove()がFirebase側のルール等で万一失敗しても、
-  // 地図のピン・仲間リストはどちらもtsの新しさだけを見て「乗務中か」を
-  // 判定しているため、ts:0への更新さえ通れば確実に非表示になる
-  if(db&&!testMode){
-    const myRef=db.ref('drivers/'+myId);
-    myRef.update({ts:0}).catch(e=>console.error('退勤時のFirebase更新(ts)に失敗しました',e));
-    myRef.remove().catch(e=>console.error('退勤時のFirebaseレコード削除に失敗しました',e));
-  }
-  const btn=document.getElementById('duty-btn');
-  const lbl=document.getElementById('duty-label');
-  const offline=document.getElementById('map-offline');
-  btn.textContent='出勤する';btn.className='duty-btn off';
-  lbl.textContent='休み中';offline.classList.add('show');
+  // 仲間の地図・仲間リストから自分のアイコンを消す処理（Firebaseの更新・
+  // GPS停止等）は、このモーダルを開く前のendDutyImmediate()で既に完了している
   if(dutyStart&&!testMode){
   try{
   const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
@@ -1807,9 +1823,7 @@ function confirmEndDuty(){
   }catch(e){console.error('退勤時のシフト記録に失敗しました',e);}
  }
 
-  stopGPS();myLat=null;myLng=null;dutyStart=null;
-  if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
-  if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
+  dutyStart=null;
   const wasTestMode=testMode;
   testMode=false;
   if(wasTestMode)toast('🧪 テストモードを終了しました');
