@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260818-3 -->
+<!-- v20260818-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -919,6 +919,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         はい
       </button>
     </div>
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <button onclick="cancelDutyCarModal()"
+        style="flex:1;padding:11px;border:2px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">
+        ← 戻る
+      </button>
+    </div>
     <div style="display:flex;gap:10px">
       <button onclick="skipDutyCarModal()"
         style="flex:1;padding:12px;border:2px solid var(--accent);border-radius:10px;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer">
@@ -965,7 +971,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260818-3';
+const APP_BUILD='20260818-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1980,6 +1986,10 @@ function applyDutyPlanChoice(){
   }else{
     localStorage.removeItem('taxi_today_target_hours');
   }
+}
+
+function cancelDutyCarModal(){
+  document.getElementById('duty-car-modal').style.display='none';
 }
 
 function confirmDutyCarModal(){
@@ -3740,10 +3750,13 @@ function renderShiftEntries(){
  if(!shifts.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">今月の記録はありません</div>';return;}
  el.innerHTML=shifts.map(s=>{
   const h=(s.durationSec/3600).toFixed(1);
+  const startStr=new Date(s.startTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  const endStr=s.endTs?new Date(s.endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'-';
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
    <div style="flex:1;font-size:12px">
     <span style="color:var(--muted)">${s.dateStr}</span>
     <span style="font-weight:700;color:var(--gold);margin-left:6px">${h}時間</span>
+    <div style="margin-top:2px"><span style="color:var(--green)">🟢 ${startStr}</span> <span style="color:var(--muted)">→</span> <span style="color:var(--red)">🔴 ${endStr}</span></div>
    </div>
    <button onclick="editShiftEntry(${s.startTs})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
    <button onclick="deleteShiftEntry(${s.startTs})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
