@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260818-18 -->
+<!-- v20260819-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -977,7 +977,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260818-18';
+const APP_BUILD='20260819-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1115,6 +1115,17 @@ function loadCPs(){
       if(!ex.spots||!ex.spots.length) ex.spots=d.spots||[];
       // 全角数字を半角に変換
       ex.spots=ex.spots.map(s=>s.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)));
+    }
+  });
+  // 1〜4号乗り場・国際線第3プールは、実際の乗り場の形状に合わせて円形ではなく
+  // 進行方向に長い長方形の判定エリアにする（既存の半径からおおよその寸法を引き継ぐ）
+  p.forEach(cp=>{
+    if(spotLabelFromCheckpointName(cp.name)&&cp.shape!=='rect'){
+      const r=cp.radius||60;
+      cp.shape='rect';
+      if(!cp.length)cp.length=Math.round(r*3);
+      if(!cp.width)cp.width=Math.round(r*1.2);
+      if(cp.bearing===undefined||cp.bearing===null)cp.bearing=0;
     }
   });
   return p;
@@ -3201,7 +3212,7 @@ function checkGeofences(lat,lng,isFirstFix){
   checkpoints.forEach(cp=>{
     if(!cp.enabled||cp.lat===null)return;
     const dist=haversine(lat,lng,cp.lat,cp.lng);
-    const nowInside=dist<=cp.radius;
+    const nowInside=isInsideCP(lat,lng,cp);
     // 再読み込み後のGPS初回フィックスでは、cpInsideがまだ空のため、実際にはずっと
     // 滞在し続けていても「今初めて到着した」と誤検知してしまう。初回だけは
     // 到着・出発イベントを発火させず、現在地から見た本当の在圏状況をそのまま記憶する
@@ -3251,8 +3262,7 @@ function checkGeofences(lat,lng,isFirstFix){
       pendingDepartureTimer[cp.id]=setTimeout(()=>{
         delete pendingDepartureTimer[cp.id];
         if(myLat===null||myLng===null)return;
-        const d2=haversine(myLat,myLng,cp.lat,cp.lng);
-        if(d2<=cp.radius+DEPARTURE_CONFIRM_BUFFER_M)return; // 境界付近だった（誤検知）
+        if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M))return; // 境界付近だった（誤検知）
         cpLastTransitionTs[cp.id]=Date.now();
         cpInside[cp.id]=false;
         // onDeparture内で「1分以上滞在したか」の判定にcpArriveTsを使うため、
@@ -3366,7 +3376,7 @@ function onArrival(cp,dist){
   cp.stopNotifyTimer=setTimeout(()=>{
     cp.stopNotifyTimer=null;
     if(!isDuty||myLat===null||myLng===null)return;
-    const stillInside=haversine(myLat,myLng,cp.lat,cp.lng)<=cp.radius;
+    const stillInside=isInsideCP(myLat,myLng,cp);
     if(!stillInside)return; // 60秒後にはもう外にいれば、通過とみなして通知しない
     cp.stopConfirmed=true; // 出発時の通知可否の判定に使う
     // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
@@ -4355,6 +4365,39 @@ function haversine(lat1,lng1,lat2,lng2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+// 長方形エリア（cp.shape==='rect'）の判定に使う、中心点からのローカル平面座標（メートル）への近似変換
+function metersOffset(lat,lng,lat0,lng0){
+  const y=(lat-lat0)*111320;
+  const x=(lng-lng0)*111320*Math.cos(lat0*Math.PI/180);
+  return {x,y};
+}
+function offsetToLatLng(lat0,lng0,x,y){
+  return [lat0+y/111320,lng0+x/(111320*Math.cos(lat0*Math.PI/180))];
+}
+// チェックポイントの形状（円形/長方形）に応じた在圏判定。bufferMは境界の余裕（m）
+function isInsideCP(lat,lng,cp,bufferM){
+  const buf=bufferM||0;
+  if(cp.shape==='rect'){
+    const {x,y}=metersOffset(lat,lng,cp.lat,cp.lng);
+    const rad=(cp.bearing||0)*Math.PI/180;
+    // (u,v) = 長方形の向き（進行方向を長さ軸）に合わせて回転した座標
+    const u=x*Math.sin(rad)+y*Math.cos(rad);
+    const v=x*Math.cos(rad)-y*Math.sin(rad);
+    return Math.abs(u)<=(cp.length/2+buf)&&Math.abs(v)<=(cp.width/2+buf);
+  }
+  return haversine(lat,lng,cp.lat,cp.lng)<=(cp.radius+buf);
+}
+// 長方形エリアの4隅の緯度経度（地図描画用）
+function rectCornersLatLng(cp){
+  const hl=cp.length/2,hw=cp.width/2;
+  const rad=(cp.bearing||0)*Math.PI/180;
+  return [[hl,hw],[hl,-hw],[-hl,-hw],[-hl,hw]].map(([u,v])=>{
+    const x=u*Math.sin(rad)+v*Math.cos(rad);
+    const y=u*Math.cos(rad)-v*Math.sin(rad);
+    return offsetToLatLng(cp.lat,cp.lng,x,y);
+  });
+}
+
 function calcBearing(lat1,lng1,lat2,lng2){
   const dL=(lng2-lng1)*Math.PI/180,φ1=lat1*Math.PI/180,φ2=lat2*Math.PI/180;
   const y=Math.sin(dL)*Math.cos(φ2),x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(dL);
@@ -4460,6 +4503,34 @@ function renderCPs(){
         <button class="toggle-sw ${cp.enabled?'on':''}" onclick="toggleCP(${i})"></button>
       </div>
       <div class="cp-coords">${cp.lat!==null?`${cp.lat.toFixed(5)}, ${cp.lng.toFixed(5)}`:'位置が未設定です'}</div>
+      ${cp.shape==='rect'?`
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:12px;color:var(--muted)">長さ（進行方向）</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button onclick="stepCPLength(${i},-10)" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;font-weight:700;line-height:1;cursor:pointer">－</button>
+            <span style="font-size:14px;font-weight:700;color:var(--cyan);min-width:52px;text-align:center" id="cp-length-val-${i}">${cp.length}m</span>
+            <button onclick="stepCPLength(${i},10)" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;font-weight:700;line-height:1;cursor:pointer">＋</button>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:12px;color:var(--muted)">幅</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button onclick="stepCPWidth(${i},-5)" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;font-weight:700;line-height:1;cursor:pointer">－</button>
+            <span style="font-size:14px;font-weight:700;color:var(--cyan);min-width:52px;text-align:center" id="cp-width-val-${i}">${cp.width}m</span>
+            <button onclick="stepCPWidth(${i},5)" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;font-weight:700;line-height:1;cursor:pointer">＋</button>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">向き（北=0°、時計回り）</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button onclick="stepCPBearing(${i},-5)" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;font-weight:700;line-height:1;cursor:pointer">－</button>
+            <span style="font-size:14px;font-weight:700;color:var(--cyan);min-width:52px;text-align:center" id="cp-bearing-val-${i}">${cp.bearing}°</span>
+            <button onclick="stepCPBearing(${i},5)" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;font-weight:700;line-height:1;cursor:pointer">＋</button>
+          </div>
+        </div>
+      </div>
+      `:`
       <div style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:12px;color:var(--muted)">通知範囲（半径）</span>
@@ -4470,6 +4541,7 @@ function renderCPs(){
           </div>
         </div>
       </div>
+      `}
       <div style="display:flex;gap:7px;flex-wrap:wrap">
         <button class="btn btn-s" style="font-size:11px;padding:5px 10px" onclick="setCPFromGPS(${i})">📍 現在地を登録</button>
         <button class="btn btn-g" style="font-size:11px;padding:5px 10px" onclick="openCPEdit(${i})">✏️ 手動入力</button>
@@ -4487,16 +4559,49 @@ function stepCPRadius(i,delta){
   if(el)el.textContent=cp.radius+'m';
   saveCPs();
 }
+function stepCPLength(i,delta){
+  const cp=checkpoints[i];if(!cp)return;
+  cp.length=Math.max(20,Math.min(2000,(cp.length||90)+delta));
+  const el=document.getElementById('cp-length-val-'+i);
+  if(el)el.textContent=cp.length+'m';
+  saveCPs();
+}
+function stepCPWidth(i,delta){
+  const cp=checkpoints[i];if(!cp)return;
+  cp.width=Math.max(10,Math.min(500,(cp.width||40)+delta));
+  const el=document.getElementById('cp-width-val-'+i);
+  if(el)el.textContent=cp.width+'m';
+  saveCPs();
+}
+function stepCPBearing(i,delta){
+  const cp=checkpoints[i];if(!cp)return;
+  cp.bearing=(((cp.bearing||0)+delta)%360+360)%360;
+  const el=document.getElementById('cp-bearing-val-'+i);
+  if(el)el.textContent=cp.bearing+'°';
+  saveCPs();
+}
 function toggleCP(i){checkpoints[i].enabled=!checkpoints[i].enabled;saveCPs();renderCPs();toast(checkpoints[i].name+' 通知'+(checkpoints[i].enabled?'ON':'OFF'));}
 function setCPFromGPS(i){if(myLat===null){toast('⚠️ GPSを取得できていません');return;}checkpoints[i].lat=myLat;checkpoints[i].lng=myLng;saveCPs();renderCPs();toast('✅ '+checkpoints[i].name+' の位置を登録');}
 function openCPEdit(i){
   const cp=checkpoints[i];
   const lat=prompt(cp.name+'\n緯度を入力',cp.lat||'');if(lat===null)return;
   const lng=prompt(cp.name+'\n経度を入力',cp.lng||'');if(lng===null)return;
-  const r=prompt('通知半径（m）',cp.radius||150);if(r===null)return;
-  const pLat=parseFloat(lat),pLng=parseFloat(lng),pR=parseInt(r);
+  const pLat=parseFloat(lat),pLng=parseFloat(lng);
   if(isNaN(pLat)||isNaN(pLng)){toast('⚠️ 数値を正しく入力してください');return;}
-  checkpoints[i].lat=pLat;checkpoints[i].lng=pLng;checkpoints[i].radius=isNaN(pR)?150:Math.max(10,pR);
+  checkpoints[i].lat=pLat;checkpoints[i].lng=pLng;
+  if(cp.shape==='rect'){
+    const len=prompt('長さ（進行方向、m）',cp.length||90);if(len===null)return;
+    const wid=prompt('幅（m）',cp.width||40);if(wid===null)return;
+    const brg=prompt('向き（北を0°として時計回り、0〜359）',cp.bearing||0);if(brg===null)return;
+    const pLen=parseInt(len),pWid=parseInt(wid),pBrg=parseInt(brg);
+    checkpoints[i].length=isNaN(pLen)?90:Math.max(20,pLen);
+    checkpoints[i].width=isNaN(pWid)?40:Math.max(10,pWid);
+    checkpoints[i].bearing=isNaN(pBrg)?0:((pBrg%360)+360)%360;
+  }else{
+    const r=prompt('通知半径（m）',cp.radius||150);if(r===null)return;
+    const pR=parseInt(r);
+    checkpoints[i].radius=isNaN(pR)?150:Math.max(10,pR);
+  }
   saveCPs();renderCPs();toast('✅ '+cp.name+' を設定しました');
 }
 
@@ -4504,18 +4609,24 @@ function addCheckpoint(){
   const name=prompt('チェックポイント名を入力してください（例: 〇〇駐車場）');
   if(!name||!name.trim())return;
   const icon=prompt('アイコン（絵文字1つ、空欄なら📍）','📍')||'📍';
-  checkpoints.push({
+  const trimmed=name.trim();
+  const obj={
     id:'custom_'+Date.now(),
-    name:name.trim(),
+    name:trimmed,
     icon:icon.trim()||'📍',
     lat:myLat!==null?myLat:null,
     lng:myLat!==null?myLng:null,
     radius:10,
     enabled:true,
     spots:[]
-  });
+  };
+  // 1〜4号乗り場・国際線第3プールと同名で追加した場合は、長方形エリアで作成する
+  if(spotLabelFromCheckpointName(trimmed)){
+    obj.shape='rect';obj.length=90;obj.width=40;obj.bearing=0;
+  }
+  checkpoints.push(obj);
   saveCPs();renderCPs();
-  toast('✅ '+name.trim()+' を追加しました');
+  toast('✅ '+trimmed+' を追加しました');
 }
 
 function deleteCheckpoint(i){
@@ -4543,14 +4654,20 @@ function openCPAdjust(i){
     cpAdjustMap.invalidateSize();
     if(cpAdjustCircle){cpAdjustMap.removeLayer(cpAdjustCircle);}
     if(cpAdjustMarker){cpAdjustMap.removeLayer(cpAdjustMarker);}
-    cpAdjustCircle=L.circle([cp.lat,cp.lng],{radius:cp.radius,color:'#22c55e',fillOpacity:0.15,weight:2}).addTo(cpAdjustMap);
+    cpAdjustCircle=cp.shape==='rect'
+      ?L.polygon(rectCornersLatLng(cp),{color:'#22c55e',fillOpacity:0.15,weight:2}).addTo(cpAdjustMap)
+      :L.circle([cp.lat,cp.lng],{radius:cp.radius,color:'#22c55e',fillOpacity:0.15,weight:2}).addTo(cpAdjustMap);
     cpAdjustMarker=L.marker([cp.lat,cp.lng],{
       draggable:true,
       icon:L.divIcon({html:`<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))">${cp.icon}</div>`,className:'',iconAnchor:[14,28]})
     }).addTo(cpAdjustMap);
     cpAdjustMarker.on('drag',e=>{
       const ll=e.target.getLatLng();
-      cpAdjustCircle.setLatLng(ll);
+      if(cp.shape==='rect'){
+        cpAdjustCircle.setLatLngs(rectCornersLatLng({...cp,lat:ll.lat,lng:ll.lng}));
+      }else{
+        cpAdjustCircle.setLatLng(ll);
+      }
       document.getElementById('cp-adjust-coords').textContent=ll.lat.toFixed(6)+', '+ll.lng.toFixed(6);
     });
   },100);
@@ -4572,9 +4689,12 @@ function previewCP(i){
   showPage('map',document.querySelector('.nb'));
   setTimeout(()=>{
     leafletMap.setView([cp.lat,cp.lng],16);
-    const circle=L.circle([cp.lat,cp.lng],{radius:cp.radius,color:'#22c55e',fillOpacity:0.15}).addTo(leafletMap);
+    const circle=cp.shape==='rect'
+      ?L.polygon(rectCornersLatLng(cp),{color:'#22c55e',fillOpacity:0.15}).addTo(leafletMap)
+      :L.circle([cp.lat,cp.lng],{radius:cp.radius,color:'#22c55e',fillOpacity:0.15}).addTo(leafletMap);
+    const sizeLabel=cp.shape==='rect'?`長さ${cp.length}m × 幅${cp.width}m`:`半径 ${cp.radius}m`;
     L.marker([cp.lat,cp.lng],{icon:L.divIcon({html:`<div style="font-size:24px;line-height:1">${cp.icon}</div>`,className:'',iconAnchor:[12,12]})})
-      .bindPopup(`<b>${cp.name}</b><br>半径 ${cp.radius}m`).addTo(leafletMap).openPopup();
+      .bindPopup(`<b>${cp.name}</b><br>${sizeLabel}`).addTo(leafletMap).openPopup();
     setTimeout(()=>leafletMap.removeLayer(circle),8000);
   },200);
 }
