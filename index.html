@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260819-2 -->
+<!-- v20260819-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -977,7 +977,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260819-2';
+const APP_BUILD='20260819-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2214,8 +2214,11 @@ function restoreAppState(){
       if(!d)return;
       if(d.waitSpot){
         document.getElementById('wait-spot-lbl').textContent='待機場所: '+d.waitSpot;
-        // currentSpotSelection を waitSpot から正規表現で抽出
-        const mSpot=d.waitSpot.match(/([1-4]号)/);
+        // currentSpotSelection を waitSpot から正規表現で抽出（国際線も対象に含める。
+        // これが抜けていると、国際線を選択中にリロード等でこの再読み込みが走った際、
+        // 表示テキストは「…国際線乗り場」のままでもcurrentSpotSelectionだけがnullに
+        // 戻ってしまい、号チップの選択表示や次の実車記録の乗り場情報がずれていた）
+        const mSpot=d.waitSpot.match(/([1-4]号|国際線)/);
         if(mSpot){currentSpotSelection=mSpot[1];renderSpotRow();}
       }
     });
@@ -3442,10 +3445,10 @@ async function recordAbure(){
   const now=new Date();
   const alightTime=now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-  // 「待機開始」ボタンだけで号を選んでいない場合でも、待機場所ラベルから号を復元する
+  // 「待機開始」ボタンだけで号を選んでいない場合でも、待機場所ラベルから号を復元する（国際線も対象）
   const lblText=(document.getElementById('wait-spot-lbl').textContent||'')
     .replace('待機場所: ','').replace('（終了）','').replace('未設定','').trim();
-  const mSpotLbl=lblText.match(/([1-4]号)/);
+  const mSpotLbl=lblText.match(/([1-4]号|国際線)/);
   const spot=currentSpotSelection||(mSpotLbl?mSpotLbl[1]:'');
   const saved=boardInfo;
   const boardTime=saved?saved.time:alightTime;
