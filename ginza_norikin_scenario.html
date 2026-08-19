@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>銀座乗禁地区マンガ動画シナリオ</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:#0d0d1a;color:#e8e8f4;min-height:100vh;padding:20px 16px 48px;max-width:640px;margin:0 auto;line-height:1.7}
+h1{font-size:20px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:#7878a0;margin-bottom:20px}
+.cat{font-size:11px;font-weight:700;color:#7878a0;text-transform:uppercase;letter-spacing:.8px;
+  margin:26px 0 10px;display:flex;align-items:center;gap:6px}
+.card{background:#161628;border:1px solid #2a2a4a;border-radius:14px;padding:16px;margin-bottom:12px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+.badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;
+  background:rgba(255,255,255,.06);color:#c0c0d8;border:1px solid #2a2a4a}
+.badge.red{color:#f87171;border-color:rgba(239,68,68,.3)}
+.badge.amber{color:#fbbf24;border-color:rgba(245,158,11,.3)}
+.badge.cyan{color:#67e8f9;border-color:rgba(6,182,212,.3)}
+.badge.green{color:#4ade80;border-color:rgba(74,222,128,.3)}
+.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.ov-item{background:#101022;border:1px solid #26264a;border-radius:10px;padding:10px 12px}
+.ov-item .k{font-size:10px;color:#7878a0;margin-bottom:3px}
+.ov-item .v{font-size:13px;font-weight:700}
+.cast{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
+.cast .ic{width:38px;height:38px;border-radius:10px;background:rgba(79,142,247,.18);
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.cast .name{font-size:14px;font-weight:700}
+.cast .desc{font-size:12px;color:#9999b8}
+/* scene table */
+.scene{background:#161628;border:1px solid #2a2a4a;border-radius:14px;padding:16px;margin-bottom:12px;position:relative}
+.scene.img{border-color:rgba(79,142,247,.5);box-shadow:0 0 0 1px rgba(79,142,247,.15) inset}
+.scene-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.scene-no{font-size:13px;font-weight:800;color:#4f8ef7}
+.tc{font-size:11px;color:#7878a0;font-weight:700}
+.dur{font-size:10px;color:#9999b8;background:#101022;border:1px solid #26264a;border-radius:20px;padding:2px 8px}
+.imgtag{font-size:10px;font-weight:700;color:#67e8f9;background:rgba(6,182,212,.12);
+  border:1px solid rgba(6,182,212,.3);border-radius:20px;padding:2px 8px}
+.lbl{font-size:10px;font-weight:700;color:#7878a0;margin-top:10px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+.txt{font-size:13px;color:#e8e8f4;line-height:1.75}
+.line{font-size:13px;color:#c9c9e6;background:#101022;border-left:3px solid #4f8ef7;
+  padding:8px 10px;border-radius:0 8px 8px 0;margin-top:2px}
+.telop{display:inline-block;font-size:12px;font-weight:700;color:#0d0d1a;background:#fbbf24;
+  padding:4px 10px;border-radius:6px;margin-top:2px}
+/* map svg */
+.mapwrap{background:#101022;border:1px solid #26264a;border-radius:12px;padding:10px;margin-top:10px}
+.caption{font-size:11px;color:#7878a0;text-align:center;margin-top:6px}
+/* compare */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.cc{border-radius:12px;padding:12px;font-size:12px;line-height:1.7}
+.cc.pickup{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3)}
+.cc.refuse{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3)}
+.cc h4{font-size:12px;margin-bottom:8px}
+.cc .step{padding:6px 8px;background:#101022;border-radius:8px;margin-bottom:6px;border:1px solid #26264a}
+.cc .arrow{text-align:center;color:#7878a0;font-size:11px;margin:2px 0}
+.note{background:#161628;border:1px solid #2a2a4a;border-radius:12px;padding:14px 16px;
+  font-size:12px;color:#9999b8;line-height:1.8;margin-top:14px}
+.note b{color:#e8e8f4}
+.phrase{background:#101022;border:1px solid #26264a;border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:13px}
+.phrase b{color:#4ade80}
+.src{font-size:11px;color:#7878a0;line-height:1.9}
+.src a{color:#67e8f9;text-decoration:none}
+</style>
+</head>
+<body>
+
+<h1>🎬 銀座乗禁地区マンガ動画シナリオ</h1>
+<div class="sub">優良ドライバー(社内評価AAA)の視点で語る「銀座乗車禁止地区」解説動画・台本</div>
+
+<div class="card">
+  <div class="overview-grid">
+    <div class="ov-item"><div class="k">尺</div><div class="v">約3分(180秒)</div></div>
+    <div class="ov-item"><div class="k">形式</div><div class="v">マンガ動画+解説画像2点</div></div>
+    <div class="ov-item"><div class="k">語り手</div><div class="v">ベテラン運転手・武田(仮)</div></div>
+    <div class="ov-item"><div class="k">対象視聴者</div><div class="v">新人〜中堅ドライバー</div></div>
+  </div>
+  <div class="meta" style="margin-top:12px">
+    <span class="badge cyan">銀座乗禁地区の基礎知識</span>
+    <span class="badge red">乗せてしまったら</span>
+    <span class="badge amber">乗せなかったら(乗車拒否)</span>
+    <span class="badge green">AAA評価の接客法</span>
+  </div>
+</div>
+
+<div class="cat">🎭 登場人物</div>
+<div class="card">
+  <div class="cast">
+    <div class="ic">🚕</div>
+    <div><div class="name">武田さん(語り手)</div><div class="desc">タクシー歴28年。社内評価は数年連続AAA、優良ドライバー表彰も受賞。新人時代の失敗も包み隠さず語る、面倒見のいいベテラン。</div></div>
+  </div>
+  <div class="cast">
+    <div class="ic">🔰</div>
+    <div><div class="name">圭太(新人ドライバー)</div><div class="desc">入社3ヶ月。土地勘が薄く、銀座の乗禁ルールを知らずにヒヤリとする役どころ。視聴者の分身。</div></div>
+  </div>
+  <div class="cast">
+    <div class="ic">🎫</div>
+    <div><div class="name">巡回指導員</div><div class="desc">東京タクシーセンターの腕章をつけた巡回員。乗禁地区内での違反を現認し、その場で指導・会社への通知を行う立場。</div></div>
+  </div>
+</div>
+
+<div class="cat">📖 本編シナリオ</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S1</span><span class="tc">0:00-0:10</span><span class="dur">10秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">深夜の銀座・中央通り。ネオンが眩しい。酔った様子の男性が武田さんの車の窓越しに身を乗り出し「兄さん、乗せてよ!」と叫ぶ。武田さんは表情を変えず、ハザードも出さずに徐行を続ける。</div>
+  <div class="lbl">ナレーション(心の声)</div>
+  <div class="line">「銀座のこの一角――実は、どんなに手を挙げられても、簡単には乗せちゃいけない場所なんです。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">知らないと一発アウト!? 銀座"乗禁地区"の真実</div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S2</span><span class="tc">0:10-0:25</span><span class="dur">15秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">営業所の休憩室。背景に「優良ドライバー AAA」の表彰状。武田さんがカメラ目線で語りかける。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「どうも、タクシー歴28年、おかげさまで社内評価は毎年AAAをいただいている武田です。今日は新人時代に僕も冷や汗をかいた、銀座の"乗禁地区"について、そのときの気持ちのまま話します。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">タクシー歴28年／優良ドライバー表彰 武田(仮)</div>
+</div>
+
+<div class="scene img">
+  <div class="scene-head"><span class="scene-no">S3</span><span class="tc">0:25-0:50</span><span class="dur">25秒</span><span class="imgtag">🖼 解説画像①</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">画面が地図イラストに切り替わる。中央通り・外堀通り・晴海通り・東京高速道路に囲まれたエリアが赤く塗られ、点在するタクシー乗り場のマークが表示される。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「正式には"タクシー業務適正化特別措置法"に基づく乗車禁止地区。銀座5丁目から8丁目あたり、中央通りや外堀通り、晴海通りに囲まれたこのエリアでは、平日の夜10時から翌1時ごろまで、決められたタクシー乗り場・無線タクシー乗り場・ハイヤー乗り場以外でお客様を乗せることができません。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">銀座乗禁地区(通称"乗禁") 平日22:00〜翌1:00頃は乗り場のみ</div>
+
+  <div class="mapwrap">
+    <svg viewBox="0 0 320 240" width="100%" style="max-width:400px;display:block;margin:0 auto">
+      <rect x="0" y="0" width="320" height="240" fill="#0d0d1a"/>
+      <rect x="40" y="30" width="240" height="180" fill="rgba(239,68,68,.12)" stroke="#f87171" stroke-width="2" rx="6"/>
+      <text x="160" y="24" text-anchor="middle" fill="#67e8f9" font-size="11" font-weight="700">晴海通り</text>
+      <text x="160" y="222" text-anchor="middle" fill="#67e8f9" font-size="11" font-weight="700">外堀通り</text>
+      <text x="18" y="124" text-anchor="middle" fill="#67e8f9" font-size="11" font-weight="700" transform="rotate(-90 18 124)">東京高速道路</text>
+      <text x="302" y="124" text-anchor="middle" fill="#67e8f9" font-size="11" font-weight="700" transform="rotate(90 302 124)">中央通り</text>
+      <text x="160" y="122" text-anchor="middle" fill="#f87171" font-size="13" font-weight="800">乗禁エリア</text>
+      <text x="160" y="140" text-anchor="middle" fill="#e8e8f4" font-size="10">(銀座5〜8丁目)</text>
+      <text x="80" y="70" text-anchor="middle" font-size="14">🚕</text>
+      <text x="80" y="84" text-anchor="middle" fill="#9999b8" font-size="8">乗り場</text>
+      <text x="230" y="90" text-anchor="middle" font-size="14">🚕</text>
+      <text x="230" y="104" text-anchor="middle" fill="#9999b8" font-size="8">乗り場</text>
+      <text x="120" y="180" text-anchor="middle" font-size="14">🚕</text>
+      <text x="120" y="194" text-anchor="middle" fill="#9999b8" font-size="8">新幸橋</text>
+    </svg>
+    <div class="caption">解説画像① 銀座乗禁地区イメージ図(概略・実際の道路形状とは異なります)</div>
+  </div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S4</span><span class="tc">0:50-1:05</span><span class="dur">15秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">回想。昭和レトロなタッチで、路肩に何十台も列を作って客待ちするタクシーと、低速でうろつく車列のイラスト。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「1970年、銀座の路上でお客を奪い合うように何十台ものタクシーが低速走行したり、路肩に列を作って客待ちしたり…街が大渋滞になったのがきっかけで生まれたルールなんです。だから乗禁地区は"意地悪なルール"じゃなくて、"街とお客様を守るためのルール"なんですよ。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">無秩序な客待ち・低速走行 → 大渋滞を防ぐための規制(1970年〜)</div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S5</span><span class="tc">1:05-1:30</span><span class="dur">25秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">中央通り。圭太が千鳥足の客に「すぐそこだから」と頼み込まれ、断り切れず路肩に停車してドアを開けてしまう。数十メートル先から腕章の指導員が歩いてくるのが見え、圭太の顔がサッと青ざめる。</div>
+  <div class="lbl">セリフ(ナレーション)</div>
+  <div class="line">「僕の後輩にもいました。"すぐそこだから"って断り切れずに乗せた瞬間、東京タクシーセンターの巡回員に現認されるケース。その場で指導が入り、会社にも連絡がいきます。繰り返せば乗務員証の停止、会社側も行政処分の点数が積み上がって、営業所ごと停止処分になることもある。良かれと思って乗せた一台が、会社全体に迷惑をかけてしまうんです。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">乗せた瞬間、その場で現認 → 会社に通知 → 乗務員証停止も</div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S6</span><span class="tc">1:30-1:50</span><span class="dur">20秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">乗禁地区内の正規タクシー乗り場。列の先頭の客が近距離らしき行き先を告げると、若手ドライバーが露骨に嫌な顔をして発進しようとする。客が営業所に電話でクレームを入れているカットへ。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「逆に、乗り場で並んでくれているお客様を"近距離だから"なんて理由で断るのも、これは乗車拒否。正当な理由がない限り、法律違反です。苦情が入れば運輸局の調査対象になり、こちらも乗務員証停止や営業停止につながります。乗禁地区は"乗り場でならちゃんと乗せる"のが大前提なんです。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">正当な理由のない乗車拒否も違反。乗り場ではお断りNG</div>
+</div>
+
+<div class="scene img">
+  <div class="scene-head"><span class="scene-no">S7</span><span class="tc">1:50-2:05</span><span class="dur">15秒</span><span class="imgtag">🖼 解説画像②</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">画面分割。左「路上で乗せてしまう」、右「乗り場で拒否する」。それぞれの結果を矢印でフローチャート表示。</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">2つのNGパターン比較</div>
+
+  <div class="compare">
+    <div class="cc pickup">
+      <h4>🚫 路上で乗せてしまう</h4>
+      <div class="step">呼び止められて路肩に停車・乗車させる</div>
+      <div class="arrow">↓</div>
+      <div class="step">巡回指導員に現認される</div>
+      <div class="arrow">↓</div>
+      <div class="step">その場で指導＋会社へ通知</div>
+      <div class="arrow">↓</div>
+      <div class="step">乗務員証停止／会社の処分点数が加算</div>
+    </div>
+    <div class="cc refuse">
+      <h4>🚫 乗り場で乗車拒否</h4>
+      <div class="step">近距離・行き先を理由に断る</div>
+      <div class="arrow">↓</div>
+      <div class="step">お客様が営業所・運輸局に苦情</div>
+      <div class="arrow">↓</div>
+      <div class="step">運輸局の調査・指導</div>
+      <div class="arrow">↓</div>
+      <div class="step">乗務員証停止／営業停止のおそれ</div>
+    </div>
+  </div>
+  <div class="caption">解説画像② どちらの行動も"処分"につながる、という対比図</div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S8</span><span class="tc">2:05-2:30</span><span class="dur">25秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">武田さんが銀座で酔客に声をかけられるが、笑顔で最寄りの乗り場までの道順を指差して案内する。客も納得した様子で歩いて向かう。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「じゃあどう対応すればAAA評価がもらえるのか。ポイントは3つ。① "ここでは乗せられません"で終わらせず、"あちらの乗り場まですぐです、ご案内しますね"と行き先まで添える。② 笑顔とトーンを崩さない、乗禁のルールはお客様のせいじゃない。③ 迷ったら無線や指導員に相談する勇気を持つこと。この積み重ねが、会社の評価にもお客様の満足度にもつながるんです。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">①乗り場まで一言案内 ②笑顔を崩さない ③迷ったら相談</div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S9</span><span class="tc">2:30-2:50</span><span class="dur">20秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">武田さんが車内から銀座の夜景を見つめ、しみじみと語る。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「乗禁地区は"覚えるのが面倒なルール"じゃなくて、"知っているだけでお客様にもっと信頼してもらえるルール"。今日話した内容、ぜひ営業所の後輩にもシェアしてあげてください。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">知っている人だけが、ちゃんと守れる</div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S10</span><span class="tc">2:50-3:00</span><span class="dur">10秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">ロゴ表示。武田さんが軽く会釈。</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">次回予告: 六本木・新宿の乗禁ルールも解説予定</div>
+</div>
+
+<div class="cat">💬 AAA評価につながる接客フレーズ集</div>
+<div class="card">
+  <div class="phrase"><b>OK:</b> 「このあたりは決まった乗り場からのご案内になるんです。すぐそこなので、ご一緒します」</div>
+  <div class="phrase"><b>OK:</b> 「お待たせしてすみません、あちらの乗り場でしたらすぐ乗っていただけますよ」</div>
+  <div class="phrase"><b>NG:</b> 「ここじゃ乗せられません」とだけ言って走り去る(案内なし)</div>
+  <div class="phrase"><b>NG:</b> 乗り場の客に対して行き先だけを聞いて渋い顔をする・発進をためらう</div>
+</div>
+
+<div class="cat">📌 実際に起きている事例(取材・公開情報ベース)</div>
+<div class="note">
+  <b>現場でよくあるケース：</b>銀座エリアは業界内で「乗禁地区」と呼ばれ、特に新幸橋周辺は東京タクシーセンターによる指導(現認・注意)が多い場所として知られています。「知らずにやってしまった」という悪意のないケースでも処分の対象になる点が、多くのベテランドライバーが新人に「銀座には迂闊に近づくな」と教える理由です。<br><br>
+  <b>会社への影響：</b>違反が繰り返されると、乗務員個人だけでなく、所属する営業所の行政処分点数(車両停止換算)が累積し、一定を超えると営業所単位の停止処分、さらに重大・悪質な場合は許可取消しにまで発展する制度になっています。
+</div>
+
+<div class="cat">🔗 参考情報</div>
+<div class="card src">
+  ・<a href="https://www.tokyo-tc.or.jp/driver/regulation-area/" target="_blank">公益財団法人東京タクシーセンター「タクシー乗り場等適正運営推進制度規制地区」</a><br>
+  ・<a href="https://www.tokyo-tc.or.jp/driver/uploads/ginza-poster20220120-2.pdf" target="_blank">東京タクシーセンター「銀座乗車禁止地区乗り場」案内PDF</a><br>
+  ・<a href="https://www.taxi-concierge-tokyo.com/ginza-zyoshakinshichiku/" target="_blank">東京のタクシーの教科書「銀座乗車禁止地区(銀座乗禁地区)を攻略しよう」</a><br>
+  ・<a href="https://www.mlit.go.jp/jidosha/anzen/03punishment/baseline.html" target="_blank">国土交通省「自動車総合安全情報 行政処分の基準」</a><br>
+  <div style="margin-top:8px;color:#666690">※ 制度の詳細・時間帯・区域は改定される場合があります。動画公開前に最新の公式情報でファクトチェックしてください。</div>
+</div>
+
+</body>
+</html>
