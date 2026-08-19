@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260819-3 -->
+<!-- v20260819-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -977,7 +977,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260819-3';
+const APP_BUILD='20260819-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2524,11 +2524,14 @@ function makeDriverRow(id, d, isMe){
   const waitMins=isWaiting?Math.floor((Date.now()-waitSince)/60000):null;
   const spotIcon=waitSpot?(waitSpot.includes('羽田空港')?'✈️':waitSpot.startsWith('出庫事務所')?'🏢':waitSpot.startsWith('納金事務所')?'💴':'📍'):'';
   const rowClick=isMe?'':`onclick="focusDriverFromList('${id}')" style="cursor:pointer"`;
+  const hasLoc=alive&&d.lat!==null&&d.lat!==undefined&&d.lng!==null&&d.lng!==undefined;
+  const cachedAddr=hasLoc?driverAddrCache[id]:null;
   return `<div class="driver-row" ${rowClick}>
     <div class="driver-avatar" style="background:${cfg.color}${isMe?';box-shadow:0 0 0 2px #fff,0 0 0 4px '+cfg.color:''}">${esc(initial)}</div>
     <div class="driver-info">
       <div class="driver-name" style="${isMe?'':'color:var(--accent);text-decoration:underline dotted'}">${esc(d.name||'不明')}${isMe?' <span style="font-size:10px;color:var(--accent)">(自分)</span>':''}</div>
       <div class="driver-sub">${d.car?`${esc(d.car)}号車${d.plate?' '+esc(d.plate):''}  · `:''}${timeStr}</div>
+      ${hasLoc?`<div id="driver-addr-${id}" style="font-size:11px;color:var(--muted);margin-top:2px">${cachedAddr&&cachedAddr.addr?'📍 '+esc(cachedAddr.addr):'📍 住所を取得中…'}</div>`:''}
       ${isWaiting?`
         <div style="margin-top:5px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);
           border-radius:8px;padding:6px 10px">
@@ -2554,7 +2557,9 @@ function updateDriverList(){
   const container=document.getElementById('driver-list-inner');
   const myName=localStorage.getItem('taxi_name')||'自分';
   const myCar=localStorage.getItem('taxi_car')||'';
-  const myRow=isDuty?makeDriverRow(myId,{name:myName,car:myCar,status:currentStatus,ts:Date.now()},true):'';
+  const myD={name:myName,car:myCar,status:currentStatus,ts:Date.now(),lat:myLat,lng:myLng};
+  const myRow=isDuty?makeDriverRow(myId,myD,true):'';
+  if(isDuty&&myLat!==null)scheduleDriverGeocode(myId,myLat,myLng);
   // 地図のピンと同様、5分以上位置情報の更新が無い（退勤済み、または
   // 正常に退勤処理が走らなかった）仲間は、「オフライン」として残すのではなく
   // 一覧から完全に外す
@@ -2562,6 +2567,9 @@ function updateDriverList(){
   let online=isDuty?1:0;
   const peerRows=entries.map(([id,d])=>{
     online++;
+    if(d.lat!==null&&d.lat!==undefined&&d.lng!==null&&d.lng!==undefined){
+      scheduleDriverGeocode(id,Number(d.lat),Number(d.lng));
+    }
     return makeDriverRow(id,d,false);
   }).join('');
   container.innerHTML=myRow+peerRows||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">仲間がいません</div>';
@@ -2680,6 +2688,45 @@ async function reverseGeocode(lat,lng){
     }
   }catch(e){}
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+}
+
+// 仲間の状況欄に表示する「現在地の住所」。Nominatim（無料の逆ジオコーディングAPI）の
+// 利用規約（1秒あたり1リクエストまで）を守るため、キューで直列に処理し、
+// 一定時間・一定距離動くまでは再取得しないようキャッシュする
+let driverAddrCache={}; // {id:{lat,lng,addr,ts,fetching}}
+let geocodeQueue=[];
+let geocodeQueueRunning=false;
+const DRIVER_ADDR_MAX_AGE_MS=5*60*1000;
+const DRIVER_ADDR_MOVE_THRESHOLD_M=300;
+function scheduleDriverGeocode(id,lat,lng){
+  if(lat===null||lat===undefined||lng===null||lng===undefined)return;
+  // 仲間の状況パネルを開いている時だけ取得する（無駄なAPI呼び出しを避ける）
+  const panel=document.getElementById('driver-panel');
+  if(!panel||!panel.classList.contains('open'))return;
+  const cached=driverAddrCache[id];
+  if(cached){
+    if(cached.fetching)return;
+    const age=Date.now()-cached.ts;
+    const moved=haversine(lat,lng,cached.lat,cached.lng);
+    if(age<DRIVER_ADDR_MAX_AGE_MS&&moved<DRIVER_ADDR_MOVE_THRESHOLD_M)return; // 十分新しい
+  }
+  if(geocodeQueue.some(q=>q.id===id))return; // すでにキュー待ち
+  driverAddrCache[id]={...(cached||{}),lat,lng,fetching:true};
+  geocodeQueue.push({id,lat,lng});
+  processGeocodeQueue();
+}
+async function processGeocodeQueue(){
+  if(geocodeQueueRunning)return;
+  geocodeQueueRunning=true;
+  while(geocodeQueue.length){
+    const {id,lat,lng}=geocodeQueue.shift();
+    const addr=await reverseGeocode(lat,lng);
+    driverAddrCache[id]={lat,lng,addr,ts:Date.now(),fetching:false};
+    const el=document.getElementById('driver-addr-'+id);
+    if(el)el.textContent='📍 '+addr;
+    if(geocodeQueue.length)await new Promise(r=>setTimeout(r,1200));
+  }
+  geocodeQueueRunning=false;
 }
 
 function kanjiToNum(s){
