@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260819-1 -->
+<!-- v20260819-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -793,7 +793,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="padding:14px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
       <div>
         <div style="font-size:15px;font-weight:700" id="cp-adjust-title">位置を微調整</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">ピンをドラッグして中心を移動してください</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px" id="cp-adjust-hint">ピンをドラッグして中心を移動してください</div>
       </div>
       <button class="mc" onclick="closeCPAdjust()">✕</button>
     </div>
@@ -977,7 +977,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260819-1';
+const APP_BUILD='20260819-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4638,11 +4638,37 @@ function deleteCheckpoint(i){
   toast('🗑 '+cp.name+' を削除しました');
 }
 let cpAdjustMap=null,cpAdjustMarker=null,cpAdjustCircle=null,cpAdjustIdx=null;
+let cpAdjustWork=null,cpAdjustLenHandle=null,cpAdjustWidthHandle=null;
+function updateCPAdjustReadout(){
+  if(!cpAdjustWork)return;
+  document.getElementById('cp-adjust-coords').textContent=
+    cpAdjustWork.lat.toFixed(6)+', '+cpAdjustWork.lng.toFixed(6)+
+    ' ｜ 長さ'+cpAdjustWork.length+'m 幅'+cpAdjustWork.width+'m 向き'+Math.round(cpAdjustWork.bearing)+'°';
+}
+// 長さ/幅ハンドルの位置を、現在のcpAdjustWork（中心・長さ・幅・向き）に合わせて再配置する
+function updateCPAdjustHandles(skip){
+  if(!cpAdjustWork)return;
+  const rad=(cpAdjustWork.bearing||0)*Math.PI/180;
+  const hl=cpAdjustWork.length/2,hw=cpAdjustWork.width/2;
+  if(cpAdjustLenHandle&&cpAdjustLenHandle!==skip){
+    const x=hl*Math.sin(rad),y=hl*Math.cos(rad); // 中心から見て(u,v)=(hl,0)の位置
+    cpAdjustLenHandle.setLatLng(offsetToLatLng(cpAdjustWork.lat,cpAdjustWork.lng,x,y));
+  }
+  if(cpAdjustWidthHandle&&cpAdjustWidthHandle!==skip){
+    const x=hw*Math.cos(rad),y=-hw*Math.sin(rad); // 中心から見て(u,v)=(0,hw)の位置
+    cpAdjustWidthHandle.setLatLng(offsetToLatLng(cpAdjustWork.lat,cpAdjustWork.lng,x,y));
+  }
+}
 function openCPAdjust(i){
   const cp=checkpoints[i];if(!cp.lat)return;
   cpAdjustIdx=i;
+  cpAdjustWork=cp.shape==='rect'?{lat:cp.lat,lng:cp.lng,length:cp.length,width:cp.width,bearing:cp.bearing||0}:null;
   document.getElementById('cp-adjust-title').textContent=cp.icon+' '+cp.name+' の位置を微調整';
-  document.getElementById('cp-adjust-coords').textContent=cp.lat.toFixed(6)+', '+cp.lng.toFixed(6);
+  document.getElementById('cp-adjust-hint').textContent=cp.shape==='rect'
+    ?'📍中心：ドラッグで移動　🟠長さ・向き　🔵幅　をそれぞれドラッグで調整できます'
+    :'ピンをドラッグして中心を移動してください';
+  if(cp.shape==='rect'){updateCPAdjustReadout();}
+  else{document.getElementById('cp-adjust-coords').textContent=cp.lat.toFixed(6)+', '+cp.lng.toFixed(6);}
   document.getElementById('cp-adjust-overlay').classList.add('open');
   setTimeout(()=>{
     if(!cpAdjustMap){
@@ -4652,10 +4678,10 @@ function openCPAdjust(i){
       cpAdjustMap.setView([cp.lat,cp.lng],17);
     }
     cpAdjustMap.invalidateSize();
-    if(cpAdjustCircle){cpAdjustMap.removeLayer(cpAdjustCircle);}
-    if(cpAdjustMarker){cpAdjustMap.removeLayer(cpAdjustMarker);}
+    [cpAdjustCircle,cpAdjustMarker,cpAdjustLenHandle,cpAdjustWidthHandle].forEach(l=>{if(l)cpAdjustMap.removeLayer(l);});
+    cpAdjustLenHandle=null;cpAdjustWidthHandle=null;
     cpAdjustCircle=cp.shape==='rect'
-      ?L.polygon(rectCornersLatLng(cp),{color:'#22c55e',fillOpacity:0.15,weight:2}).addTo(cpAdjustMap)
+      ?L.polygon(rectCornersLatLng(cpAdjustWork),{color:'#22c55e',fillOpacity:0.15,weight:2}).addTo(cpAdjustMap)
       :L.circle([cp.lat,cp.lng],{radius:cp.radius,color:'#22c55e',fillOpacity:0.15,weight:2}).addTo(cpAdjustMap);
     cpAdjustMarker=L.marker([cp.lat,cp.lng],{
       draggable:true,
@@ -4664,12 +4690,47 @@ function openCPAdjust(i){
     cpAdjustMarker.on('drag',e=>{
       const ll=e.target.getLatLng();
       if(cp.shape==='rect'){
-        cpAdjustCircle.setLatLngs(rectCornersLatLng({...cp,lat:ll.lat,lng:ll.lng}));
+        cpAdjustWork.lat=ll.lat;cpAdjustWork.lng=ll.lng;
+        cpAdjustCircle.setLatLngs(rectCornersLatLng(cpAdjustWork));
+        updateCPAdjustHandles();
+        updateCPAdjustReadout();
       }else{
         cpAdjustCircle.setLatLng(ll);
+        document.getElementById('cp-adjust-coords').textContent=ll.lat.toFixed(6)+', '+ll.lng.toFixed(6);
       }
-      document.getElementById('cp-adjust-coords').textContent=ll.lat.toFixed(6)+', '+ll.lng.toFixed(6);
     });
+    if(cp.shape==='rect'){
+      const mkHandle=(bg,label)=>L.marker([cp.lat,cp.lng],{
+        draggable:true,
+        icon:L.divIcon({
+          html:`<div style="width:22px;height:22px;border-radius:50%;background:${bg};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:700">${label}</div>`,
+          className:'',iconSize:[22,22],iconAnchor:[11,11]
+        })
+      }).addTo(cpAdjustMap);
+      cpAdjustLenHandle=mkHandle('#f59e0b','↕');
+      cpAdjustWidthHandle=mkHandle('#3b82f6','↔');
+      updateCPAdjustHandles();
+      cpAdjustLenHandle.on('drag',e=>{
+        const ll=e.target.getLatLng();
+        const {x,y}=metersOffset(ll.lat,ll.lng,cpAdjustWork.lat,cpAdjustWork.lng);
+        const dist=Math.sqrt(x*x+y*y);
+        if(dist>3)cpAdjustWork.bearing=(Math.atan2(x,y)*180/Math.PI+360)%360; // 中心付近での暴れ防止
+        cpAdjustWork.length=Math.max(20,Math.min(2000,Math.round(dist*2)));
+        cpAdjustCircle.setLatLngs(rectCornersLatLng(cpAdjustWork));
+        updateCPAdjustHandles(cpAdjustLenHandle);
+        updateCPAdjustReadout();
+      });
+      cpAdjustWidthHandle.on('drag',e=>{
+        const ll=e.target.getLatLng();
+        const {x,y}=metersOffset(ll.lat,ll.lng,cpAdjustWork.lat,cpAdjustWork.lng);
+        const rad=(cpAdjustWork.bearing||0)*Math.PI/180;
+        const v=x*Math.cos(rad)-y*Math.sin(rad);
+        cpAdjustWork.width=Math.max(10,Math.min(500,Math.round(Math.abs(v)*2)));
+        cpAdjustCircle.setLatLngs(rectCornersLatLng(cpAdjustWork));
+        updateCPAdjustHandles(cpAdjustWidthHandle);
+        updateCPAdjustReadout();
+      });
+    }
   },100);
 }
 function saveCPAdjust(){
@@ -4677,6 +4738,11 @@ function saveCPAdjust(){
   const ll=cpAdjustMarker.getLatLng();
   checkpoints[cpAdjustIdx].lat=ll.lat;
   checkpoints[cpAdjustIdx].lng=ll.lng;
+  if(cpAdjustWork){
+    checkpoints[cpAdjustIdx].length=cpAdjustWork.length;
+    checkpoints[cpAdjustIdx].width=cpAdjustWork.width;
+    checkpoints[cpAdjustIdx].bearing=Math.round(((cpAdjustWork.bearing||0)%360+360)%360);
+  }
   saveCPs();renderCPs();
   toast('✅ '+checkpoints[cpAdjustIdx].name+' の位置を更新しました');
   closeCPAdjust();
