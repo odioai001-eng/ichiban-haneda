@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260820-5 -->
+<!-- v20260820-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -416,7 +416,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div id="wait-spot-lbl" style="font-size:13px;color:var(--muted);padding:8px 4px 0">待機場所: </div>
   <div id="wait-timer" style="display:none"></div>
   <button class="btn btn-g" onclick="openHotelShuttleModal()" style="width:100%;margin:8px 0 4px;font-size:13px">🏨 周辺ホテルの送迎バス案内</button>
-  <button class="btn btn-g" onclick="openTaxiCamModal()" style="width:100%;margin:4px 0 4px;font-size:13px">📹 乗り場カメラで混雑確認</button>
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
     <span>🗺 送り先（自動登録）</span>
     <div style="display:flex;gap:6px">
@@ -762,15 +761,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
 </div>
 
-<!-- 羽田空港 待機所ライブカメラ（東京タクシーセンター公開） -->
-<div class="overlay" id="taxi-cam-overlay">
-  <div class="modal" style="max-height:85vh;overflow-y:auto">
-    <h3>📹 乗り場カメラで混雑確認 <button class="mc" onclick="closeTaxiCamModal()">✕</button></h3>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">東京タクシーセンターが公開している待機所ライブカメラです。1分ごとに自動で更新されます。<br>🔎の「動きの目安」は、1台ごとの正確な待ち時間ではなく、直近の画像の変化量から見た大まかな参考値です。</div>
-    <div id="taxi-cam-list"></div>
-  </div>
-</div>
-
 <!-- 時刻入力用の専用テンキー（OS標準キーボードの代わりに表示） -->
 <div class="overlay" id="time-keypad-overlay" style="z-index:9500">
   <div class="modal" style="max-width:300px">
@@ -997,7 +987,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260820-5';
+const APP_BUILD='20260820-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1963,125 +1953,6 @@ function openHotelShuttleModal(){
 }
 function closeHotelShuttleModal(){
   document.getElementById('hotel-shuttle-overlay').classList.remove('open');
-}
-
-// 東京タクシーセンターが公開している羽田空港 待機所ライブカメラ（1分ごとに更新）。
-// 個々の車両を識別して追跡するのは静止画1分間隔では精度が出ないため、
-// 画像全体をごく粗いグリッドに縮小し、前回フレームとの明るさの変化量から
-// 「車の動き（入れ替わり）が多いか少ないか」を大まかな目安として示す。
-// 配信元が他ドメインからのピクセル読み取りを許可（CORS）していない場合は
-// getImageDataで例外が発生するため、その場合は解析を諦めて表示のみに留める
-const TAXI_CAMS=[
-  {id:'cam1',label:'第1待機所 南側',url:'https://ttc.taxi-inf.jp/Real001.jpg'},
-  {id:'cam2',label:'第1待機所 東側',url:'https://ttc.taxi-inf.jp/Real002.jpg'}
-];
-const TAXI_CAM_REFRESH_MS=60000;
-const TAXI_CAM_GRID=24; // 比較用に縮小するグリッドの一辺
-const TAXI_CAM_DIFF_THRESHOLD=18; // このマスの明るさ変化以上を「動きあり」とみなす
-let taxiCamRefreshTimer=null;
-let taxiCamAnalysisSupported=null; // null=未検証／true=解析できる／false=不可（判明後は再試行しない）
-let taxiCamPrevGrid={}; // {id: Float32Array} 前回フレームの各マスの明るさ
-let taxiCamMotionHistory={}; // {id: number[]} 直近の変化度（%）。ノイズをならすため数回分の平均を表示に使う
-function renderTaxiCamList(){
-  const el=document.getElementById('taxi-cam-list');
-  if(!el)return;
-  el.innerHTML=TAXI_CAMS.map(c=>`
-    <div style="border:2px solid #fff;border-radius:10px;padding:10px;margin-bottom:10px;background:var(--surface)">
-      <div style="font-size:13px;font-weight:800;margin-bottom:6px">${esc(c.label)}</div>
-      <img id="taxi-cam-img-${c.id}" src="${c.url}?${Date.now()}" alt="${esc(c.label)}"
-        style="width:100%;border-radius:8px;display:block;background:var(--surface2)"
-        onerror="onTaxiCamError('${c.id}')" onload="onTaxiCamLoad('${c.id}')">
-      <div id="taxi-cam-status-${c.id}" style="font-size:11px;color:var(--muted);margin-top:6px">読み込み中…</div>
-      <div id="taxi-cam-motion-${c.id}"></div>
-    </div>`).join('');
-}
-function onTaxiCamLoad(id){
-  const st=document.getElementById('taxi-cam-status-'+id);
-  if(st)st.textContent='最終更新: '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  const img=document.getElementById('taxi-cam-img-'+id);
-  if(img)loadTaxiCamForAnalysis(id,img.src);
-}
-function onTaxiCamError(id){
-  const st=document.getElementById('taxi-cam-status-'+id);
-  if(st)st.textContent='⚠️ 画像を読み込めませんでした。しばらくしてから再度お試しください';
-}
-// 解析専用に、表示用<img>とは別の非表示Imageをcrossorigin指定つきで読み込む。
-// 配信元がCORSを許可していない場合はこちらの読み込みだけが失敗し、画面に表示している
-// <img>（crossorigin指定なし・常に表示できる）には一切影響しないようにするため
-function loadTaxiCamForAnalysis(id,src){
-  if(taxiCamAnalysisSupported===false)return;
-  const img=new Image();
-  img.crossOrigin='anonymous';
-  img.onload=()=>analyzeTaxiCamFrame(id,img);
-  img.onerror=()=>{
-    if(taxiCamAnalysisSupported===null){
-      taxiCamAnalysisSupported=false;
-      renderTaxiCamAnalysisUnavailable();
-    }
-  };
-  img.src=src;
-}
-function analyzeTaxiCamFrame(id,img){
-  if(taxiCamAnalysisSupported===false)return;
-  try{
-    const w=TAXI_CAM_GRID,h=TAXI_CAM_GRID;
-    const canvas=document.createElement('canvas');
-    canvas.width=w;canvas.height=h;
-    const ctx=canvas.getContext('2d');
-    ctx.drawImage(img,0,0,w,h);
-    const data=ctx.getImageData(0,0,w,h).data; // 配信元が非対応ならここで例外が発生する
-    taxiCamAnalysisSupported=true;
-    const grid=new Float32Array(w*h);
-    for(let i=0;i<w*h;i++){
-      grid[i]=(data[i*4]+data[i*4+1]+data[i*4+2])/3;
-    }
-    const prev=taxiCamPrevGrid[id];
-    taxiCamPrevGrid[id]=grid;
-    if(!prev)return; // 比較対象となる前回フレームがまだない（初回）
-    let changed=0;
-    for(let i=0;i<grid.length;i++){
-      if(Math.abs(grid[i]-prev[i])>TAXI_CAM_DIFF_THRESHOLD)changed++;
-    }
-    const score=Math.round(changed/grid.length*100);
-    const hist=taxiCamMotionHistory[id]||(taxiCamMotionHistory[id]=[]);
-    hist.push(score);
-    if(hist.length>10)hist.shift();
-    const avgScore=Math.round(hist.reduce((a,b)=>a+b,0)/hist.length);
-    renderTaxiCamMotion(id,avgScore);
-  }catch(e){
-    taxiCamAnalysisSupported=false;
-    renderTaxiCamAnalysisUnavailable();
-  }
-}
-function renderTaxiCamMotion(id,score){
-  const el=document.getElementById('taxi-cam-motion-'+id);
-  if(!el)return;
-  let label,color;
-  if(score>=25){label='動きが多い（車の入れ替わりが活発）';color='var(--green)';}
-  else if(score>=10){label='動きは普通';color='var(--gold)';}
-  else{label='動きが少ない（滞留気味）';color='var(--muted)';}
-  el.innerHTML=`<div style="font-size:11px;color:${color};font-weight:700;margin-top:4px">🔎 ${label}（参考値・変化度${score}%）</div>`;
-}
-function renderTaxiCamAnalysisUnavailable(){
-  document.querySelectorAll('[id^="taxi-cam-motion-"]').forEach(el=>{
-    el.innerHTML='<div style="font-size:11px;color:var(--muted);margin-top:4px">🔎 この配信元は画像解析に対応していないため、混雑度の目安は表示できません</div>';
-  });
-}
-function refreshTaxiCams(){
-  TAXI_CAMS.forEach(c=>{
-    const img=document.getElementById('taxi-cam-img-'+c.id);
-    if(img)img.src=c.url+'?'+Date.now();
-  });
-}
-function openTaxiCamModal(){
-  renderTaxiCamList();
-  document.getElementById('taxi-cam-overlay').classList.add('open');
-  if(taxiCamRefreshTimer)clearInterval(taxiCamRefreshTimer);
-  taxiCamRefreshTimer=setInterval(refreshTaxiCams,TAXI_CAM_REFRESH_MS);
-}
-function closeTaxiCamModal(){
-  document.getElementById('taxi-cam-overlay').classList.remove('open');
-  if(taxiCamRefreshTimer){clearInterval(taxiCamRefreshTimer);taxiCamRefreshTimer=null;}
 }
 
 async function confirmCsvExportDelete(){
