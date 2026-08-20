@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260819-4 -->
+<!-- v20260820-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -415,6 +415,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <div class="pc">
   <div id="wait-spot-lbl" style="font-size:13px;color:var(--muted);padding:8px 4px 0">待機場所: </div>
   <div id="wait-timer" style="display:none"></div>
+  <button class="btn btn-g" onclick="openHotelShuttleModal()" style="width:100%;margin:8px 0 4px;font-size:13px">🏨 周辺ホテルの送迎バス案内</button>
   <div class="sec" style="display:flex;justify-content:space-between;align-items:center">
     <span>🗺 送り先（自動登録）</span>
     <div style="display:flex;gap:6px">
@@ -751,6 +752,15 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
 </div>
 
+<!-- 羽田空港周辺ホテルの無料送迎バス案内 -->
+<div class="overlay" id="hotel-shuttle-overlay">
+  <div class="modal" style="max-height:85vh;overflow-y:auto">
+    <h3>🏨 空港⇔ホテル送迎バス案内 <button class="mc" onclick="closeHotelShuttleModal()">✕</button></h3>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">お客様に無料送迎バスをご案内できます。時刻表・乗り場は変更されることがあるため、必ず各ホテル公式サイトの最新情報をご確認ください。</div>
+    <div id="hotel-shuttle-list"></div>
+  </div>
+</div>
+
 <!-- 時刻入力用の専用テンキー（OS標準キーボードの代わりに表示） -->
 <div class="overlay" id="time-keypad-overlay" style="z-index:9500">
   <div class="modal" style="max-width:300px">
@@ -977,7 +987,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260819-4';
+const APP_BUILD='20260820-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1912,6 +1922,37 @@ async function exportAndResetTeamDests(manual){
 function closeCsvExportModal(){
   document.getElementById('csv-export-overlay').classList.remove('open');
   if(pendingCsvBlobUrl){URL.revokeObjectURL(pendingCsvBlobUrl);pendingCsvBlobUrl=null;}
+}
+
+// 羽田空港⇔ホテル間の無料送迎バスを運行している周辺ホテルの案内。
+// 時刻表や乗り場はホテル側の都合で随時変わるため、アプリ内には固定の時刻を
+// 持たせず、各ホテル公式サイトの送迎バス案内ページへ直接リンクする
+const HOTEL_SHUTTLES=[
+  {name:'ホテルメトロポリタン東京羽田',note:'天空橋駅すぐ。空港⇔ホテル無料送迎バスあり',url:'https://haneda.metropolitan.jp/feature/airportbus.html'},
+  {name:'京急EXイン羽田',note:'天空橋駅徒歩2分。無料シャトルバス（予約不要・先着順）',url:'https://www.keikyu-exinn.co.jp/en/hotel/haneda/shuttle-bus.html'},
+  {name:'京急EXイン羽田イノベーションシティ',note:'天空橋駅徒歩2分。無料シャトルバスあり',url:'https://www.keikyu-exinn.co.jp/en/hotel/innovation-city/shuttle-bus.html'},
+  {name:'ホテルJALシティ羽田東京',note:'穴守稲荷駅徒歩4分。空港⇔ホテル無料シャトルバス（予約不要）',url:'https://haneda.jalcity.co.jp/shuttle-bus/'},
+  {name:'ホテルJALシティ羽田東京 WestWing',note:'無料シャトルバスあり（予約不要）',url:'https://www.haneda-hotel.com/shuttlebus'},
+  {name:'変なホテル東京 羽田',note:'空港⇔ホテル間シャトルバス運行',url:'https://www.hennnahotel.com/haneda/access/'},
+  {name:'羽田イン',note:'送迎は要事前連絡（空港到着後に電話）',url:'https://www.hanedainn.co.jp/sougei/'},
+  {name:'ホテルマイステイズ羽田',note:'空港⇔ホテル無料シャトルバス（先着順）',url:'https://iconia.co.jp/en-us/hotel-mystays-haneda-tokyo'}
+];
+function renderHotelShuttleList(){
+  const el=document.getElementById('hotel-shuttle-list');
+  if(!el)return;
+  el.innerHTML=HOTEL_SHUTTLES.map(h=>`
+    <div style="border:2px solid #fff;border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface)">
+      <div style="font-size:14px;font-weight:800;color:var(--text)">${esc(h.name)}</div>
+      <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">${esc(h.note)}</div>
+      <a href="${h.url}" target="_blank" rel="noopener" class="btn btn-p" style="display:block;text-align:center;text-decoration:none;font-size:12px;padding:8px;box-sizing:border-box">🔗 公式サイトで時刻表を見る</a>
+    </div>`).join('');
+}
+function openHotelShuttleModal(){
+  renderHotelShuttleList();
+  document.getElementById('hotel-shuttle-overlay').classList.add('open');
+}
+function closeHotelShuttleModal(){
+  document.getElementById('hotel-shuttle-overlay').classList.remove('open');
 }
 async function confirmCsvExportDelete(){
   if(!confirm('仲間全員分の送り先データを削除してリセットしますか？'))return;
