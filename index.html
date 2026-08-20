@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260820-7 -->
+<!-- v20260820-8 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -987,7 +987,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260820-7';
+const APP_BUILD='20260820-8';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1171,6 +1171,11 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   restoreAppState(); // リロード後の状態復元
   restoreFollowState(); // オートフォロー・仲間フォローの状態復元（出退勤に関わらず常に）
   if(localStorage.getItem('taxi_wakelock')==='1')toggleWakeLock(); // スリープ防止を復元
+  // バックグラウンド中でも到着・出発通知をより確実に表示するためのService Worker登録
+  // （ネットワークキャッシュには一切関与しないため、アプリ更新検知への影響はない）
+  if('serviceWorker'in navigator&&location.protocol!=='file:'){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
   setTimeout(checkForUpdate,4000);
   setInterval(checkForUpdate,5*60*1000);
   document.addEventListener('visibilitychange',()=>{
@@ -4447,7 +4452,14 @@ function sendNotif(title,body,tag){
     window.AndroidBridge.showNotification(title,body,tag);
     return;
   }
-  if('Notification'in window&&Notification.permission==='granted'){
+  if(!('Notification'in window)||Notification.permission!=='granted')return;
+  // 画面ロック中・バックグラウンド中でも表示が消えにくいよう、Service Worker経由の
+  // 通知（showNotification）を優先する。未登録の端末では従来通りのNotificationにする
+  if('serviceWorker'in navigator&&navigator.serviceWorker.controller){
+    navigator.serviceWorker.ready.then(reg=>{
+      reg.showNotification(title,{body,tag,renotify:true,vibrate:[300,100,300,100,300]});
+    }).catch(()=>{new Notification(title,{body,tag,renotify:true});});
+  }else{
     new Notification(title,{body,tag,renotify:true});
   }
 }
