@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260820-6 -->
+<!-- v20260820-7 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -987,7 +987,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260820-6';
+const APP_BUILD='20260820-7';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2291,6 +2291,14 @@ function setStatus(s){
     // 押し忘れて自動検知された場合でも同じ基準で待機時間を計算する
     const poolCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
     const poolArriveTs=poolCp?cpArriveTs[poolCp.id]:null;
+    // 羽田プール全体（haneda）の円とは別に、1〜4号乗り場自体もそれぞれ独立した
+    // チェックポイントとして実際の到着時刻(cpArriveTs)を持っている。
+    // 羽田プールの円に入らず直接その号へ着いた場合や、同じ滞在中に2人目以降の
+    // お客様を乗せた場合（1人目の乗車時にwaitInterval・manualWaitStartTimeは
+    // リセット済み）は、poolArriveTsが取れずwaitStartTsUsedが空になり、待機時間が
+    // 一切記録されない不具合があったため、その号自体の到着時刻もフォールバックに使う
+    const spotCp=boardSpot?checkpoints.find(c=>spotLabelFromCheckpointName(c.name)===boardSpot):null;
+    const spotArriveTs=spotCp?cpArriveTs[spotCp.id]:null;
     // 従来通りの待機タイマー・手動「待機開始」ボタンの時刻を使うフォールバック
     // （国内線プール到着時刻・国際線の到着時刻のいずれも取れない場合に使う）
     const legacyWaitStartTs=()=>{
@@ -2313,6 +2321,8 @@ function setStatus(s){
       const intlStartTs=intlPool4ArriveTs||(cp3?cpArriveTs[cp3.id]:null);
       intlPool4ArriveTs=null; // 使い終わったので次回の国際線待機のためにクリアしておく
       waitStartTsUsed=intlStartTs||legacyWaitStartTs();
+    } else if(boardSpot&&spotArriveTs){
+      waitStartTsUsed=spotArriveTs;
     } else {
       waitStartTsUsed=legacyWaitStartTs();
     }
