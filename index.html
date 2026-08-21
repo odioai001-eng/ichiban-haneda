@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260820-8 -->
+<!-- v20260820-9 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -987,7 +987,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260820-8';
+const APP_BUILD='20260820-9';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3341,6 +3341,11 @@ function checkGeofences(lat,lng,isFirstFix){
       // 改めて確定する）。これにより、移動中にアプリの画面を開いても待機処理
       // （待機時間の起点）が途切れないようにする
       if(!nowInside&&!wasInsideBeforeReload&&cpArriveTs[cp.id]){delete cpArriveTs[cp.id];saveCpArriveTs();}
+      // アプリを閉じている間に国内線プールへ到着していた場合、この初回フィックスでは
+      // 通常の到着イベント（onArrival）が発火しないため、乗り場選択のポップアップが
+      // 一度も出ないまま待機してしまうことがあった。プールに到着済みで、まだ号が
+      // 未選択（poolModalHandledでない）であれば、この初回フィックスでも表示する
+      if(cp.id==='haneda'&&nowInside&&!cp.poolModalHandled)showPoolLaneModal();
       return;
     }
     const wasInside=cpInside[cp.id]||false;
