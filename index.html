@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-5 -->
+<!-- v20260821-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -639,7 +639,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">その日の運賃の入力を忘れてしまった場合、日付を指定して合計売上をまとめて記録できます。「売上管理」「本日の残り時間」等の集計にすぐ反映されます。</div>
     <label>日付</label>
     <input type="date" id="sf-date" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:10px">
-    <label>その日の合計売上（円・税込）</label>
+    <label>その日の合計売上（円・税抜）</label>
     <input type="number" id="sf-fare" inputmode="numeric" placeholder="例: 32000" style="margin-bottom:10px">
     <button class="btn btn-p" onclick="saveManualFareEntry()" style="width:100%">この内容で記録する</button>
     <div id="manual-fare-entries-list" style="margin-top:10px"></div>
@@ -992,7 +992,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-5';
+const APP_BUILD='20260821-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4087,8 +4087,11 @@ function saveManualFareEntry(){
  const dateVal=document.getElementById('sf-date').value;
  const fareVal=document.getElementById('sf-fare').value;
  if(!dateVal||!fareVal){toast('⚠️ 日付と金額を入力してください');return;}
- const fare=parseInt(fareVal)||0;
- if(fare<=0){toast('⚠️ 金額を入力してください');return;}
+ const fareExTax=parseInt(fareVal)||0;
+ if(fareExTax<=0){toast('⚠️ 金額を入力してください');return;}
+ // 入力は税抜だが、他の集計箇所ではfareフィールドを税込として扱っているため、
+ // 保存前に税込へ変換する
+ const fare=Math.round(fareExTax*1.1);
  const [y,m,d]=dateVal.split('-').map(Number);
  // 時刻自体は集計に使わないため、日付の境界（深夜0時付近）に影響されないよう
  // その日の代表時刻として正午を使う
@@ -4099,7 +4102,7 @@ function saveManualFareEntry(){
   fare,toll:0,ts:entryDate.getTime(),tripTs:null,manual:true
  });
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
- toast(`✅ ${dateVal} の売上 ¥${fare.toLocaleString()} を記録しました`);
+ toast(`✅ ${dateVal} の売上 ¥${fareExTax.toLocaleString()}（税抜）を記録しました`);
  document.getElementById('sf-date').value='';
  document.getElementById('sf-fare').value='';
  renderSalesStats();
@@ -4116,7 +4119,7 @@ function renderManualFareEntries(){
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
    <div style="flex:1;font-size:12px">
     <span style="color:var(--muted)">${e.dateStr}</span>
-    <span style="font-weight:700;color:var(--green);margin-left:6px">¥${(e.fare||0).toLocaleString()}</span>
+    <span style="font-weight:700;color:var(--green);margin-left:6px">¥${exTax(e.fare||0).toLocaleString()}</span>
    </div>
    <button onclick="editManualFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
    <button onclick="deleteManualFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
@@ -4128,10 +4131,9 @@ function editManualFareEntry(ts){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const idx=log.findIndex(e=>e.ts===ts);
  if(idx<0)return;
- const newFare=prompt('その日の合計売上（円・税込）',log[idx].fare);
- if(newFare===null)return;
- const fare=parseInt(newFare)||0;
- log[idx].fare=fare;
+ const newFareExTax=prompt('その日の合計売上（円・税抜）',exTax(log[idx].fare));
+ if(newFareExTax===null)return;
+ log[idx].fare=Math.round((parseInt(newFareExTax)||0)*1.1);
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast('✅ 記録を更新しました');
  renderSalesStats();
