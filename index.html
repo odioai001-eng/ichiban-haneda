@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-4 -->
+<!-- v20260821-5 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -992,7 +992,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-4';
+const APP_BUILD='20260821-5';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4041,15 +4041,18 @@ function renderFareDayEntries(){
 function editFareDayEntry(ts){
  const g=getMonthFareDays().find(d=>d.ts===ts);
  if(!g)return;
- const newFare=prompt(`${g.dateStr} の売上合計（円・税込）`,g.fare);
- if(newFare===null)return;
+ // 表示（税抜）に合わせて、入力も税抜で受け付ける。保存はfare=税込という
+ // 他の集計箇所との前提を崩さないよう、入力値を税込に変換してから保存する
+ const newFareExTax=prompt(`${g.dateStr} の売上合計（円・税抜）`,exTax(g.fare));
+ if(newFareExTax===null)return;
  const newToll=prompt(`${g.dateStr} の自腹高速代合計（円）`,g.toll);
  if(newToll===null)return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  log=g.tsRange
   ?log.filter(e=>!((e.ts||0)>=g.tsRange.start&&(e.ts||0)<=g.tsRange.end))
   :log.filter(e=>e.dateStr!==g.dateStr);
- log.push({dateStr:g.dateStr,fare:parseInt(newFare)||0,toll:parseInt(newToll)||0,ts:g.ts,tripTs:null,manual:true});
+ const newFare=Math.round((parseInt(newFareExTax)||0)*1.1);
+ log.push({dateStr:g.dateStr,fare:newFare,toll:parseInt(newToll)||0,ts:g.ts,tripTs:null,manual:true});
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast('✅ 記録を更新しました');
  renderSalesStats();
