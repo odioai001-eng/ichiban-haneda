@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-3 -->
+<!-- v20260821-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -992,7 +992,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-3';
+const APP_BUILD='20260821-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3980,21 +3980,39 @@ function deleteShiftEntry(startTs){
  renderWorkStats();
 }
 
-// 「勤務時間管理」と同じ形式（日ごとに1行・編集/削除できる）で売上を確認できるよう、
-// 今月分のtaxi_fare_logを日付（dateStr）ごとに合算する
+// 「勤務時間管理」と同じ形式（1回の勤務ごとに1行・編集/削除できる）で売上を確認
+// できるよう、今月分のtaxi_fare_logを勤務（出勤〜退勤）ごとに合算する。暦日
+// （dateStr）で単純にまとめると、日をまたぐ夜勤の売上が2日分に分かれてしまうため、
+// 「本日の売上」（getTodayShiftFareEntries）と同じ「出勤〜退勤の期間」を基準にする。
+// どの勤務にも属さない記録（勤務記録の無い日の手動記録など）だけ、従来通り
+// dateStrでまとめる
 function getMonthFareDays(){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const now=new Date();
  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+ const monthEntries=log.filter(e=>(e.ts||0)>=monthStart);
+ const shifts=getMonthShifts().filter(s=>s.endTs);
+ const used=new Set();
+ const groups=shifts.map(s=>{
+  const inShift=monthEntries.filter(e=>(e.ts||0)>=s.startTs&&(e.ts||0)<=s.endTs);
+  inShift.forEach(e=>used.add(e));
+  return {
+   dateStr:s.dateStr,
+   fare:inShift.reduce((a,e)=>a+(e.fare||0),0),
+   toll:inShift.reduce((a,e)=>a+(e.toll||0),0),
+   ts:s.startTs,
+   tsRange:{start:s.startTs,end:s.endTs}
+  };
+ }).filter(g=>g.fare||g.toll);
  const byDate={};
- log.filter(e=>(e.ts||0)>=monthStart).forEach(e=>{
+ monthEntries.filter(e=>!used.has(e)).forEach(e=>{
   const key=e.dateStr;
-  if(!byDate[key])byDate[key]={dateStr:key,fare:0,toll:0,ts:e.ts||0};
+  if(!byDate[key])byDate[key]={dateStr:key,fare:0,toll:0,ts:e.ts||0,tsRange:null};
   byDate[key].fare+=(e.fare||0);
   byDate[key].toll+=(e.toll||0);
   byDate[key].ts=Math.max(byDate[key].ts,e.ts||0);
  });
- return Object.values(byDate);
+ return groups.concat(Object.values(byDate));
 }
 function renderFareDayEntries(){
  const el=document.getElementById('fare-day-entries-list');
@@ -4002,41 +4020,50 @@ function renderFareDayEntries(){
  const days=getMonthFareDays().sort((a,b)=>b.ts-a.ts);
  if(!days.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">今月の記録はありません</div>';return;}
  el.innerHTML=days.map(d=>{
+  const rangeStr=d.tsRange
+   ?` <span style="color:var(--muted)">(🟢${new Date(d.tsRange.start).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}→🔴${new Date(d.tsRange.end).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})})</span>`
+   :'';
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
    <div style="flex:1;font-size:12px">
-    <span style="color:var(--muted)">${d.dateStr}</span>
-    <span style="font-weight:700;color:var(--green);margin-left:6px">¥${exTax(d.fare).toLocaleString()}</span>
-    ${d.toll?`<span style="color:var(--red);margin-left:6px">高速¥${d.toll.toLocaleString()}</span>`:''}
+    <span style="color:var(--muted)">${d.dateStr}</span>${rangeStr}
+    <div style="margin-top:2px">
+     <span style="font-weight:700;color:var(--green)">¥${exTax(d.fare).toLocaleString()}</span>
+     ${d.toll?`<span style="color:var(--red);margin-left:6px">高速¥${d.toll.toLocaleString()}</span>`:''}
+    </div>
    </div>
-   <button onclick="editFareDayEntry('${d.dateStr}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
-   <button onclick="deleteFareDayEntry('${d.dateStr}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
+   <button onclick="editFareDayEntry(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
+   <button onclick="deleteFareDayEntry(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
   </div>`;
  }).join('');
 }
-// その日の売上（税込・合算）を編集する。同じ日の既存エントリをすべて1件に
-// まとめ直すことで、個々の乗車記録の内訳ではなく日単位の合計として上書きする
-function editFareDayEntry(dateStr){
- const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
- const dayEntries=log.filter(e=>e.dateStr===dateStr);
- if(!dayEntries.length)return;
- const curFare=dayEntries.reduce((a,e)=>a+(e.fare||0),0);
- const curToll=dayEntries.reduce((a,e)=>a+(e.toll||0),0);
- const newFare=prompt(`${dateStr} の売上合計（円・税込）`,curFare);
+// その勤務（またはその日）の売上（税込・合算）を編集する。対象範囲の既存エントリを
+// すべて1件にまとめ直すことで、個々の乗車記録の内訳ではなく合計として上書きする
+function editFareDayEntry(ts){
+ const g=getMonthFareDays().find(d=>d.ts===ts);
+ if(!g)return;
+ const newFare=prompt(`${g.dateStr} の売上合計（円・税込）`,g.fare);
  if(newFare===null)return;
- const newToll=prompt(`${dateStr} の自腹高速代合計（円）`,curToll);
+ const newToll=prompt(`${g.dateStr} の自腹高速代合計（円）`,g.toll);
  if(newToll===null)return;
- const others=log.filter(e=>e.dateStr!==dateStr);
- others.push({dateStr,fare:parseInt(newFare)||0,toll:parseInt(newToll)||0,ts:dayEntries[0].ts,tripTs:null,manual:true});
- localStorage.setItem('taxi_fare_log',JSON.stringify(others));
+ let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ log=g.tsRange
+  ?log.filter(e=>!((e.ts||0)>=g.tsRange.start&&(e.ts||0)<=g.tsRange.end))
+  :log.filter(e=>e.dateStr!==g.dateStr);
+ log.push({dateStr:g.dateStr,fare:parseInt(newFare)||0,toll:parseInt(newToll)||0,ts:g.ts,tripTs:null,manual:true});
+ localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast('✅ 記録を更新しました');
  renderSalesStats();
  updateDailyBar();
  pushTeamSales();
 }
-function deleteFareDayEntry(dateStr){
- if(!confirm(dateStr+' の売上記録を削除しますか？'))return;
+function deleteFareDayEntry(ts){
+ const g=getMonthFareDays().find(d=>d.ts===ts);
+ if(!g)return;
+ if(!confirm(g.dateStr+' の売上記録を削除しますか？'))return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
- log=log.filter(e=>e.dateStr!==dateStr);
+ log=g.tsRange
+  ?log.filter(e=>!((e.ts||0)>=g.tsRange.start&&(e.ts||0)<=g.tsRange.end))
+  :log.filter(e=>e.dateStr!==g.dateStr);
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast('🗑 記録を削除しました');
  renderSalesStats();
