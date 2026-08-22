@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-2 -->
+<!-- v20260821-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -536,6 +536,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
    <div id="work-stats-out" style="margin-top:10px"></div>
    <div id="shift-entries-list" style="margin-top:10px"></div>
   </div>
+  <div class="sec">💰 売上管理（税抜）</div>
+  <div class="card">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">今月の日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。</div>
+   <div id="fare-day-entries-list"></div>
+  </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
       <input type="password" id="pin-input" placeholder="管理者PIN"
@@ -987,7 +992,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-2';
+const APP_BUILD='20260821-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3975,6 +3980,70 @@ function deleteShiftEntry(startTs){
  renderWorkStats();
 }
 
+// 「勤務時間管理」と同じ形式（日ごとに1行・編集/削除できる）で売上を確認できるよう、
+// 今月分のtaxi_fare_logを日付（dateStr）ごとに合算する
+function getMonthFareDays(){
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const now=new Date();
+ const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+ const byDate={};
+ log.filter(e=>(e.ts||0)>=monthStart).forEach(e=>{
+  const key=e.dateStr;
+  if(!byDate[key])byDate[key]={dateStr:key,fare:0,toll:0,ts:e.ts||0};
+  byDate[key].fare+=(e.fare||0);
+  byDate[key].toll+=(e.toll||0);
+  byDate[key].ts=Math.max(byDate[key].ts,e.ts||0);
+ });
+ return Object.values(byDate);
+}
+function renderFareDayEntries(){
+ const el=document.getElementById('fare-day-entries-list');
+ if(!el)return;
+ const days=getMonthFareDays().sort((a,b)=>b.ts-a.ts);
+ if(!days.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">今月の記録はありません</div>';return;}
+ el.innerHTML=days.map(d=>{
+  return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+   <div style="flex:1;font-size:12px">
+    <span style="color:var(--muted)">${d.dateStr}</span>
+    <span style="font-weight:700;color:var(--green);margin-left:6px">¥${exTax(d.fare).toLocaleString()}</span>
+    ${d.toll?`<span style="color:var(--red);margin-left:6px">高速¥${d.toll.toLocaleString()}</span>`:''}
+   </div>
+   <button onclick="editFareDayEntry('${d.dateStr}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
+   <button onclick="deleteFareDayEntry('${d.dateStr}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--red);cursor:pointer">削除</button>
+  </div>`;
+ }).join('');
+}
+// その日の売上（税込・合算）を編集する。同じ日の既存エントリをすべて1件に
+// まとめ直すことで、個々の乗車記録の内訳ではなく日単位の合計として上書きする
+function editFareDayEntry(dateStr){
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const dayEntries=log.filter(e=>e.dateStr===dateStr);
+ if(!dayEntries.length)return;
+ const curFare=dayEntries.reduce((a,e)=>a+(e.fare||0),0);
+ const curToll=dayEntries.reduce((a,e)=>a+(e.toll||0),0);
+ const newFare=prompt(`${dateStr} の売上合計（円・税込）`,curFare);
+ if(newFare===null)return;
+ const newToll=prompt(`${dateStr} の自腹高速代合計（円）`,curToll);
+ if(newToll===null)return;
+ const others=log.filter(e=>e.dateStr!==dateStr);
+ others.push({dateStr,fare:parseInt(newFare)||0,toll:parseInt(newToll)||0,ts:dayEntries[0].ts,tripTs:null,manual:true});
+ localStorage.setItem('taxi_fare_log',JSON.stringify(others));
+ toast('✅ 記録を更新しました');
+ renderSalesStats();
+ updateDailyBar();
+ pushTeamSales();
+}
+function deleteFareDayEntry(dateStr){
+ if(!confirm(dateStr+' の売上記録を削除しますか？'))return;
+ let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ log=log.filter(e=>e.dateStr!==dateStr);
+ localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ toast('🗑 記録を削除しました');
+ renderSalesStats();
+ updateDailyBar();
+ pushTeamSales();
+}
+
 // 運賃の入力を忘れた日の売上を、日付を指定してあとからまとめて記録するための機能。
 // 個々の乗車記録には紐づかない（tripTs:null）1件のtaxi_fare_logエントリとして保存する
 function getMonthManualFares(){
@@ -4393,6 +4462,7 @@ function renderSalesStats(){
  `;
  renderFareEntries();
  renderManualFareEntries();
+ renderFareDayEntries();
 }
 
 function renderFareEntries(){
