@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-13 -->
+<!-- v20260823-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -71,11 +71,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-/* ホテル等のボタン列（.map-btn-stack.left）を画面左端に寄せ、
-   GPS状態はその右側に縦長の表示として並べる */
-.gps-pill{position:absolute;left:132px;bottom:8px;z-index:500;
-  background:rgba(13,13,26,.82);backdrop-filter:blur(6px);
-  border:1px solid var(--border);border-radius:14px;
+/* GPS状態は、駅アイコン（station-btn）と同じ行にその左隣として並べる
+   （.map-btn-stack.left内の該当行を参照） */
+.gps-pill{background:rgba(13,13,26,.82);backdrop-filter:blur(6px);
+  border:1px solid var(--border);border-radius:14px;flex-shrink:0;
   padding:10px 8px;font-size:11px;font-weight:700;color:var(--text);
   display:flex;flex-direction:column;align-items:center;gap:6px}
 .map-zoom-ctrl{position:absolute;top:8px;right:8px;z-index:500;
@@ -402,24 +401,26 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
       backdrop-filter:blur(6px)">🚗</button>
   </div>
-  <!-- 地図左下のボタン群 -->
+  <!-- 地図左下のボタン群。GPS状態は駅アイコン（station-btn）の行に組み込み、
+       その左隣に並べて表示する -->
   <div class="map-btn-stack left">
     <button id="abure-row" onclick="recordAbure()"
       style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
         backdrop-filter:blur(6px)">😔 あぶれ</button>
     <button class="map-ctrl-btn" id="hotel-btn" onclick="toggleHotels()" title="羽田・成田行きが見込める主要ホテルを地図にハイライト">🏨</button>
-    <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）">🚉</button>
+    <div style="display:flex;align-items:center;gap:6px">
+      <div class="gps-pill" title="GPS状態">
+        <span class="gps-dot" id="gps-dot"></span>
+        <!-- 詳しい状態文言は幅に収めるため非表示にし、色（gps-dot）と仲間の人数
+             のみをここに表示する。JS側の更新処理はそのまま動かすため要素自体は残す -->
+        <span id="gps-txt" style="display:none">GPS停止中</span>
+        <span id="online-count" style="color:var(--cyan)">0人</span>
+      </div>
+      <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）">🚉</button>
+    </div>
     <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
-  </div>
-  <!-- GPS状態は、画面左端のボタン列（.map-btn-stack.left）の右側に縦表示 -->
-  <div class="gps-pill" title="GPS状態">
-    <span class="gps-dot" id="gps-dot"></span>
-    <!-- 詳しい状態文言は幅に収めるため非表示にし、色（gps-dot）と仲間の人数
-         のみをここに表示する。JS側の更新処理はそのまま動かすため要素自体は残す -->
-    <span id="gps-txt" style="display:none">GPS停止中</span>
-    <span id="online-count" style="color:var(--cyan)">0人</span>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -1012,7 +1013,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-13';
+const APP_BUILD='20260823-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
