@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260823-11 -->
+<!-- v20260823-12 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1024,7 +1024,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260823-11';
+const APP_BUILD='20260823-12';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5659,13 +5659,12 @@ function recordProgress(spot,amount){
   }
   const name=localStorage.getItem('taxi_name')||'自分';
   const ref=db.ref('pool_progress/'+spot);
-  ref.transaction(cur=>{
-    const expired=!cur||(now-(cur.ts||0))>PROGRESS_TIMEOUT_MS;
-    if(expired){
-      return {count:amount,ts:now,startTs:now,lastBy:name};
-    }
-    return {count:(cur.count||0)+amount,ts:now,startTs:cur.startTs||now,lastBy:name};
-  });
+  // 20分の無操作による期限切れリセットは、別途renderPoolChart経由の
+  // cleanupExpiredProgressIfNeededが該当ノードを削除する形で行うため、ここでは
+  // 常に「今あるcountに加算」するだけでよい。以前はここでも独自に期限切れ判定を
+  // 行っていたが、その判定に使うcurが常に最新とは限らず、連続で押すたびに
+  // 加算されず毎回amountで上書きされてしまう不具合があったため削除した
+  ref.transaction(cur=>({count:(cur&&cur.count?cur.count:0)+amount,ts:now,startTs:(cur&&cur.startTs)||now,lastBy:name}));
   // 履歴にも「+1」「+2」として記録
   const movesRef=db.ref('pool_moves').push({spot,lane:'+'+amount,ts:now,uid:myId,name});
   myLastAction={type:'progress',spot,amount,movesKey:movesRef.key,ts:now};
