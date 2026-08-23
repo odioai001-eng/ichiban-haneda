@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-9 -->
+<!-- v20260821-10 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -71,10 +71,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-.gps-pill{position:absolute;bottom:268px;left:8px;z-index:500;
-  background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
-  border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);
-  display:flex;align-items:center;gap:6px}
+.gps-pill{background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
+  border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);white-space:nowrap;
+  display:flex;align-items:center;gap:6px;flex-shrink:0}
 .map-zoom-ctrl{position:absolute;top:8px;right:8px;z-index:500;
   display:flex;flex-direction:column;gap:2px}
 .map-zoom-ctrl button{width:34px;height:34px;background:rgba(13,13,26,.82);
@@ -367,12 +366,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button onclick="if(leafletMap)leafletMap.zoomIn()">+</button>
     <button onclick="if(leafletMap)leafletMap.zoomOut()">−</button>
   </div>
-  <div class="gps-pill">
-    <span class="gps-dot" id="gps-dot"></span>
-    <span id="gps-txt">GPS停止中</span>
-    <span style="color:var(--border)">│</span>
-    <span id="online-count" style="color:var(--cyan)">仲間0人</span>
-  </div>
   <!-- 地図種別切替 -->
   <div class="map-layer-bar" id="layer-bar" style="display:none">
     <div class="map-layer-chip sel" id="layer-osm"    onclick="setTileLayer('osm')"   >標準</div>
@@ -415,6 +408,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）">🚉</button>
     <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
+    <div class="gps-pill">
+      <span class="gps-dot" id="gps-dot"></span>
+      <span id="gps-txt">GPS停止中</span>
+      <span style="color:var(--border)">│</span>
+      <span id="online-count" style="color:var(--cyan)">仲間0人</span>
+    </div>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -1007,7 +1006,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-9';
+const APP_BUILD='20260821-10';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
