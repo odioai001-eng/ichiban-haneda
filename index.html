@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260823-15 -->
+<!-- v20260823-17 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1024,7 +1024,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260823-15';
+const APP_BUILD='20260823-17';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4667,27 +4667,28 @@ function openLocationSettings(){
   }
   // アプリ版（AndroidBridge）以外のWeb版では、OSの設定画面を直接開く手段がなく、
   // 以前は「アプリ版のみ対応」というトーストが出るだけでボタンとして機能して
-  // いなかった。まだ許可・拒否が決まっていなければブラウザの許可ダイアログを
-  // その場で呼び出し、すでに拒否されている場合は手動での変更手順を案内する
+  // いなかった。ブラウザの許可ダイアログは、ボタンを押した操作から間を置かず
+  // 呼び出さないと（Promiseを一つ挟んだだけでも）「ユーザー操作に基づく呼び出し」
+  // とみなされず、ダイアログ自体が出ないことがあるため、事前にnavigator.permissions
+  // で状態を調べたりせず、ここで直接getCurrentPositionを呼ぶ
   if(!navigator.geolocation){toast('⚠️ この端末は位置情報に対応していません');return;}
-  const manualGuide='位置情報がブロックされています。\n\nブラウザのアドレスバー付近の🔒（鍵）またはⓘアイコンをタップ →「位置情報」を「許可」に変更してから、このページを再読み込みしてください。';
-  const requestNow=()=>{
-    navigator.geolocation.getCurrentPosition(()=>{
-      toast('✅ 位置情報が許可されました');
-      if(isDuty)startGPS();
-    },()=>{
-      alert(manualGuide);
-    });
-  };
-  if(navigator.permissions&&navigator.permissions.query){
-    navigator.permissions.query({name:'geolocation'}).then(status=>{
-      if(status.state==='granted')toast('✅ 位置情報はすでに許可されています');
-      else if(status.state==='denied')alert(manualGuide);
-      else requestNow();
-    }).catch(requestNow);
-  }else{
-    requestNow();
-  }
+  // iPhoneのSafariはアドレスバーに鍵アイコンがなく、設定の場所が異なるため、
+  // 案内文をiOS向けに分けて分かりやすくする
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+  const manualGuide=isIOS
+    ?'位置情報がブロックされています。\n\nSafari左上の「aA」アイコンをタップ→「Webサイトの設定」→「位置情報」を「許可」に変更してください。\n\nそれでも変わらない場合は、iPhoneの「設定」アプリ→「プライバシーとセキュリティ」→「位置情報サービス」→「Safariの各Webサイト」から許可に変更し、このページを再読み込みしてください。'
+    :'位置情報がブロックされています。\n\nブラウザのアドレスバー付近の🔒（鍵）またはⓘアイコンをタップ →「位置情報」を「許可」に変更してから、このページを再読み込みしてください。';
+  navigator.geolocation.getCurrentPosition(()=>{
+    toast('✅ 位置情報が許可されています');
+    if(isDuty)startGPS();
+  },err=>{
+    // 権限が拒否されている場合、ブラウザは再度ダイアログを出さずに即座に
+    // エラーを返す。JS側から許可ダイアログを再表示させる手段はないため、
+    // 手動での変更手順を案内する（タイムアウト等の一時的な失敗の場合は
+    // 単に再試行を促す）
+    if(err.code===err.PERMISSION_DENIED)alert(manualGuide);
+    else toast('⚠️ 位置情報を取得できませんでした。電波状況を確認し、もう一度お試しください');
+  },{enableHighAccuracy:true,timeout:10000,maximumAge:0});
 }
 function requestNotificationPermission(){
   if(!('Notification'in window)){toast('⚠️ この端末は通知非対応');return;}
