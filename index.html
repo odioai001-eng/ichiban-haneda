@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-6 -->
+<!-- v20260821-7 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -27,7 +27,11 @@
   --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#a855f7;--cyan:#06b6d4;
   --gold:#fbbf24;--hh:54px;--nh:58px;
 }
-html,body{height:100%;overflow:hidden}
+/* 一部の端末・ブラウザではアドレスバー等が常に表示され続け、100%（=100vh相当）だと
+   実際に見えている範囲より高さを大きく見積もってしまい、position:fixedの画面下部の
+   ボタン類がブラウザのツールバーの下に隠れて押せなくなることがあった。動的な
+   ビューポート高さ（100dvh）に対応したブラウザではそちらを優先して使う */
+html,body{height:100%;height:100dvh;overflow:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
   background:var(--bg);color:var(--text);max-width:480px;margin:0 auto;position:relative}
 .hdr{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
@@ -67,7 +71,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-.gps-pill{position:absolute;bottom:140px;left:8px;z-index:500;
+.gps-pill{position:absolute;bottom:268px;left:8px;z-index:500;
   background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
   border-radius:20px;padding:5px 12px;font-size:11px;color:var(--text);
   display:flex;align-items:center;gap:6px}
@@ -82,33 +86,37 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .gps-dot.on{background:var(--green);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes blinkRed{0%,49%{opacity:1}50%,100%{opacity:.15}}
-.locate-me-btn{position:absolute;bottom:52px;right:8px;z-index:500;
-  background:var(--surface);color:var(--text);border:1px solid var(--border);
-  border-radius:50%;width:44px;height:44px;cursor:pointer;
+.locate-me-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:50%;width:44px;height:44px;cursor:pointer;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 2px 8px rgba(0,0,0,.4);transition:all .2s}
 .locate-me-btn:active{transform:scale(.92)}
+/* 地図右下・左下のボタン群を、個別に手計算したbottom座標ではなく
+   flexboxで自動的に積み上げる。端末やブラウザによって表示領域の高さが
+   変わっても、ボタン同士が重なったり隙間が詰まりすぎたりしない */
+.map-btn-stack{position:absolute;bottom:8px;z-index:500;
+  display:flex;flex-direction:column-reverse;align-items:center;gap:10px}
+.map-btn-stack.right{right:8px}
+.map-btn-stack.left{left:8px}
 .pool-info-cell{text-align:center;font-size:13px;font-weight:700;color:#fff;line-height:1.4;
   background:rgba(79,142,247,.25);border-radius:8px;padding:4px 2px;border:1px solid rgba(79,142,247,.4)}
 .pool-btn{padding:7px 2px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
   background:rgba(79,142,247,.18);color:var(--accent);border:1.5px solid var(--accent);transition:all .2s}
 .pool-btn:disabled{opacity:.35;cursor:not-allowed}
-.map-ctrl-btn{position:absolute;right:8px;z-index:500;
-  background:var(--surface);color:var(--text);border:1px solid var(--border);
-  border-radius:50%;width:44px;height:44px;cursor:pointer;font-size:18px;
+.map-ctrl-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:50%;width:44px;height:44px;cursor:pointer;font-size:18px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 2px 8px rgba(0,0,0,.4);transition:all .2s}
 .map-ctrl-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .map-ctrl-btn:active{transform:scale(.92)}
-.map-layer-bar{position:absolute;bottom:100px;left:8px;z-index:500;
+.map-layer-bar{position:absolute;bottom:116px;left:8px;z-index:500;
   display:flex;flex-direction:column;gap:5px}
 .map-layer-chip{background:rgba(13,13,26,.85);backdrop-filter:blur(6px);
   border:1px solid var(--border);border-radius:20px;padding:5px 12px;
   font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap}
 .map-layer-chip.sel{background:var(--accent);border-color:var(--accent);color:#fff}
-.driver-panel-btn{position:absolute;bottom:8px;right:8px;z-index:500;
-  background:var(--accent);color:#fff;border:none;border-radius:50%;
-  width:44px;height:44px;cursor:pointer;font-size:20px;
+.driver-panel-btn{background:var(--accent);color:#fff;border:none;border-radius:50%;
+  width:44px;height:44px;cursor:pointer;font-size:20px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center}
 .driver-panel{position:absolute;bottom:0;left:0;right:0;z-index:600;
   background:var(--surface);border-radius:16px 16px 0 0;
@@ -362,13 +370,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="color:var(--border)">│</span>
     <span id="online-count" style="color:var(--cyan)">仲間0人</span>
   </div>
-  <!-- オートフォロー -->
-  <button class="map-ctrl-btn on" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー" style="bottom:104px">🎯</button>
-  <button id="abure-row" onclick="recordAbure()"
-    style="position:absolute;left:8px;bottom:94px;z-index:500;
-      padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
-      background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
-      backdrop-filter:blur(6px)">😔 あぶれ</button>
   <!-- 地図種別切替 -->
   <div class="map-layer-bar" id="layer-bar" style="display:none">
     <div class="map-layer-chip sel" id="layer-osm"    onclick="setTileLayer('osm')"   >標準</div>
@@ -377,30 +378,41 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="map-layer-chip"     id="layer-google" onclick="setTileLayer('google')">Google</div>
     <div class="map-layer-chip"     id="layer-gsat"   onclick="setTileLayer('gsat')"  >衛星</div>
   </div>
-  <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替" style="bottom:50px;right:8px">🗺</button>
-  <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ" style="bottom:156px">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-      <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-      <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
-    </svg>
-  </button>
-  <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報" style="bottom:200px;right:8px">🚦</button>
-  <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索" style="bottom:250px;right:8px">💴</button>
-  <button class="map-ctrl-btn" id="hotel-btn" onclick="toggleHotels()" title="羽田・成田行きが見込める主要ホテルを地図にハイライト" style="left:8px;right:auto;bottom:178px">🏨</button>
-  <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）" style="left:8px;right:auto;bottom:228px">🚉</button>
-  <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト" style="left:8px;right:auto;bottom:278px">🎪</button>
-  <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ" style="left:8px;right:auto;bottom:328px">🎤</button>
-  <!-- 移動記録ボタン（仲間ボタンの左） -->
-  <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;position:absolute;z-index:500;
-    right:8px;bottom:350px;background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
-    border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
-    backdrop-filter:blur(6px)">🚗</button>
-  <button class="driver-panel-btn" onclick="toggleDriverPanel()" title="仲間リスト">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-  </button>
+  <!-- 地図右下のボタン群（下から順にDOMへ並べ、flexboxで自動的に積み上げる） -->
+  <div class="map-btn-stack right">
+    <button class="driver-panel-btn" onclick="toggleDriverPanel()" title="仲間リスト">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    </button>
+    <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替">🗺</button>
+    <button class="map-ctrl-btn on" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー">🎯</button>
+    <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+        <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
+      </svg>
+    </button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報">🚦</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索">💴</button>
+    <!-- 移動記録ボタン -->
+    <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;
+      background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
+      border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
+      backdrop-filter:blur(6px)">🚗</button>
+  </div>
+  <!-- 地図左下のボタン群 -->
+  <div class="map-btn-stack left">
+    <button id="abure-row" onclick="recordAbure()"
+      style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+        background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
+        backdrop-filter:blur(6px)">😔 あぶれ</button>
+    <button class="map-ctrl-btn" id="hotel-btn" onclick="toggleHotels()" title="羽田・成田行きが見込める主要ホテルを地図にハイライト">🏨</button>
+    <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）">🚉</button>
+    <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
+  </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
     <div class="dp-title">
@@ -992,7 +1004,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-6';
+const APP_BUILD='20260821-7';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
