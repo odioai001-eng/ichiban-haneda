@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-7 -->
+<!-- v20260821-8 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -331,9 +331,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div id="pool-start-time" style="font-size:14px;font-weight:800;color:var(--gold);white-space:nowrap">−</div>
     </div>
   </div>
+  <!-- 左右の余白は、地図左下・右下のボタン列（.map-btn-stack）の下に文字が
+       隠れないよう、ボタンの幅ぶんだけ空けている -->
   <div id="daily-bar" style="position:absolute;left:0;right:0;bottom:0;z-index:480;
    background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border);
-   padding:6px 10px;pointer-events:none">
+   padding:6px 62px;pointer-events:none">
    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 6px;margin-bottom:4px">
     <div style="text-align:center">
      <div style="font-size:8px;color:var(--muted)">本日の出勤時間</div>
@@ -1004,7 +1006,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-7';
+const APP_BUILD='20260821-8';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
