@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260823-2 -->
+<!-- v20260823-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -99,7 +99,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .map-btn-stack{position:absolute;bottom:8px;z-index:500;
   display:flex;flex-direction:column-reverse;align-items:center;gap:10px}
 .map-btn-stack.right{right:8px}
-.map-btn-stack.left{left:44px}
+.map-btn-stack.left{left:8px}
 .pool-info-cell{text-align:center;font-size:13px;font-weight:700;color:#fff;line-height:1.4;
   background:rgba(79,142,247,.25);border-radius:8px;padding:4px 2px;border:1px solid rgba(79,142,247,.4)}
 .pool-btn{padding:7px 2px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
@@ -401,8 +401,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
       backdrop-filter:blur(6px)">🚗</button>
   </div>
-  <!-- 地図左下のボタン群。GPS状態は駅アイコン（station-btn）の行に組み込み、
-       その左隣に並べて表示する -->
+  <!-- 地図左下のボタン群。駅アイコン（station-btn）は他のボタンと同じ位置の
+       ままにし、GPS状態表示はその右（地図側）にはみ出す形で並べる。
+       これにより左端に余白を作らずに済む -->
   <div class="map-btn-stack left">
     <button id="abure-row" onclick="recordAbure()"
       style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
@@ -410,17 +411,17 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         backdrop-filter:blur(6px)">😔 あぶれ</button>
     <button class="map-ctrl-btn" id="hotel-btn" onclick="toggleHotels()" title="羽田・成田行きが見込める主要ホテルを地図にハイライト">🏨</button>
     <!-- position:relativeのラッパー自体は駅ボタン1個ぶんの幅のままにし、
-         GPS状態はその外側（左）にposition:absoluteで重ねる。こうすることで
-         他のボタンと同じ幅としてセンタリングされ、縦一列がまっすぐ揃う -->
+         GPS状態はその外側（右）にposition:absoluteで重ねる。駅アイコン自体は
+         他のボタンと同じ幅としてセンタリングされるため、縦一列がまっすぐ揃う -->
     <div style="position:relative">
-      <div class="gps-pill" title="GPS状態" style="position:absolute;right:calc(100% + 6px);top:50%;transform:translateY(-50%)">
+      <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）">🚉</button>
+      <div class="gps-pill" title="GPS状態" style="position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%)">
         <span class="gps-dot" id="gps-dot"></span>
         <!-- 詳しい状態文言は幅に収めるため非表示にし、色（gps-dot）と仲間の人数
              のみをここに表示する。JS側の更新処理はそのまま動かすため要素自体は残す -->
         <span id="gps-txt" style="display:none">GPS停止中</span>
         <span id="online-count" style="color:var(--cyan)">0人</span>
       </div>
-      <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）">🚉</button>
     </div>
     <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
@@ -1016,7 +1017,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260823-2';
+const APP_BUILD='20260823-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
