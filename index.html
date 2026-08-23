@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260823-1 -->
+<!-- v20260823-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -99,7 +99,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .map-btn-stack{position:absolute;bottom:8px;z-index:500;
   display:flex;flex-direction:column-reverse;align-items:center;gap:10px}
 .map-btn-stack.right{right:8px}
-.map-btn-stack.left{left:8px}
+.map-btn-stack.left{left:44px}
 .pool-info-cell{text-align:center;font-size:13px;font-weight:700;color:#fff;line-height:1.4;
   background:rgba(79,142,247,.25);border-radius:8px;padding:4px 2px;border:1px solid rgba(79,142,247,.4)}
 .pool-btn{padding:7px 2px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
@@ -409,8 +409,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
         backdrop-filter:blur(6px)">😔 あぶれ</button>
     <button class="map-ctrl-btn" id="hotel-btn" onclick="toggleHotels()" title="羽田・成田行きが見込める主要ホテルを地図にハイライト">🏨</button>
-    <div style="display:flex;align-items:center;gap:6px">
-      <div class="gps-pill" title="GPS状態">
+    <!-- position:relativeのラッパー自体は駅ボタン1個ぶんの幅のままにし、
+         GPS状態はその外側（左）にposition:absoluteで重ねる。こうすることで
+         他のボタンと同じ幅としてセンタリングされ、縦一列がまっすぐ揃う -->
+    <div style="position:relative">
+      <div class="gps-pill" title="GPS状態" style="position:absolute;right:calc(100% + 6px);top:50%;transform:translateY(-50%)">
         <span class="gps-dot" id="gps-dot"></span>
         <!-- 詳しい状態文言は幅に収めるため非表示にし、色（gps-dot）と仲間の人数
              のみをここに表示する。JS側の更新処理はそのまま動かすため要素自体は残す -->
@@ -1013,7 +1016,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260823-1';
+const APP_BUILD='20260823-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
