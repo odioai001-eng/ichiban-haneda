@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260823-13 -->
+<!-- v20260823-14 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1024,7 +1024,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260823-13';
+const APP_BUILD='20260823-14';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4646,8 +4646,30 @@ function sendNotif(title,body,tag){
 function openLocationSettings(){
   if(window.AndroidBridge&&window.AndroidBridge.openLocationSettings){
     window.AndroidBridge.openLocationSettings();
+    return;
+  }
+  // アプリ版（AndroidBridge）以外のWeb版では、OSの設定画面を直接開く手段がなく、
+  // 以前は「アプリ版のみ対応」というトーストが出るだけでボタンとして機能して
+  // いなかった。まだ許可・拒否が決まっていなければブラウザの許可ダイアログを
+  // その場で呼び出し、すでに拒否されている場合は手動での変更手順を案内する
+  if(!navigator.geolocation){toast('⚠️ この端末は位置情報に対応していません');return;}
+  const manualGuide='位置情報がブロックされています。\n\nブラウザのアドレスバー付近の🔒（鍵）またはⓘアイコンをタップ →「位置情報」を「許可」に変更してから、このページを再読み込みしてください。';
+  const requestNow=()=>{
+    navigator.geolocation.getCurrentPosition(()=>{
+      toast('✅ 位置情報が許可されました');
+      if(isDuty)startGPS();
+    },()=>{
+      alert(manualGuide);
+    });
+  };
+  if(navigator.permissions&&navigator.permissions.query){
+    navigator.permissions.query({name:'geolocation'}).then(status=>{
+      if(status.state==='granted')toast('✅ 位置情報はすでに許可されています');
+      else if(status.state==='denied')alert(manualGuide);
+      else requestNow();
+    }).catch(requestNow);
   }else{
-    toast('⚠️ この機能はアプリ版のみ対応です');
+    requestNow();
   }
 }
 function requestNotificationPermission(){
