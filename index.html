@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260823-4 -->
+<!-- v20260823-5 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -99,7 +99,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .map-btn-stack{position:absolute;bottom:8px;z-index:500;
   display:flex;flex-direction:column-reverse;align-items:center;gap:10px}
 .map-btn-stack.right{right:8px}
-.map-btn-stack.left{left:8px}
+/* あぶれボタンは「😔 あぶれ」という文字つきで他の丸ボタンより幅が広いため、
+   align-items:centerのままだと丸ボタン側が中央寄せされ、あぶれの顔マーク
+   （左側）の真上ではなくボタン全体の中央の真上に来てしまっていた。
+   左揃えにして、丸ボタンの列があぶれの顔マークの位置にまっすぐ揃うようにする */
+.map-btn-stack.left{left:8px;align-items:flex-start}
 .pool-info-cell{text-align:center;font-size:13px;font-weight:700;color:#fff;line-height:1.4;
   background:rgba(79,142,247,.25);border-radius:8px;padding:4px 2px;border:1px solid rgba(79,142,247,.4)}
 .pool-btn{padding:7px 2px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
@@ -1017,7 +1021,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260823-4';
+const APP_BUILD='20260823-5';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
