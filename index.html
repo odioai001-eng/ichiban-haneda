@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260823-5 -->
+<!-- v20260823-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -494,6 +494,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="font-size:10px;color:var(--muted)">※月末リセット対象外・累計</span>
   </div>
   <div id="spotwait-table"></div>
+  <div class="sec" style="margin-top:18px">📋 列移動履歴</div>
+  <div class="card"><div id="pool-move-history-log"></div></div>
 </div>
 </div>
 
@@ -1021,7 +1023,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260823-5';
+const APP_BUILD='20260823-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1050,6 +1052,8 @@ let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTime
 let poolMoves=[],poolLocks={},poolLockTimer=null,myLastAction=null;
 let poolProgress={};
 let intlPoolMoves=[]; // 国際線2列移動の記録 {ts,uid,name}
+let poolMoveHistory=[]; // 列移動の記録セッション履歴 {startTs,endTs,counts,by}
+let myPoolInputActive=false; // 今回のプール滞在中に自分が列移動を入力したか（出発時の履歴保存の要否判定に使う）
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
 let chatReadMap={};
 let posHistory=[],stopState=null,bearingBeforeStop=null;
@@ -2537,6 +2541,12 @@ function connectFirebase(config){
       if(intlPoolMoves.length>50)intlPoolMoves.shift();
       renderIntlMoveLog();
     });
+    db.ref('pool_move_history').limitToLast(50).on('child_added',snap=>{
+      const m=snap.val();if(!m)return;
+      poolMoveHistory.push(m);poolMoveHistory.sort((a,b)=>a.startTs-b.startTs);
+      if(poolMoveHistory.length>50)poolMoveHistory.shift();
+      renderPoolMoveHistoryLog();
+    });
     db.ref('pool_locks').on('value',snap=>{
       poolLocks=snap.val()||{};
       renderPoolButtons();
@@ -3475,6 +3485,9 @@ function onDeparture(cp){
   if(cp.name&&cp.name.includes('国際線')&&cp.name.includes('第4')){
     intlPool4ArriveTs=stayedOneMinAccurate?cpArriveTs[cp.id]:null;
   }
+  // 自分が今回のプール滞在中に列移動を入力していた場合、出発（＝入力終了）の
+  // タイミングでその時点までの列数を履歴として記録する
+  if(cp.id==='haneda'&&myPoolInputActive&&hadConfirmedStop)finalizePoolMoveHistory();
   // 「1号乗り場」〜「4号乗り場」「国際線第3/4プール」等のチェックポイントから、
   // 実車ボタンを押さないまま出発した場合は、押し忘れとみなして自動的に実車状態にする
   // （乗り場・待機時間も記録される）。ここも同じ「1分以上の停止が確認できた場合のみ」
@@ -5582,6 +5595,7 @@ function recordPoolMove(spot,lane){
   const name=localStorage.getItem('taxi_name')||'自分';
   const ref=db.ref('pool_moves').push({spot,lane,ts:now,uid:myId,name});
   myLastAction={type:'move',key:ref.key,spot,lane,ts:now};
+  myPoolInputActive=true;
   db.ref('pool_locks/'+key).set({ts:now,name,uid:myId});
   renderUndoBtn();
   refreshPoolHistory(spot);
@@ -5640,6 +5654,7 @@ function recordProgress(spot,amount){
   // 履歴にも「+1」「+2」として記録
   const movesRef=db.ref('pool_moves').push({spot,lane:'+'+amount,ts:now,uid:myId,name});
   myLastAction={type:'progress',spot,amount,movesKey:movesRef.key,ts:now};
+  myPoolInputActive=true;
   db.ref('pool_locks/'+spot).set({ts:now,name,uid:myId});
   renderUndoBtn();
   refreshPoolHistory(spot);
@@ -5669,6 +5684,45 @@ function renderIntlMoveLog(){
   for(let i=1;i<today.length;i++)intervals.push(Math.max(0,Math.round((today[i].ts-today[i-1].ts)/60000)));
   el.style.display='block';
   el.textContent='国際線2列移動の間隔: '+intervals.map(v=>v+'分').join('、');
+}
+
+// 自分がプールを出発する時点での各乗り場の列数を、1件の履歴として保存する。
+// 「入力開始」はその時点でまだ有効な（20分でリセットされていない）列数の中で
+// 最も古いstartTsを使い、「入力終了」は出発した今の時刻とする
+function finalizePoolMoveHistory(){
+  myPoolInputActive=false;
+  if(!db||testMode)return;
+  const counts={};
+  let startTs=null;
+  ['1号','2号','3号','4号'].forEach(spot=>{
+    const p=poolProgress[spot];
+    const c=(p&&p.count)?p.count:0;
+    counts[spot]=c;
+    if(c>0&&p&&p.startTs&&(startTs===null||p.startTs<startTs))startTs=p.startTs;
+  });
+  if(startTs===null)return; // 記録すべき列移動データがなければ保存しない
+  const name=localStorage.getItem('taxi_name')||'自分';
+  db.ref('pool_move_history').push({startTs,endTs:Date.now(),counts,by:name});
+}
+function renderPoolMoveHistoryLog(){
+  const el=document.getElementById('pool-move-history-log');
+  if(!el)return;
+  if(!poolMoveHistory.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">記録はまだありません</div>';return;}
+  const spots=['1号','2号','3号','4号'];
+  const list=poolMoveHistory.slice().sort((a,b)=>b.startTs-a.startTs);
+  el.innerHTML=list.map(h=>{
+    const dateStr=new Date(h.startTs).toLocaleDateString('ja-JP',{month:'numeric',day:'numeric',weekday:'short'});
+    const startStr=new Date(h.startTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    const endStr=new Date(h.endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    const counts=h.counts||{};
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+     <div style="font-size:12px;color:var(--muted)">${dateStr} ${startStr}〜${endStr}${h.by?`<span style="margin-left:6px">（${esc(h.by)}）</span>`:''}</div>
+     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:4px;text-align:center">
+      ${spots.map(s=>`<div style="font-size:10px;color:var(--muted)">${s}</div>`).join('')}
+      ${spots.map(s=>`<div style="font-size:13px;font-weight:700">${counts[s]||0}列</div>`).join('')}
+     </div>
+    </div>`;
+  }).join('');
 }
 
 const LANE_MODAL_COUNTS={'1号':8,'2号':11,'3号':10,'4号':9};
@@ -6158,7 +6212,7 @@ function showPage(name,btn){
   }
   if(name==='settings'){renderNotifToggle();}
   if(name==='ranking'){renderRankingPage();}
-  if(name==='spotdest'){renderSpotDestTable();renderSpotWaitStats();}
+  if(name==='spotdest'){renderSpotDestTable();renderSpotWaitStats();renderPoolMoveHistoryLog();}
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
     setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
