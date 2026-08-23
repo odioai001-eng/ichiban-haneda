@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260821-8 -->
+<!-- v20260821-9 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -25,7 +25,7 @@
   --bg:#0d0d1a;--surface:#161628;--surface2:#1e1e35;--border:#2a2a4a;
   --text:#e8e8f4;--muted:#7878a0;--accent:#4f8ef7;
   --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#a855f7;--cyan:#06b6d4;
-  --gold:#fbbf24;--hh:54px;--nh:58px;
+  --gold:#fbbf24;--hh:54px;--nh:48px;
 }
 /* 一部の端末・ブラウザではアドレスバー等が常に表示され続け、100%（=100vh相当）だと
    実際に見えている範囲より高さを大きく見積もってしまい、position:fixedの画面下部の
@@ -49,9 +49,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   background:var(--surface);border-top:1px solid var(--border);
   display:flex;z-index:1000}
 .nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:2px;border:none;background:transparent;color:var(--muted);cursor:pointer;
-  font-size:10px;transition:color .2s;padding:6px 2px;position:relative}
-.nb svg{width:20px;height:20px}
+  gap:1px;border:none;background:transparent;color:var(--muted);cursor:pointer;
+  font-size:11px;font-weight:700;transition:color .2s;padding:3px 2px;position:relative}
+.nb svg{width:18px;height:18px}
 .nb.active{color:var(--accent)}
 .chat-unread{position:absolute;top:4px;right:calc(50% - 22px);min-width:16px;height:16px;
   background:var(--red);border-radius:8px;display:none;
@@ -332,32 +332,33 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
   </div>
   <!-- 左右の余白は、地図左下・右下のボタン列（.map-btn-stack）の下に文字が
-       隠れないよう、ボタンの幅ぶんだけ空けている -->
+       隠れないよう、ボタンの幅ぶんだけ空けている。左側は「😔 あぶれ」ボタンが
+       文字ラベルつきで丸ボタンより幅が広いため、右側より大きく余白を取る -->
   <div id="daily-bar" style="position:absolute;left:0;right:0;bottom:0;z-index:480;
    background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border);
-   padding:6px 62px;pointer-events:none">
-   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 6px;margin-bottom:4px">
+   padding:4px 62px 4px 132px;pointer-events:none">
+   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px 6px;margin-bottom:2px">
     <div style="text-align:center">
-     <div style="font-size:8px;color:var(--muted)">本日の出勤時間</div>
-     <div id="daily-start-time" style="font-size:11px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums">--:--</div>
+     <div style="font-size:9px;color:var(--muted)">本日の出勤時間</div>
+     <div id="daily-start-time" style="font-size:13px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums">--:--</div>
     </div>
     <div style="text-align:center">
-     <div style="font-size:8px;color:var(--muted)">本日の上がり予定</div>
-     <div id="daily-worked-time" style="font-size:11px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
+     <div style="font-size:9px;color:var(--muted)">本日の上がり予定</div>
+     <div id="daily-worked-time" style="font-size:13px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
     </div>
     <div style="text-align:center">
-     <div style="font-size:8px;color:var(--muted)">本日の目標</div>
-     <div id="daily-target-amount" style="font-size:11px;font-weight:800;color:var(--text)">-</div>
+     <div style="font-size:9px;color:var(--muted)">本日の目標</div>
+     <div id="daily-target-amount" style="font-size:13px;font-weight:800;color:var(--text)">-</div>
     </div>
    </div>
-   <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 8px">
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px">
     <div style="text-align:center">
      <div style="font-size:10px;color:var(--muted)">本日の残り時間</div>
-     <div id="daily-time-left" style="font-size:14px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums">--:--:--</div>
+     <div id="daily-time-left" style="font-size:16px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums">--:--:--</div>
     </div>
     <div style="text-align:center">
      <div style="font-size:10px;color:var(--muted)">目標まであと</div>
-     <div id="daily-amount-left" style="font-size:14px;font-weight:800;color:var(--cyan)">-</div>
+     <div id="daily-amount-left" style="font-size:16px;font-weight:800;color:var(--cyan)">-</div>
     </div>
    </div>
   </div>
@@ -1006,7 +1007,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260821-8';
+const APP_BUILD='20260821-9';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
