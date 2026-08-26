@@ -272,7 +272,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260817-2';
+const APP_BUILD='20260825-1';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -385,15 +385,27 @@ function getMonthLogs(){
   const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
   return log.filter(e=>e.startTs>=monthStart);
 }
+// 本体アプリ（index.html）と同じ考え方に揃える: 月の目標を予定日数で単純に
+// 割るのではなく、「これまでの実績（記録済みの日ごとの売上合計）」を差し引いた
+// 残りを「残り出勤日数」で割る。簡易版は当日の売上を退勤時に1件でまとめて
+// 記録する仕組みのため、記録済みの合計＝当日を含まない「今日より前の売上」に
+// 自然と一致し、本体側のようにtodaySalesを別途差し引く必要はない
 function dailyTargetAmount(){
-  const days=parseInt(localStorage.getItem('taxi_target_days')||'0')||0;
-  const amount=parseInt(localStorage.getItem('taxi_target_amount')||'0')||0;
-  return days>0?Math.round(amount/days):0;
+  const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0')||0;
+  if(targetDays<=0)return 0;
+  const targetAmount=parseInt(localStorage.getItem('taxi_target_amount')||'0')||0;
+  const carry=getCarryover();
+  const logs=getMonthLogs();
+  const workedDays=logs.length+carry.days;
+  const totalFare=logs.reduce((a,e)=>a+(e.fare||0),0)+carry.fare;
+  const remainDays=targetDays-workedDays;
+  return remainDays>0
+    ?Math.round((targetAmount-totalFare)/remainDays)
+    :Math.max(Math.round(targetAmount-totalFare),0);
 }
 function renderSalesTab(){
   const out=document.getElementById('sales-tab-out');
   const targetDays=parseInt(localStorage.getItem('taxi_target_days')||'0')||0;
-  const targetAmount=parseInt(localStorage.getItem('taxi_target_amount')||'0')||0;
   const carry=getCarryover();
   const logs=getMonthLogs();
   const workedDays=logs.length+carry.days;
@@ -404,7 +416,7 @@ function renderSalesTab(){
   const avgAmount=workedDays>0?Math.round(totalFare/workedDays):0;
   // 出勤時の日割り計算と同じ考え方（最終日に15時間残す）で、残りをどう配分すべきかを表示する
   const avgHours=computeDailyPlanHours();
-  const perDayTarget=targetDays>0?Math.round(targetAmount/targetDays):0;
+  const perDayTarget=dailyTargetAmount();
   out.innerHTML=`
     <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${targetDays>0?remainDays+'日':'-'}</span></div>
     <div class="row2"><span class="rl">1日あたりの目標金額</span><span class="rv" style="color:var(--gold)">${targetDays>0?'¥'+perDayTarget.toLocaleString():'-'}</span></div>
