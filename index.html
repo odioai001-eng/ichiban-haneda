@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260826-10 -->
+<!-- v20260826-11 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1024,7 +1024,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260826-10';
+const APP_BUILD='20260826-11';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2767,6 +2767,14 @@ function makeDriverRow(id, d, isMe){
 
 }
 
+// その仲間が記録した送り先の中で、最も新しい記録時刻を返す（並び替え用）
+function latestTeamDestTs(id){
+  const entries=teamDests[id];
+  if(!entries)return 0;
+  let max=0;
+  Object.values(entries).forEach(e=>{if((e.ts||0)>max)max=e.ts||0;});
+  return max;
+}
 function updateDriverList(){
   const container=document.getElementById('driver-list-inner');
   const myName=localStorage.getItem('taxi_name')||'自分';
@@ -2779,7 +2787,11 @@ function updateDriverList(){
   // 一覧から完全に外す
   const entries=Object.entries(driverData)
     .filter(([,d])=>(Date.now()-(d.ts||0))<PEER_ALIVE_MS)
-    .sort((a,b)=>(b[1].ts||0)-(a[1].ts||0)); // 直近に位置情報等を更新した人が上に来るようにする
+    // 直近に送り先（送迎）を記録した人が上に来るようにする。GPSの位置情報は
+    // 出勤中の全員が5秒おきに自動更新してしまい、それを基準にすると常に
+    // ほぼ同じタイミングになって並び順が実質変わらなかったため、より
+    // 頻度の低い「送り先の記録」を基準にする
+    .sort((a,b)=>latestTeamDestTs(b[0])-latestTeamDestTs(a[0]));
   let online=isDuty?1:0;
   const peerRows=entries.map(([id,d])=>{
     online++;
