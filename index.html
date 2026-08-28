@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260826-6 -->
+<!-- v20260826-7 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1024,7 +1024,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260826-6';
+const APP_BUILD='20260826-7';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2426,7 +2426,7 @@ function setStatus(s){
     // 号選択・待機時間は、リセットする前に確定させておく
     const boardSpot=currentSpotSelection;
     // 待機時間は「国内線プールに入った時刻」から実車ボタンを押すまでの総経過時間とする。
-    // 〇号ボタンを押した時刻や、プール到着から2分後に自動で始まる待機タイマーの
+    // 〇号ボタンを押した時刻や、プール到着から10秒後に自動で始まる待機タイマーの
     // 開始時刻ではなく、実際にGPSでプールに到着した時刻（cpArriveTs、リロードを
     // またいでも保持される）を基準にすることで、号ボタンを押すのが遅れた場合や
     // 押し忘れて自動検知された場合でも同じ基準で待機時間を計算する
@@ -3032,9 +3032,14 @@ function openWaitStartModal(){
   }else{
     // 何らかの理由で待機タイマーの状態がリセットされてしまっていても、
     // 号を選択した時刻が別枠で記録されていれば、それを初期値として提案する
-    // （現在時刻からあまりに離れた古い記録は誤って使わないよう、16時間以内のみ対象）
+    // （現在時刻からあまりに離れた古い記録は誤って使わないよう、16時間以内のみ対象）。
+    // ただし、今回の到着でまだ号を選んでいない（currentSpotSelectionが空の）場合は
+    // このtaxi_last_spot_select_tsが前回・別日に号を選んだ時の古い時刻である
+    // 可能性が高く、それをそのまま提案してしまうと「待機開始→号選択」の順で
+    // 押した際に、待機時間が0分からではなく古い時刻からスタートしてしまう
+    // 不具合の原因になっていたため、号が選択済みの場合のみこのヒントを使う
     const lastSelectTs=parseInt(localStorage.getItem('taxi_last_spot_select_ts')||'0',10);
-    base=(lastSelectTs&&(Date.now()-lastSelectTs)<16*3600*1000)?new Date(lastSelectTs):new Date();
+    base=(currentSpotSelection&&lastSelectTs&&(Date.now()-lastSelectTs)<16*3600*1000)?new Date(lastSelectTs):new Date();
   }
   const hh=String(base.getHours()).padStart(2,'0');
   const mm=String(base.getMinutes()).padStart(2,'0');
@@ -3671,8 +3676,12 @@ function onArrival(cp,dist){
   if(arrivalAutoTimer)clearTimeout(arrivalAutoTimer);
   arrivalAutoTimer=setTimeout(()=>{
     arrivalAutoTimer=null;
-    if(cpInside[cp.id]&&isDuty&&!waitInterval)startWaitAt(cp,cp.name,dist,timeStr);
-  },120000);
+    // 実車中（お客様を乗せて走行中）に、経由地や信号待ち等でたまたま別の
+    // チェックポイント付近を通っただけでも、この自動スタートが働いて待機タイマーが
+    // 動き出してしまい、実車中も空車に戻した後もカウントアップし続けてしまう
+    // 不具合があったため、空車の時だけ自動スタートするようにする
+    if(cpInside[cp.id]&&isDuty&&currentStatus==='kuusha'&&!waitInterval)startWaitAt(cp,cp.name,dist,timeStr);
+  },10000);
   // 1分以上その場に停止した場合のみ通知（通過した場合は通知しない）
   // cpInsideフラグは出発確定までに別途60秒かかるため、ここでは使わず、
   // 60秒後の実際のGPS位置を直接見て「まだ半径内にいるか」を判定する
