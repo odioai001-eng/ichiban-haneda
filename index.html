@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260826-12 -->
+<!-- v20260826-14 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -458,7 +458,14 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div id="team-dests-list"></div>
   <div id="dest-list-past-sec" style="display:none">
     <div class="sec" style="margin-top:18px">📅 過去の送り先（自分）</div>
-    <div id="dest-list-past"></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+      <div onclick="toggleOwnPastDests()" style="padding:12px 14px;background:var(--surface2);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+        <span style="font-size:14px;font-weight:700">過去の記録</span>
+        <span id="dest-list-past-count" style="font-size:11px;color:var(--muted);margin-left:auto"></span>
+        <span id="dest-list-past-arrow" style="font-size:12px;color:var(--muted);margin-left:6px">▶</span>
+      </div>
+      <div id="dest-list-past" style="display:none;padding:10px 14px"></div>
+    </div>
   </div>
 </div>
 </div>
@@ -1024,7 +1031,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260826-12';
+const APP_BUILD='20260826-14';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5529,6 +5536,14 @@ function buildDestGroupsHtml(dateKeys,groups,numMap){
   });
   return html;
 }
+function toggleOwnPastDests(){
+  const el=document.getElementById('dest-list-past');
+  const arrow=document.getElementById('dest-list-past-arrow');
+  if(!el)return;
+  const open=el.style.display==='block';
+  el.style.display=open?'none':'block';
+  if(arrow)arrow.textContent=open?'▶':'▼';
+}
 function renderDests(){
   const el=document.getElementById('dest-list');
   const pastEl=document.getElementById('dest-list-past');
@@ -5577,8 +5592,16 @@ function renderDests(){
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の送り先はまだありません</div>';
   if(pastEl){
     if(pastDates.length){
+      // 開閉状態は再描画をまたいでも維持する（毎回閉じた状態に戻ってしまわないように）
+      const wasOpen=pastEl.style.display==='block';
       pastEl.innerHTML=buildDestGroupsHtml(pastDates,pastGroups,numMap);
+      pastEl.style.display=wasOpen?'block':'none';
       if(pastSec)pastSec.style.display='';
+      const pastCount=pastDates.reduce((a,d)=>a+pastGroups[d].length,0);
+      const cntEl=document.getElementById('dest-list-past-count');
+      if(cntEl)cntEl.textContent=pastCount+'件';
+      const arrowEl=document.getElementById('dest-list-past-arrow');
+      if(arrowEl)arrowEl.textContent=wasOpen?'▼':'▶';
     }else{
       pastEl.innerHTML='';
       if(pastSec)pastSec.style.display='none';
