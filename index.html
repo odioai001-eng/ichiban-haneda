@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260823-25 -->
+<!-- v20260826-7 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -465,21 +465,21 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <div class="page" id="page-ranking">
 <div class="pc">
-  <div class="sec">🏆 本日の売り上げランキング（本人）</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
-  <div class="card"><div id="rank-today-personal"></div></div>
-  <div class="sec" style="margin-top:18px">🏆 本日の売り上げランキング（グループ）</div>
+  <div class="sec">🏆 本日の売り上げランキング（グループ）</div>
   <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
   <div class="card"><div id="rank-today-group"></div></div>
+  <div class="sec" style="margin-top:18px">🏆 本日の売り上げランキング（本人）</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
+  <div class="card"><div id="rank-today-personal"></div></div>
   <div class="sec" style="margin-top:18px">🏆 今月の売り上げランキング（グループ）</div>
   <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
   <div class="card"><div id="rank-month-group"></div></div>
-  <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（本人）</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
-  <div class="card"><div id="rank-alltime-personal"></div></div>
   <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（グループ）</div>
   <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
   <div class="card"><div id="rank-alltime-group"></div></div>
+  <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（本人）</div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
+  <div class="card"><div id="rank-alltime-personal"></div></div>
 </div>
 </div>
 
@@ -1024,7 +1024,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260823-25';
+const APP_BUILD='20260826-7';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1257,6 +1257,7 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
     const hiddenMs=pageHiddenAt?Date.now()-pageHiddenAt:0;
     if(isDuty&&hiddenMs>8000){
       pendingCatchUpCheck=true;
+      gpsCatchUpUntil=Date.now()+GPS_SETTLE_GRACE_MS;
       _restartGPS();
     }
   });
@@ -1749,6 +1750,15 @@ let gpsPermissionDeniedNotified=false;
 // 他アプリ・他サイトから復帰した直後の1回だけ、初回GPSフィックスと同じ「見逃し出発」
 // 捕捉ロジック（checkGeofences内）を適用するためのフラグ
 let pendingCatchUpCheck=false;
+// GPS再接続直後は、GPSチップがまだ安定しておらず1回だけでは実際の位置と大きく
+// ずれた値が返ってくることがある。特に到着から長時間経ってから待機中にアプリを
+// 開き直した場合、乗り場のcpArriveTs（到着時刻）は十分古いため「1分以上の停止」
+// 判定はすぐ真になってしまい、この不安定な1回だけの誤った値による見せかけの
+// 出発検知がそのまま「○号乗り場を出発しました」という誤通知に直結してしまって
+// いた。再接続後はこの猶予時間（ms）が経過するまで、初回フィックスと同じ
+// 「状態を静かに同期するだけで出発・到着イベントは発火しない」扱いを継続する
+const GPS_SETTLE_GRACE_MS=15000;
+let gpsCatchUpUntil=0;
 // 画面が非表示になった時刻。短時間の切り替えでは復帰時のGPS再取得・出発捕捉を
 // 行わないようにするための基準にする
 let pageHiddenAt=0;
@@ -1774,6 +1784,7 @@ function startGPS(){
       // 20秒も更新が止まっていた間に、乗り場を出ていたのを見逃している可能性があるため、
       // 再接続後の最初の1回はリロード直後と同じ捕捉ロジックを適用する
       pendingCatchUpCheck=true;
+      gpsCatchUpUntil=Date.now()+GPS_SETTLE_GRACE_MS;
       _restartGPS();
     }
   },10000);
@@ -1785,7 +1796,7 @@ function _attachGPSWatch(){
     gpsLastUpdate=Date.now();
     if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
     if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
-    const isFirstFix=(myLat===null)||pendingCatchUpCheck;
+    const isFirstFix=(myLat===null)||pendingCatchUpCheck||Date.now()<gpsCatchUpUntil;
     pendingCatchUpCheck=false;
     myLat=pos.coords.latitude; myLng=pos.coords.longitude;
     updateMyMarker(myLat,myLng);
@@ -2244,6 +2255,12 @@ function _startDuty(){
 }
 
 let jitsushaStart=null;
+// 乗り場素通り時の誤作動等で、気づかないまま長時間「実車」のままになっていると、
+// その後の本当の乗車（例: 全く別の場所でお客様を乗せた場合）まで最初の誤った
+// 乗車情報のまま記録されてしまう。異常に長い実車状態を検知して一度だけ知らせる
+// ための、通知済みフラグ
+let longJitsushaNotified=false;
+const LONG_JITSUSHA_WARN_MS=45*60*1000; // 45分
 let boardInfo=null;          // 実車時の乗車情報
 let manualWaitStartTime=null; // 待機開始ボタンを押した時刻
 let manualWaitAddr=null;      // 待機開始した場所の住所
@@ -2405,6 +2422,7 @@ function setStatus(s){
   toast('ステータス: '+statusCfg[s].label);
   if(s==='jitsusha'){
     jitsushaStart=Date.now();
+    longJitsushaNotified=false;
     // 号選択・待機時間は、リセットする前に確定させておく
     const boardSpot=currentSpotSelection;
     // 待機時間は「国内線プールに入った時刻」から実車ボタンを押すまでの総経過時間とする。
@@ -2511,6 +2529,7 @@ function setStatus(s){
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
     const fallbackBoardTs=jitsushaStart; // 実車開始時刻を、乗車時刻の保険として保持
     jitsushaStart=null;
+    longJitsushaNotified=false;
     const tripTs=Date.now();
     // GPSが一瞬取得できていない場合に備え、直近の位置情報履歴もフォールバックとして使う
     const fbLat=myLat!==null?myLat:(posHistory.length?posHistory[posHistory.length-1].lat:null);
@@ -2979,6 +2998,15 @@ function recordSpotDestStat(boardSpot,alightAddr){
   if(!ward)return;
   db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>(cur||0)+1);
 }
+// 記録後に乗車場所・送り先の住所を編集した場合、乗り場別タブの集計
+// （spot_dest_stats）が古い組み合わせのまま残ってしまうため、delta（+1/-1）で
+// 補正する。乗り場（boardSpot）が無い記録はそもそも集計対象外なので何もしない
+function adjustSpotDestStat(boardSpot,alightAddr,delta){
+  if(!db||!boardSpot)return;
+  const ward=extractWard(alightAddr);
+  if(!ward)return;
+  db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>Math.max((cur||0)+delta,0));
+}
 
 const DOW_JP=['日','月','火','水','木','金','土'];
 // 200分（約3時間20分）以上の待機時間は、実車ボタンの押し忘れ等によるGPS誤検知の
@@ -3415,10 +3443,12 @@ const CP_TRANSITION_DEBOUNCE_MS=10000; // 出勤直後などGPSが不安定な�
 // 出たり消えたりしやすく、それだけで出発（実車化）が確定してしまう誤作動があったため
 const DEPARTURE_CONFIRM_BUFFER_M=25;
 const DEPARTURE_CONFIRM_MS=90000; // 誤作動対策のため60秒→90秒に延長
-// 乗り場（1〜4号乗り場・国際線第3プール）は、エリアを出てから60秒経過した
-// 時点で出発（実車化）を確定させる（お客様を乗せて出発する動きが早いため、
-// 出庫・納金事務所等の他のチェックポイントより短く設定）
+// 乗り場は、エリアを出てから短時間で出発（実車化）を確定させる（お客様を乗せて
+// 出発する動きが早いため、出庫・納金事務所等の他のチェックポイントより短く設定）。
+// 1〜4号乗り場は特にノンストップで列が進みながら乗せることが多いため10秒、
+// 国際線第3プールは引き続き60秒とする
 function getDepartureConfirmMs(cp){
+  if(cp&&/^[1-4]号乗り場$/.test(cp.name||''))return 10000;
   if(cp&&spotLabelFromCheckpointName(cp.name))return 60000;
   return DEPARTURE_CONFIRM_MS;
 }
@@ -3442,7 +3472,7 @@ function cpHasStayed1Min(cp){
   const ts=cpArriveTs[cp.id];
   if(!ts)return false;
   // この関数はonDeparture内で「退場確定」した後に呼ばれるが、退場確定は
-  // 実際に圏外に出た瞬間から一定時間（通常90秒、乗り場（1〜4号乗り場・国際線第3プール）は60秒）待って
+  // 実際に圏外に出た瞬間から一定時間（通常90秒、1〜4号乗り場は10秒、国際線第3プールは60秒）待って
   // から確定するため、Date.now()（＝呼び出し時点の時刻）は必ず到着時刻からその
   // 分だけ離れてしまい、素通りしただけでも必ず1分以上に見えてしまう。実際に
   // その場を離れた時刻（≒Date.now()からその待ち時間を差し引いた時刻）を基準に
@@ -3515,7 +3545,7 @@ function checkGeofences(lat,lng,isFirstFix){
       cpArriveTs[cp.id]=now;saveCpArriveTs();
       onArrival(cp,Math.round(dist));
     } else {
-      // 退場は即確定せず、一定時間（通常90秒、乗り場（1〜4号乗り場・国際線第3プール）は60秒）後も
+      // 退場は即確定せず、一定時間（通常90秒、1〜4号乗り場は10秒、国際線第3プールは60秒）後も
       // 実際に半径+余裕分の外側のままなら確定する
       // （一瞬だけ外れた「通過」や、境界線上でのGPSのブレによる誤作動を無視する）
       if(pendingDepartureTimer[cp.id])return;
@@ -3587,16 +3617,27 @@ function onDeparture(cp){
   // 自分が今回のプール滞在中に列移動を入力していた場合、出発（＝入力終了）の
   // タイミングでその時点までの列数を履歴として記録する
   if(cp.id==='haneda'&&myPoolInputActive&&hadConfirmedStop)finalizePoolMoveHistory();
+  // 「何号乗り場に入りましたか」のポップアップ（showPoolLaneModal）は、poolModalHandled
+  // がtrueの間は再表示されない。これまではsetStatus('jitsusha')側で「実車にした
+  // 時点でプールの外にいた場合のみ」リセットしていたが、実際には1〜4号乗り場は
+  // プール全体（haneda、半径200m）の内側にあるため、プール圏内にいる間に実車にする
+  // ケースが大半を占め、その場合ポップアップが二度と再表示されずにいた
+  // （「出ないことが多い」不具合の原因）。プールの外に本当に出た時（onDeparture）を
+  // 基準にリセットする方が確実なため、ここでも行う
+  if(cp.id==='haneda')cp.poolModalHandled=false;
   // 「1号乗り場」〜「4号乗り場」「国際線第3/4プール」等のチェックポイントから、
   // 実車ボタンを押さないまま出発した場合は、押し忘れとみなして自動的に実車状態にする
   // （乗り場・待機時間も記録される）。国際線プールは引き続き「1分以上の停止が
   // 確認できた場合のみ」に限定し、素通りしただけで実車になってしまわないようにする。
   // 1号〜4号乗り場は、列がノンストップで進みながら乗せる（1分以上の連続停止が
-  // 確認できないまま実車になる）ことが多く、エリア自体も誤作動しないよう最小限に
-  // 絞っているため、滞在時間を問わずエリアを出発してから60秒経過（＝通常の
-  // 出発確定タイミング）した時点で確定させる
+  // 確認できないまま実車になる）ことが多いため、滞在時間を問わずエリアを出発
+  // してから60秒経過（＝通常の出発確定タイミング）した時点で確定させる。
+  // ただし、エリア自体は道路も含めて広めに取らざるを得ない場所があり、お客様を
+  // 乗せず単に近くの道路を通っただけ（走行速度が出ている）のに実車化されて
+  // しまう誤作動が報告されたため、直近の走行速度に列の徐行・停止に見合う
+  // 遅さ（時速13km未満）の記録が無ければ「素通り」とみなし対象外にする
   const spotLabel=spotLabelFromCheckpointName(cp.name);
-  const isNumberedSpot=/^[1-4]号乗り場$/.test(cp.name||'');
+  const isNumberedSpot=/^[1-4]号乗り場$/.test(cp.name||'')&&wasLikelyQueueingRecently();
   if(spotLabel&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&(hadConfirmedStop||isNumberedSpot)){
     currentSpotSelection=spotLabel;
     // 号チップを手動で選んだ場合（selectSpot）と同じ「東京都大田区羽田空港◯◯乗り場」
@@ -3635,7 +3676,11 @@ function onArrival(cp,dist){
   if(arrivalAutoTimer)clearTimeout(arrivalAutoTimer);
   arrivalAutoTimer=setTimeout(()=>{
     arrivalAutoTimer=null;
-    if(cpInside[cp.id]&&isDuty&&!waitInterval)startWaitAt(cp,cp.name,dist,timeStr);
+    // 実車中（お客様を乗せて走行中）に、経由地や信号待ち等でたまたま別の
+    // チェックポイント付近を通っただけでも、この自動スタートが働いて待機タイマーが
+    // 動き出してしまい、実車中も空車に戻した後もカウントアップし続けてしまう
+    // 不具合があったため、空車の時だけ自動スタートするようにする
+    if(cpInside[cp.id]&&isDuty&&currentStatus==='kuusha'&&!waitInterval)startWaitAt(cp,cp.name,dist,timeStr);
   },10000);
   // 1分以上その場に停止した場合のみ通知（通過した場合は通知しない）
   // cpInsideフラグは出発確定までに別途60秒かかるため、ここでは使わず、
@@ -3994,6 +4039,19 @@ function updateDailyBar(){
  }
 }
 setInterval(updateDailyBar,1000);
+
+// 乗り場素通り時の誤作動等で気づかないまま長時間「実車」のままになっていないか、
+// 1分おきにチェックする。異常に長い場合、その後に全く別の場所で本当にお客様を
+// 乗せても最初の誤った乗車情報のまま記録されてしまうため、早めに気づけるよう
+// 一度だけ通知する
+setInterval(()=>{
+  if(currentStatus!=='jitsusha'||!jitsushaStart||longJitsushaNotified)return;
+  if(Date.now()-jitsushaStart<LONG_JITSUSHA_WARN_MS)return;
+  longJitsushaNotified=true;
+  const mins=Math.round((Date.now()-jitsushaStart)/60000);
+  sendNotif('⚠️ 実車状態が長時間続いています',`${mins}分経過。乗り場の素通り等による誤作動でなければ問題ありません`,'long-jitsusha-warn');
+  toast(`⚠️ 実車状態が${mins}分続いています。誤作動でなければ問題ありません`);
+},60000);
 
 function getMonthShifts(){
  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
@@ -4366,6 +4424,72 @@ function editTripWait(ts){
   });
  }
  toast('✅ 待機時間を更新しました');
+}
+
+// 実車になった時刻（乗車時刻）を後から修正する。boardTimeは表示用の文字列
+// （HH:MM）としてのみ使われており、待機時間・売上等の集計には別の値
+// （waitMins・ts等）を使っているため、ここを直接編集しても他の集計には影響しない
+function editTripBoardTime(ts){
+ const idx=destinations.findIndex(d=>d.ts===ts);
+ if(idx<0)return;
+ const cur=destinations[idx].boardTime||'';
+ const val=prompt('乗車時刻（実車になった時刻、例: 23:03）',cur);
+ if(val===null)return;
+ const m=val.trim().match(/^(\d{1,2}):(\d{2})$/);
+ if(!m){toast('⚠️ 時刻はHH:MM形式で入力してください');return;}
+ const newBoardTime=`${String(parseInt(m[1],10)).padStart(2,'0')}:${m[2]}`;
+ destinations[idx].boardTime=newBoardTime;
+ saveDests();renderDests();
+ if(db&&isRankingOptedIn()){
+  db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
+   snap.forEach(child=>child.ref.update({boardTime:newBoardTime}));
+  });
+ }
+ toast('✅ 乗車時刻を更新しました');
+}
+
+// 乗車場所の住所を後から編集する。boardSpotが設定されている（1〜4号乗り場等からの
+// 自動記録）場合、表示は住所ではなく「東京都大田区羽田空港◯◯乗り場」を優先して
+// 使うため、編集した住所がそのまま表示に反映されるようboardSpotは解除する
+function editTripBoardAddr(ts){
+ const idx=destinations.findIndex(d=>d.ts===ts);
+ if(idx<0)return;
+ const oldBoardSpot=destinations[idx].boardSpot;
+ const cur=oldBoardSpot?`東京都大田区羽田空港${oldBoardSpot}乗り場`:(destinations[idx].boardAddr||'');
+ const val=prompt('乗車場所の住所',cur);
+ if(val===null)return;
+ // 乗り場からの記録ではなくなる（住所を直接指定する）ため、乗り場別タブの
+ // 集計からはこの分を除く
+ adjustSpotDestStat(oldBoardSpot,destinations[idx].alightAddr,-1);
+ destinations[idx].boardAddr=val.trim();
+ destinations[idx].boardSpot=null;
+ saveDests();renderDests();
+ if(db&&isRankingOptedIn()){
+  db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
+   snap.forEach(child=>child.ref.update({boardAddr:destinations[idx].boardAddr,boardSpot:null}));
+  });
+ }
+ toast('✅ 乗車場所を更新しました');
+}
+// 送り先（降車場所）の住所を後から編集する
+function editTripAlightAddr(ts){
+ const idx=destinations.findIndex(d=>d.ts===ts);
+ if(idx<0)return;
+ const oldAlightAddr=destinations[idx].alightAddr||'';
+ const val=prompt('送り先（降車場所）の住所',oldAlightAddr);
+ if(val===null)return;
+ destinations[idx].alightAddr=val.trim();
+ // 乗り場別タブの集計を、古い送り先の分から新しい送り先の分へ付け替える
+ // （boardSpotが無い記録はadjustSpotDestStat内で何もしないので安全）
+ adjustSpotDestStat(destinations[idx].boardSpot,oldAlightAddr,-1);
+ adjustSpotDestStat(destinations[idx].boardSpot,destinations[idx].alightAddr,1);
+ saveDests();renderDests();
+ if(db&&isRankingOptedIn()){
+  db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
+   snap.forEach(child=>child.ref.update({alightAddr:destinations[idx].alightAddr}));
+  });
+ }
+ toast('✅ 送り先を更新しました');
 }
 
 function deleteTripFare(ts){
@@ -4807,6 +4931,16 @@ function calcBearing(lat1,lng1,lat2,lng2){
 }
 function angleDiff(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d;}
 
+// 直近30秒の走行速度に、列に並んで徐行・停止しているとみなせる遅さ（時速13km≒
+// 秒速3.6m未満）の記録が1つでもあれば「列に並んでいた（＝素通りではない）」と
+// 判定する。速度データが無ければ、誤ってお客様を乗せた記録を見逃さないよう
+// 安全側（列に並んでいたとみなす）に倒す
+function wasLikelyQueueingRecently(){
+  const now=Date.now();
+  const recent=posHistory.filter(p=>now-p.ts<=30000);
+  if(!recent.length)return true;
+  return recent.some(p=>p.speed!==null&&p.speed!==undefined&&p.speed<3.6);
+}
 function updatePosHistory(lat,lng,rawSpeed){
   const now=Date.now(),prev=posHistory[posHistory.length-1];
   let speed=rawSpeed,bearing=null;
@@ -5313,14 +5447,17 @@ function buildDestEntryHtml(d,numMap){
         <div style="font-size:15px;font-weight:800;color:var(--accent)">#${no}</div>
         <button onclick="deleteTripEntry(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:10px;color:var(--red);cursor:pointer">🗑 削除</button>
       </div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:5px">
         <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
-        <span style="font-size:12px;color:#fff">${boardDesc}</span>
+        <span style="font-size:12px;color:#fff;flex:1">${boardDesc}</span>
+        <button onclick="editTripBoardTime(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:10px;color:var(--accent);cursor:pointer;flex-shrink:0">時刻</button>
+        <button onclick="editTripBoardAddr(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:10px;color:var(--accent);cursor:pointer;flex-shrink:0">住所</button>
       </div>
       ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-2px 0 4px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
-      <div style="display:flex;align-items:baseline;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:6px">
         <span style="font-size:14px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(d.alightTime||'--:--')}</span>
-        <span style="font-size:13px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
+        <span style="font-size:13px;font-weight:600;flex:1;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
+        <button onclick="editTripAlightAddr(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:10px;color:var(--accent);cursor:pointer;flex-shrink:0">住所</button>
       </div>
       <div style="font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px">
         <span style="flex:1">${waitStr||''}</span>
