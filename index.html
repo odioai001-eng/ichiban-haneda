@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260826-17 -->
+<!-- v20260826-18 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1031,7 +1031,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260826-17';
+const APP_BUILD='20260826-18';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3235,8 +3235,10 @@ function renderTeamDests(){
         <span style="font-size:12px;color:var(--muted);margin-left:6px">▶</span>
       </div>
       <div id="${folderId}" style="display:none;padding:10px 14px">`;
-    // 通し番号用に時系列ソート
-    const driverDutyStart=(driverData[driverId]&&driverData[driverId].dutyStartTs)||0;
+    // 通し番号用に時系列ソート。退勤済み（driverDataから削除済み）の場合、
+    // 0のままだと直近1か月分すべてが1本の通し番号になってしまうため、
+    // 直近の午前9時を「その日の開始」とみなして区切る（getEffectiveShiftStart）
+    const driverDutyStart=getEffectiveShiftStart((driverData[driverId]&&driverData[driverId].dutyStartTs)||0);
     const teamTrips=entries.filter(e=>e.type==='trip'&&(e.ts||0)>=driverDutyStart).sort((a,b)=>(a.ts||0)-(b.ts||0));
     const teamNumMap=new Map();
     teamTrips.forEach((e,i)=>teamNumMap.set(e.ts,i+1));
@@ -3318,9 +3320,19 @@ function adminDelBtnHtml(onclick){
 function renderRankTodayPersonal(){
   const el=document.getElementById('rank-today-personal');
   if(!el)return;
-  const bizStart=getBusinessDayStart();
-  const bizEnd=bizStart+24*3600*1000;
-  const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0&&(d.ts||0)>=bizStart&&(d.ts||0)<bizEnd).slice().sort((a,b)=>(b.fare||0)-(a.fare||0));
+  // 「本日」は出勤中なら出勤時刻(dutyStart)以降、退勤後は直近に完了した出退勤の
+  // 時間帯を基準にする（9時区切りの暦日だと、夜勤でそれをまたいだ際に記録が
+  // 分断されてしまうため。送り先一覧・仲間の送り先と同じ考え方）
+  let rangeStart,rangeEnd;
+  if(isDuty&&dutyStart){
+    rangeStart=dutyStart.getTime();rangeEnd=Infinity;
+  }else{
+    const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+    const lastShift=shiftLog.length?shiftLog.reduce((a,b)=>(!a||b.endTs>a.endTs)?b:a,null):null;
+    if(lastShift){rangeStart=lastShift.startTs;rangeEnd=lastShift.endTs;}
+    else{rangeStart=getBusinessDayStart();rangeEnd=rangeStart+24*3600*1000;}
+  }
+  const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0&&(d.ts||0)>=rangeStart&&(d.ts||0)<rangeEnd).slice().sort((a,b)=>(b.fare||0)-(a.fare||0));
   el.innerHTML=trips.length
     ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),exTax(d.fare),adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の記録がありません</div>';
@@ -4756,8 +4768,11 @@ function pushTeamSales(){
  const now=new Date();
  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
  const todayBizStart=getBusinessDayStart(now.getTime());
- // 運賃は税込みで入力されているため、ランキングに積み上げる際は1件ずつ税抜きに変換する
- const todayFare=log.filter(e=>(e.ts||0)>=todayBizStart&&(e.ts||0)<todayBizStart+24*3600*1000).reduce((a,e)=>a+exTax(e.fare||0),0);
+ // 運賃は税込みで入力されているため、ランキングに積み上げる際は1件ずつ税抜きに変換する。
+ // 集計範囲は9時区切りではなく、出勤〜退勤のシフト単位（getTodayShiftFareEntries）に
+ // する。9時区切りだと、それをまたぐ夜勤の売上が途中で分断されてしまうため
+ // （todayBizStartは他端末からの表示が古くならないようにするための識別用に残す）
+ const todayFare=getTodayShiftFareEntries().reduce((a,e)=>a+exTax(e.fare||0),0);
  const monthFareRaw=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+exTax(e.fare||0),0)+carry.fare;
  const monthDaysRaw=getMonthShifts().length+carry.days;
  // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
