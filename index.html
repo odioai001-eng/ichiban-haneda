@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260826-16 -->
+<!-- v20260826-17 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1031,7 +1031,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260826-16';
+const APP_BUILD='20260826-17';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5577,12 +5577,22 @@ function renderDests(){
   const allSorted=visible.filter(d=>d.type==='trip'||d.type==='cp').sort((a,b)=>(a.ts||0)-(b.ts||0));
   const numMap=computeTripNumbers(allSorted.filter(d=>d.type==='trip'));
   // 「本日分」は、出勤中であれば暦日ではなく今回の出勤（dutyStart）以降の記録に限定する。
-  // 日をまたぐ夜勤の場合、暦日だけで区切ると出勤前（前の暦日）の記録が紛れ込んだり、
-  // 日付が変わった直後の記録が「過去」に追いやられたりしていたため、出勤中は
-  // シフト開始時刻を基準にする（出勤中でなければ従来通り暦日で判定する）
-  const shiftStartTs=(isDuty&&dutyStart)?dutyStart.getTime():null;
+  // 退勤後は、直近に完了した出退勤（出勤〜退勤）の時間帯そのものを基準にする。
+  // 暦日だけで区切ると、日をまたぐ夜勤で出勤前（前の暦日）の記録が紛れ込んだり、
+  // 日付が変わった瞬間や退勤後に翌日確認した際に「本日分」の記録が「過去」へ
+  // 追いやられたりしてしまうため（出退勤の記録が一切無ければ従来通り暦日で判定する）
   const todayStr=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-  const isCurrent=d=>shiftStartTs!==null?(d.ts||0)>=shiftStartTs:d.dateStr===todayStr;
+  let isCurrent;
+  if(isDuty&&dutyStart){
+    const shiftStartTs=dutyStart.getTime();
+    isCurrent=d=>(d.ts||0)>=shiftStartTs;
+  }else{
+    const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+    const lastShift=shiftLog.length?shiftLog.reduce((a,b)=>(!a||b.endTs>a.endTs)?b:a,null):null;
+    isCurrent=lastShift
+      ?d=>(d.ts||0)>=lastShift.startTs&&(d.ts||0)<=lastShift.endTs
+      :d=>d.dateStr===todayStr;
+  }
   const todayGroups={},pastGroups={};
   visible.forEach(d=>{
     const key=d.dateStr||'日付不明';
