@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260826-21 -->
+<!-- v20260826-22 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1042,7 +1042,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260826-21';
+const APP_BUILD='20260826-22';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3446,8 +3446,8 @@ function renderRankMonthGroup(){
       const avg=days>0?Math.round(fareForAvg/days):0;
       const sub=`1日平均 ¥${avg.toLocaleString()}（${days}日出勤）`;
       let btns=adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`);
-      if(d.uid===myId){
-        btns+=`<button onclick="editMyMonthSales()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer;margin-left:4px;flex-shrink:0">✏️ 修正</button>`;
+      if(d.uid===myId||isAdmin){
+        btns+=`<button onclick="editTeamMemberMonthSales('${d.uid}','${esc(d.name||'不明')}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer;margin-left:4px;flex-shrink:0">✏️ 修正</button>`;
       }
       return rankRowHtml(i,esc(d.name||'不明'),sub,fare,btns);
     }).join('')
@@ -3463,19 +3463,25 @@ function syncMySalesNow(){
   pushTeamSales();
   toast('🔄 自分の記録を同期しました');
 }
-// 自動計算が実態と合わない場合に、本人が今月の出勤日数・売上を手動で訂正する
-// （自動計算はその後も継続する。今の自動集計値との差分だけをmonthAdjustとして保存し、
-//  以後pushTeamSales()のたびに新しい自動集計値へこの差分を足し続けることで、
-//  「今回のズレだけ直す」を実現する。平均金額もこの修正後の日数・金額で再計算される）
-function editMyMonthSales(){
-  if(!isRankingOptedIn()){toast('⚠️ グループランキングに未参加です');return;}
+// 自動計算が実態と合わない場合に、今月の出勤日数・売上を手動で訂正する。
+// 本人は自分の分を、管理者は仲間の分も修正できる（月をまたぐ夜勤の集計不具合等で
+// 過去に食い違った数値が残ってしまった場合の訂正用）。
+// 自動計算はその後も継続する。今の自動集計値との差分だけをmonthAdjustとして保存し、
+// 以後pushTeamSales()のたびに新しい自動集計値へこの差分を足し続けることで、
+// 「今回のズレだけ直す」を実現する。平均金額もこの修正後の日数・金額で再計算される。
+// （ただし本人以外の場合、次にその人のpushTeamSales()が走るまでmonthDaysRaw／
+// monthFareRawの基準がここでの値のままになる点に注意）
+function editTeamMemberMonthSales(uid,name){
+  const isSelf=uid===myId;
+  if(!isSelf&&!isAdmin){toast('⚠️ 管理者のみ他の人の記録を修正できます');return;}
+  if(isSelf&&!isRankingOptedIn()){toast('⚠️ グループランキングに未参加です');return;}
   if(!db){toast('⚠️ Firebase未接続');return;}
-  const cur=(teamSales&&teamSales[myId])||{};
+  const cur=(teamSales&&teamSales[uid])||{};
   const curDays=cur.monthDays||0;
   const curFare=cur.monthFare||0;
-  const daysStr=prompt('今月の出勤日数（正しい日数）を入力してください',curDays);
+  const daysStr=prompt(`${name||'この人'}の今月の出勤日数（正しい日数）を入力してください`,curDays);
   if(daysStr===null)return;
-  const fareStr=prompt('今月の売上合計（正しい金額・円）を入力してください',curFare);
+  const fareStr=prompt(`${name||'この人'}の今月の売上合計（正しい金額・円）を入力してください`,curFare);
   if(fareStr===null)return;
   const days=Math.max(0,parseInt(daysStr)||0);
   const fare=Math.max(0,parseInt(fareStr)||0);
@@ -3486,7 +3492,7 @@ function editMyMonthSales(){
   // （そうしないと次に自動集計が走るまで、平均だけ訂正前の値のままになってしまう）
   const curFareForAvg=cur.monthFareForAvg!=null?cur.monthFareForAvg:curFare;
   const monthFareForAvg=Math.max(0,curFareForAvg+(fare-curFare));
-  db.ref('team_sales/'+myId).update({monthAdjust,monthDays:days,monthFare:fare,monthFareForAvg});
+  db.ref('team_sales/'+uid).update({monthAdjust,monthDays:days,monthFare:fare,monthFareForAvg});
   toast('✅ 今月の出勤日数・売上を修正しました（自動計算は今後も継続します）');
 }
 // ④ 歴代送り先ランキング（本人・1回の送先ごと、日付含む）
