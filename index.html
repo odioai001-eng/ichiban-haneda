@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-1 -->
+<!-- v20260901-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-1';
+const APP_BUILD='20260901-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3590,10 +3590,10 @@ const DEPARTURE_CONFIRM_BUFFER_M=25;
 const DEPARTURE_CONFIRM_MS=90000; // 誤作動対策のため60秒→90秒に延長
 // 乗り場は、エリアを出てから短時間で出発（実車化）を確定させる（お客様を乗せて
 // 出発する動きが早いため、出庫・納金事務所等の他のチェックポイントより短く設定）。
-// 1〜4号乗り場は特にノンストップで列が進みながら乗せることが多いため10秒、
-// 国際線第3プールは引き続き60秒とする
+// 1〜4号乗り場は特にノンストップで列が進みながら乗せることが多いため、
+// 国際線第3プールより短くしつつも、10秒だと誤作動が多かったため30秒とする
 function getDepartureConfirmMs(cp){
-  if(cp&&/^[1-4]号乗り場$/.test(cp.name||''))return 10000;
+  if(cp&&/^[1-4]号乗り場$/.test(cp.name||''))return 30000;
   if(cp&&spotLabelFromCheckpointName(cp.name))return 60000;
   return DEPARTURE_CONFIRM_MS;
 }
