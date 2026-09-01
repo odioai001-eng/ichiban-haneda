@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-2 -->
+<!-- v20260901-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-2';
+const APP_BUILD='20260901-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1336,6 +1336,26 @@ function showUpdateBanner(){
   b.textContent='🔄 アプリの更新があります。タップして最新の状態に更新してください';
   b.onclick=()=>location.reload();
   document.body.appendChild(b);
+}
+// 位置情報の利用が拒否されたまま乗務中だと、仲間の地図・仲間リストに
+// 自分のアイコンが一切表示されない。トーストは数秒で消えて見逃されやすく、
+// 特にPWAとしてインストールしていないWeb版（ブラウザでの利用）は許可が
+// 下りていないまま気づかないケースが多かったため、許可されるまで（または
+// 退勤するまで）消えない目立つバナーで知らせる
+function showGpsPermissionBanner(){
+  if(document.getElementById('gps-permission-banner'))return;
+  const b=document.createElement('div');
+  b.id='gps-permission-banner';
+  b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99998;background:var(--red);color:#fff;'
+    +'text-align:center;font-size:13px;font-weight:700;cursor:pointer;'
+    +'padding:10px 14px calc(10px + env(safe-area-inset-top,0px));';
+  b.textContent='📍 位置情報が許可されていません。タップして許可してください（仲間にアイコンが表示されません）';
+  b.onclick=()=>openLocationSettings();
+  document.body.appendChild(b);
+}
+function hideGpsPermissionBanner(){
+  const b=document.getElementById('gps-permission-banner');
+  if(b)b.remove();
 }
 
 function syncZoomCtrlVisibility(visible){
@@ -1828,6 +1848,7 @@ function _attachGPSWatch(){
     pendingCatchUpCheck=false;
     myLat=pos.coords.latitude; myLng=pos.coords.longitude;
     updateMyMarker(myLat,myLng);
+    hideGpsPermissionBanner();
     document.getElementById('gps-dot').style.background='';
     document.getElementById('gps-dot').classList.add('on');
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
@@ -1855,9 +1876,15 @@ function _attachGPSWatch(){
     // 呼ばれず、出勤ボタンを押しても仲間に自分のアイコンが全く表示されない。
     // gps-txtは幅を抑えるため非表示にしているため、他に気づく手段がなく
     // 気づかれにくいので、これだけは一度だけ確実に目立つ形で知らせる
-    if(err.code===err.PERMISSION_DENIED&&!gpsPermissionDeniedNotified){
-      gpsPermissionDeniedNotified=true;
-      toast('⚠️ 位置情報の利用が許可されていません。ブラウザの設定で位置情報を許可しないと、仲間にアイコンが表示されません');
+    if(err.code===err.PERMISSION_DENIED){
+      // トーストは数秒で消えて見逃されやすく、Web版（PWAとしてインストールしていない
+      // ブラウザ利用）では特に位置情報の許可が下りていないケースに気づきにくかった
+      // ため、許可されるまで消えない目立つバナーも合わせて表示する
+      if(!gpsPermissionDeniedNotified){
+        gpsPermissionDeniedNotified=true;
+        toast('⚠️ 位置情報の利用が許可されていません。ブラウザの設定で位置情報を許可しないと、仲間にアイコンが表示されません');
+      }
+      showGpsPermissionBanner();
     }
     document.getElementById('gps-dot').style.background='var(--purple)';
     document.getElementById('gps-txt').textContent='GPS弱 — 再試行中';
@@ -1884,6 +1911,7 @@ function stopGPS(){
   if(myMarker){leafletMap.removeLayer(myMarker);myMarker=null;}
   document.getElementById('gps-dot').classList.remove('on');
   document.getElementById('gps-txt').textContent='GPS停止中';
+  hideGpsPermissionBanner();
 }
 
 function toggleDuty(){
