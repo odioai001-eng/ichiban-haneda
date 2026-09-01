@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-3 -->
+<!-- v20260901-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -577,7 +577,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
   <div class="sec">💰 売上管理（税抜）</div>
   <div class="card">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">今月の日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。</div>
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。</div>
+   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <span id="fare-day-entries-label" style="font-size:13px;font-weight:700">今月</span>
+    <button class="btn btn-g" onclick="toggleFareDayEntriesMonth()" id="fare-day-entries-toggle" style="font-size:11px;padding:5px 10px">📅 先月の記録を見る</button>
+   </div>
    <div id="fare-day-entries-list"></div>
   </div>
   <div id="admin-lock-area">
@@ -1046,7 +1050,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-3';
+const APP_BUILD='20260901-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4239,11 +4243,18 @@ function getEffectiveMonthRefDate(){
  if(lastShift&&(Date.now()-lastShift.endTs)<12*3600*1000)return new Date(lastShift.startTs);
  return new Date();
 }
-function getMonthShifts(){
+// offsetを指定すると、その分だけ月をずらして取得できる（-1で先月分）。
+// 「今月」の基準は月をまたぐ夜勤で分断されないようgetEffectiveMonthRefDate()を
+// 使うが、月が変わって新しいシフトが始まった直後は、その基準も新しい月に
+// 切り替わってしまい前月の最終日が今月の集計・一覧のどちらからも見えなく
+// なってしまうため、offset=-1で前月分をいつでも見られるようにしている
+function getMonthShifts(offset){
+ offset=offset||0;
  const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
  const ref=getEffectiveMonthRefDate();
- const monthStart=new Date(ref.getFullYear(),ref.getMonth(),1).getTime();
- return log.filter(s=>s.startTs>=monthStart);
+ const monthStart=new Date(ref.getFullYear(),ref.getMonth()+offset,1).getTime();
+ const monthEnd=new Date(ref.getFullYear(),ref.getMonth()+offset+1,1).getTime();
+ return log.filter(s=>s.startTs>=monthStart&&s.startTs<monthEnd);
 }
 
 function hoursToHM(hours){
@@ -4376,12 +4387,14 @@ function deleteShiftEntry(startTs){
 // 「本日の売上」（getTodayShiftFareEntries）と同じ「出勤〜退勤の期間」を基準にする。
 // どの勤務にも属さない記録（勤務記録の無い日の手動記録など）だけ、従来通り
 // dateStrでまとめる
-function getMonthFareDays(){
+function getMonthFareDays(offset){
+ offset=offset||0;
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const ref=getEffectiveMonthRefDate();
- const monthStart=new Date(ref.getFullYear(),ref.getMonth(),1).getTime();
- const monthEntries=log.filter(e=>(e.ts||0)>=monthStart);
- const shifts=getMonthShifts().filter(s=>s.endTs);
+ const monthStart=new Date(ref.getFullYear(),ref.getMonth()+offset,1).getTime();
+ const monthEnd=new Date(ref.getFullYear(),ref.getMonth()+offset+1,1).getTime();
+ const monthEntries=log.filter(e=>(e.ts||0)>=monthStart&&(e.ts||0)<monthEnd);
+ const shifts=getMonthShifts(offset).filter(s=>s.endTs);
  const used=new Set();
  const groups=shifts.map(s=>{
   const inShift=monthEntries.filter(e=>(e.ts||0)>=s.startTs&&(e.ts||0)<=s.endTs);
@@ -4404,11 +4417,21 @@ function getMonthFareDays(){
  });
  return groups.concat(Object.values(byDate));
 }
+let fareDayEntriesMonthOffset=0; // 0=今月, -1=先月
+function toggleFareDayEntriesMonth(){
+ fareDayEntriesMonthOffset=fareDayEntriesMonthOffset===0?-1:0;
+ const lbl=document.getElementById('fare-day-entries-label');
+ const btn=document.getElementById('fare-day-entries-toggle');
+ if(lbl)lbl.textContent=fareDayEntriesMonthOffset===0?'今月':'先月';
+ if(btn)btn.textContent=fareDayEntriesMonthOffset===0?'📅 先月の記録を見る':'📅 今月の記録に戻る';
+ renderFareDayEntries();
+}
 function renderFareDayEntries(){
  const el=document.getElementById('fare-day-entries-list');
  if(!el)return;
- const days=getMonthFareDays().sort((a,b)=>b.ts-a.ts);
- if(!days.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">今月の記録はありません</div>';return;}
+ const days=getMonthFareDays(fareDayEntriesMonthOffset).sort((a,b)=>b.ts-a.ts);
+ const monthLabel=fareDayEntriesMonthOffset===0?'今月':'先月';
+ if(!days.length){el.innerHTML=`<div style="font-size:12px;color:var(--muted);padding:6px 0">${monthLabel}の記録はありません</div>`;return;}
  el.innerHTML=days.map(d=>{
   const rangeStr=d.tsRange
    ?` <span style="color:var(--muted)">(🟢${new Date(d.tsRange.start).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}→🔴${new Date(d.tsRange.end).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})})</span>`
@@ -4429,7 +4452,7 @@ function renderFareDayEntries(){
 // その勤務（またはその日）の売上（税込・合算）を編集する。対象範囲の既存エントリを
 // すべて1件にまとめ直すことで、個々の乗車記録の内訳ではなく合計として上書きする
 function editFareDayEntry(ts){
- const g=getMonthFareDays().find(d=>d.ts===ts);
+ const g=getMonthFareDays(fareDayEntriesMonthOffset).find(d=>d.ts===ts);
  if(!g)return;
  // 表示（税抜）に合わせて、入力も税抜で受け付ける。保存はfare=税込という
  // 他の集計箇所との前提を崩さないよう、入力値を税込に変換してから保存する
@@ -4450,7 +4473,7 @@ function editFareDayEntry(ts){
  pushTeamSales();
 }
 function deleteFareDayEntry(ts){
- const g=getMonthFareDays().find(d=>d.ts===ts);
+ const g=getMonthFareDays(fareDayEntriesMonthOffset).find(d=>d.ts===ts);
  if(!g)return;
  if(!confirm(g.dateStr+' の売上記録を削除しますか？'))return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
