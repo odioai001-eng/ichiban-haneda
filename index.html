@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-16 -->
+<!-- v20260902-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-16';
+const APP_BUILD='20260902-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1928,6 +1928,12 @@ function toggleDuty(){
     setTimeout(()=>document.getElementById('duty-car-num').focus(),200);
     return;
   }
+  // 「退勤する」ボタンは常時画面上部に表示されており、運転中の誤タップ等で
+  // 押してしまうと、この後のendDutyImmediate()で即座に退勤扱いになってしまう
+  // （夜勤の途中でうっかり押してしまい、その後も運転を続けていても後半の
+  // 記録が一切残らなかったという報告があったため、実際に退勤する意思を
+  // ここで確認する）
+  if(!confirm('退勤しますか？\n（誤ってタップした場合は「キャンセル」を押してください）'))return;
   // 退勤処理：仲間の地図・仲間リストから自分のアイコンを消す処理は、
   // 退勤時刻の確認モーダルを表示するより前に、このボタンを押した瞬間に
   // 即座に行う。モーダルでの確認・記録処理を待たせて消えるまでに間が
