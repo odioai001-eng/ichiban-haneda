@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-9 -->
+<!-- v20260901-10 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-9';
+const APP_BUILD='20260901-10';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4994,15 +4994,24 @@ function renderSalesStats(){
  // 前月までの繰越額は、実際に使い始める前の実績を補うためのものなので、
  // 今月を見ている時だけ合算する（過去の月を遡って見る時には含めない）
  const carry=salesStatsMonthOffset===0?getCarryover():{fare:0,days:0};
- const monthRef=getEffectiveMonthRefDate();
- const monthStart=new Date(monthRef.getFullYear(),monthRef.getMonth()+salesStatsMonthOffset,1).getTime();
- const monthEnd=new Date(monthRef.getFullYear(),monthRef.getMonth()+salesStatsMonthOffset+1,1).getTime();
  const todayEntries=getTodayShiftFareEntries();
- const monthEntries=log.filter(e=>e.ts>=monthStart&&e.ts<monthEnd);
  const sum=(arr,key)=>arr.reduce((a,e)=>a+(e[key]||0),0);
  // 運賃(fare)は税込み入力なので税抜きに変換して合計する。高速代(toll)・繰越(carry.fare、
  // 既に税抜きで入力済み)はそのまま
  const sumFareExTax=(arr)=>arr.reduce((a,e)=>a+exTax(e.fare||0),0);
+ // 「今月の売上」は、以前は暦のtsの範囲(monthStart〜monthEnd)でtaxi_fare_logを
+ // 直接絞り込んでいたが、これだと月をまたぐシフト（例: 8/31の夜勤）の日付変更後の
+ // 記録が漏れて実際より少なく表示されてしまっていた。日ごとの売上一覧
+ // （getMonthFareDays、シフト単位で正しく集計済み）の合計を使うようにし、
+ // 出勤中でまだgetMonthFareDaysに含まれていない今回のシフトの分はtodayEntriesを
+ // 別途足し合わせる（今月表示中のみ。前月以前を見ている時は含めない）
+ const monthDays=getMonthFareDays(salesStatsMonthOffset);
+ let monthFareExTax=monthDays.reduce((a,d)=>a+exTax(d.fare),0);
+ let monthToll=monthDays.reduce((a,d)=>a+(d.toll||0),0);
+ if(salesStatsMonthOffset===0&&isDuty&&dutyStart){
+  monthFareExTax+=sumFareExTax(todayEntries);
+  monthToll+=sum(todayEntries,'toll');
+ }
  const monthLabel=salesStatsMonthLabel(salesStatsMonthOffset);
  out.innerHTML=`
   <div class="row2"><span class="rl">本日の売上（税抜）</span><span class="rv" style="color:var(--green)">¥${sumFareExTax(todayEntries).toLocaleString()}</span></div>
@@ -5012,8 +5021,8 @@ function renderSalesStats(){
    <span style="font-size:13px;font-weight:700;min-width:80px;text-align:center">${monthLabel}</span>
    <button class="btn btn-g" onclick="changeSalesStatsMonth(1)" id="sales-stats-next-btn" style="font-size:11px;padding:5px 10px" ${salesStatsMonthOffset>=0?'disabled':''}>次月 ▶</button>
   </div>
-  <div class="row2"><span class="rl">${monthLabel}の売上（税抜${salesStatsMonthOffset===0?'・繰越込み':''}）</span><span class="rv" style="color:var(--green)">¥${(sumFareExTax(monthEntries)+carry.fare).toLocaleString()}</span></div>
-  <div class="row2"><span class="rl">${monthLabel}の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(monthEntries,'toll').toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">${monthLabel}の売上（税抜${salesStatsMonthOffset===0?'・繰越込み':''}）</span><span class="rv" style="color:var(--green)">¥${(monthFareExTax+carry.fare).toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">${monthLabel}の自腹高速代</span><span class="rv" style="color:var(--red)">¥${monthToll.toLocaleString()}</span></div>
  `;
  renderFareEntries();
  renderManualFareEntries();
