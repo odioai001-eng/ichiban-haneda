@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-2 -->
+<!-- v20260902-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-2';
+const APP_BUILD='20260902-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4437,6 +4437,9 @@ function editShiftEntry(startTs){
  localStorage.setItem('taxi_shift_log',JSON.stringify(log));
  toast('✅ 記録を更新しました');
  renderWorkStats();
+ // 売上管理側の一覧もこのシフトの時刻範囲を元に組み立てているため、
+ // ここで更新しないと勤務時間管理とは別の古い表示のまま残ってしまう
+ renderSalesStats();
 }
 
 function deleteShiftEntry(startTs){
@@ -4446,6 +4449,7 @@ function deleteShiftEntry(startTs){
  localStorage.setItem('taxi_shift_log',JSON.stringify(log));
  toast('🗑 記録を削除しました');
  renderWorkStats();
+ renderSalesStats();
 }
 
 // 「勤務時間管理」と同じ形式（1回の勤務ごとに1行・編集/削除できる）で売上を確認
@@ -4476,7 +4480,13 @@ function getMonthFareDays(offset){
    ts:s.startTs,
    tsRange:{start:s.startTs,end:s.endTs}
   };
- }).filter(g=>g.fare||g.toll);
+ });
+ // 以前は売上・高速代とも0円のシフトはここで一覧から除外していたが、そうすると
+ // 何らかの理由でそのシフトに紐づく運賃記録が無くなってしまった場合（削除等）に、
+ // 正しい行を「編集」する方法が無くなり、日付・時刻の紐付かない「売上の手動記録」
+ // で代用するしかなくなってしまっていた（本日の売上ランキング等、シフトの
+ // 期間で厳密に絞り込む集計に反映されない別問題を引き起こす）。0円でも
+ // シフトの行自体は常に表示し、そこから直接編集できるようにする
  // 出勤中でまだ退勤していない今回のシフトは、退勤するまでtaxi_shift_logに
  // 記録が無いため上のgroupsには含まれない。この状態でそのシフト中の記録を
  // 下のbyDateに混ぜてしまうと、日付をまたいだ夜勤の記録が暦日で分断されて
