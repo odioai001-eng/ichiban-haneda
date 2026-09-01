@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-14 -->
+<!-- v20260901-15 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -320,14 +320,15 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <!-- 国際線2列移動の間隔ログ（国際線チップの真下、右寄せ） -->
     <div id="intl-move-log" style="display:none;font-size:10px;color:var(--cyan);text-align:right;margin-top:3px;word-break:break-all"></div>
-    <!-- Row 4: 各乗り場の列移動間隔（前回の移動から何分で移動したか。1号〜4号を上から時系列で表記） -->
-    <div id="pool-info-row" style="display:flex;flex-direction:column;gap:4px;width:100%;
+    <!-- Row 4: 各乗り場の列移動間隔（前回の移動から何分で移動したか。1号・3号を上段、2号・4号を下段の2行2列で表記。
+         内容が入りきらない場合は折り返さず、そのセルだけ横スクロールできるようにする -->
+    <div id="pool-info-row" style="display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:3px;width:100%;
       background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
-      border-radius:8px;padding:6px 10px;box-sizing:border-box">
-      <div id="pool-info-1号" class="pool-info-cell" style="text-align:left;font-size:11px;word-break:break-all">1号 −</div>
-      <div id="pool-info-2号" class="pool-info-cell" style="text-align:left;font-size:11px;word-break:break-all">2号 −</div>
-      <div id="pool-info-3号" class="pool-info-cell" style="text-align:left;font-size:11px;word-break:break-all">3号 −</div>
-      <div id="pool-info-4号" class="pool-info-cell" style="text-align:left;font-size:11px;word-break:break-all">4号 −</div>
+      border-radius:8px;padding:4px 6px;box-sizing:border-box">
+      <div id="pool-info-1号" class="pool-info-cell" style="text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">1号 −</div>
+      <div id="pool-info-3号" class="pool-info-cell" style="text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">3号 −</div>
+      <div id="pool-info-2号" class="pool-info-cell" style="text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">2号 −</div>
+      <div id="pool-info-4号" class="pool-info-cell" style="text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">4号 −</div>
     </div>
     <!-- Row 5: 入力開始時間（共通） -->
     <div id="pool-start-row" style="display:flex;align-items:center;gap:8px;width:100%;
@@ -1046,7 +1047,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-14';
+const APP_BUILD='20260901-15';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6113,7 +6114,7 @@ function renderPoolChart(){
   const show=(lastAll&&now-lastAll<=LIMIT)||progressAll;
   const row=document.getElementById('pool-info-row');
   const startRow=document.getElementById('pool-start-row');
-  if(row)row.style.display=show?'flex':'none';
+  if(row)row.style.display=show?'grid':'none';
   if(startRow)startRow.style.display=show?'flex':'none';
   if(!show)return;
   // 4つの乗り場のうち、一番新しい最終入力時刻から10分以上経過していたら、まとめてリセットする
