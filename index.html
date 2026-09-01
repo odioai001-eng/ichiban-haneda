@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-12 -->
+<!-- v20260901-13 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-12';
+const APP_BUILD='20260901-13';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2847,6 +2847,14 @@ function connectFirebase(config){
 
 function pushMyPosition(gpsWeak=false){
   if(!db||!isDuty||myLat===null||testMode)return;
+  // モバイルブラウザは、バックグラウンドに回ったタブ・PWAのインスタンスを完全に
+  // 終了させず一時停止するだけのことがある。その状態で別のタブ・起動から退勤する
+  // と、退勤処理を行っていない方の（メモリ上のisDutyがtrueのまま固まった）
+  // 古いインスタンスが後から目を覚まし、位置情報を送信し続けて退勤済みの
+  // アカウントが仲間の地図にオンラインのまま残ってしまうことがあった。
+  // メモリ上のisDutyだけでなく、退勤時に必ず削除される永続化状態
+  // （taxi_runtime_state）も毎回確認し、実際には既に退勤済みであれば送信しない
+  if(!localStorage.getItem('taxi_runtime_state'))return;
   const name=localStorage.getItem('taxi_name')||'自分';
   db.ref('drivers/'+myId).update({
     name,lat:myLat,lng:myLng,status:currentStatus,
