@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-16 -->
+<!-- v20260902-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-16';
+const APP_BUILD='20260902-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2005,8 +2005,48 @@ function endDutyImmediate(){
   }
 }
 
+// これまでこのモーダルの「キャンセル」は、モーダルを閉じるだけで
+// endDutyImmediate()による退勤処理（isDuty=false化・GPS停止・Firebase上の
+// 自分のレコード削除・taxi_shift_logへの暫定退勤記録の追加）を一切
+// 取り消していなかった。そのため「退勤する」ボタンの誤タップに気づいて
+// キャンセルを押しても、実際にはすでに退勤扱いのまま乗務を続けることになり、
+// 誤タップした時刻でその日の記録が途切れてしまっていた（夜勤の後半が
+// 一切記録されない不具合の直接の原因）。ここでendDutyImmediate()の内容を
+// きちんと巻き戻すようにする
 function cancelEndDuty(){
   document.getElementById('duty-end-confirm-modal').style.display='none';
+  if(isDuty||!dutyStart)return; // 既に乗務中、または出勤情報が無ければ何もしない
+  isDuty=true;
+  try{
+    const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+    const idx=shiftLog.findIndex(s=>s.startTs===dutyStart.getTime());
+    if(idx>=0){shiftLog.splice(idx,1);localStorage.setItem('taxi_shift_log',JSON.stringify(shiftLog));}
+  }catch(e){console.error('退勤キャンセル時の暫定シフト記録の取り消しに失敗しました',e);}
+  const btn=document.getElementById('duty-btn');
+  const lbl=document.getElementById('duty-label');
+  const offline=document.getElementById('map-offline');
+  if(btn){btn.textContent='退勤する';btn.className='duty-btn on';}
+  if(lbl)lbl.textContent=testMode?'乗務中（テスト）':'乗務中';
+  if(offline)offline.classList.remove('show');
+  startGPS();
+  if(dutyInterval)clearInterval(dutyInterval);
+  dutyInterval=setInterval(()=>{
+    if(!dutyStart)return;
+    const s=Math.floor((Date.now()-dutyStart)/1000);
+    document.getElementById('duty-elapsed').textContent=toHMS(s);
+  },1000);
+  // 待機中だった場合は待機タイマーも再開する
+  if(waitStart&&!waitInterval){
+    waitInterval=setInterval(()=>{
+      waitSec=Math.floor((Date.now()-waitStart)/1000);
+      const t=toHMS(waitSec);
+      const wtEl=document.getElementById('wait-timer');if(wtEl)wtEl.textContent=t;
+      const mtEl=document.getElementById('map-wait-timer');if(mtEl)mtEl.textContent=t;
+    },1000);
+  }
+  saveAppState();
+  if(db&&!testMode)db.ref('drivers/'+myId).onDisconnect().remove();
+  toast('✅ 退勤をキャンセルしました。乗務を継続します');
 }
 
 function confirmEndDuty(){
