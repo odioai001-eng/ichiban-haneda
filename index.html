@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260826-23 -->
+<!-- v20260901-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -603,6 +603,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">出勤時の車番入力・決済端末確認をスキップして、動作確認用にすぐ乗務中の状態にします。GPSや待機タイマーなど、乗務中でないと動かない機能を出勤ボタンを押さずに一通り確認できます。</div>
       <button class="btn btn-p" onclick="adminForceStartDuty()" style="width:100%" id="admin-test-duty-btn">🧪 出勤処理をスキップして乗務中にする</button>
     </div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">「自分の乗務記録CSV保存」モーダルは、通常は月末の退勤時にしか自動で表示されません。日付に関わらず動作確認できるよう、ここから手動で表示できます。</div>
+      <button class="btn btn-g" onclick="checkMonthEndOwnRecordCsv(true)" style="width:100%">🧪 乗務記録CSVモーダルをテスト表示</button>
+    </div>
     <div class="sec">🔑 PINの変更</div>
     <div class="card">
       <label>新しいPIN（数字4〜8桁）</label>
@@ -1042,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260826-23';
+const APP_BUILD='20260901-2';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1924,10 +1928,16 @@ function endDutyImmediate(){
     // 地図のピン・仲間リストはどちらもtsの新しさだけを見て「乗務中か」を
     // 判定しているため、ts:0への更新さえ通れば確実に非表示になる
     myRef.update({ts:0}).catch(e=>console.error('退勤時のFirebase更新(ts)に失敗しました',e));
-    myRef.remove().catch(e=>console.error('退勤時のFirebaseレコード削除に失敗しました',e));
-    // 出勤中に予約したonDisconnect（切断時の自動削除）は、自分で明示的に
-    // 削除した後は不要なので解除しておく
-    myRef.onDisconnect().cancel();
+    myRef.remove()
+      .then(()=>{
+        // 出勤中に予約したonDisconnect（切断時の自動削除）は、自分で明示的に
+        // 削除できた後は不要なので解除する。remove()より先に解除してしまうと、
+        // アプリを閉じるタイミング次第ではremove()・onDisconnectのどちらも
+        // 間に合わず、レコードがPEER_ALIVE_MS（5分）の安全策が効くまで
+        // 仲間の画面に残ってしまうことがあったため、削除の成功を確認してから解除する
+        myRef.onDisconnect().cancel();
+      })
+      .catch(e=>console.error('退勤時のFirebaseレコード削除に失敗しました',e));
   }
   stopGPS();myLat=null;myLng=null;
   if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
@@ -2123,11 +2133,13 @@ function buildMyMonthlyRecordCsv(){
 }
 // 月末の退勤時に、まだ今月分の自分の記録CSVを保存していなければ自動で表示する
 // （team_configの共有フラグとは別に、端末ローカルのフラグで本人ごとに1回だけ表示する）
-function checkMonthEndOwnRecordCsv(){
-  if(!isLastDayOfMonth(new Date()))return;
-  const monthKey=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'});
-  if(localStorage.getItem('taxi_last_own_csv_month')===monthKey)return;
-  localStorage.setItem('taxi_last_own_csv_month',monthKey);
+function checkMonthEndOwnRecordCsv(force){
+  if(!force){
+    if(!isLastDayOfMonth(new Date()))return;
+    const monthKey=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'});
+    if(localStorage.getItem('taxi_last_own_csv_month')===monthKey)return;
+    localStorage.setItem('taxi_last_own_csv_month',monthKey);
+  }
   const {csv,monthStr}=buildMyMonthlyRecordCsv();
   const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
   if(pendingMyRecordCsvBlobUrl)URL.revokeObjectURL(pendingMyRecordCsvBlobUrl);
