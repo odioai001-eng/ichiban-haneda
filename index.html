@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-8 -->
+<!-- v20260901-9 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-8';
+const APP_BUILD='20260901-9';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2016,8 +2016,15 @@ function confirmEndDuty(){
   let endTs=Date.now();
   if(timeVal&&dutyStart){
     const [eh,em]=timeVal.split(':').map(Number);
-    const baseNow=new Date();
-    let endDate=new Date(baseNow.getFullYear(),baseNow.getMonth(),baseNow.getDate(),eh,em,0);
+    // 日付の基準は、このモーダルを確定した「今」ではなく、「退勤する」ボタンを
+    // 押した時点（endDutyImmediateで記録済みの暫定endTs）にする。モーダルを
+    // 開いたまま日付が変わってから確定すると、new Date()（確定操作を行った
+    // 今の時刻）の日付を使ってしまい、実際の退勤日とはズレた日付の時刻になり、
+    // 送り先一覧で本来「本日分」に入るはずの記録が「過去」に追いやられてしまっていた
+    const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+    const provisional=shiftLog.find(s=>s.startTs===dutyStart.getTime());
+    const baseDate=provisional?new Date(provisional.endTs):new Date();
+    let endDate=new Date(baseDate.getFullYear(),baseDate.getMonth(),baseDate.getDate(),eh,em,0);
     // 指定時刻が出勤時刻より前になってしまう場合は、日をまたぐ夜勤とみなして翌日扱いにする
     if(endDate.getTime()<dutyStart.getTime()){
       endDate=new Date(endDate.getTime()+24*3600*1000);
