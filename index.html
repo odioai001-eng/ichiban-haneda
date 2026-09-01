@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-5 -->
+<!-- v20260901-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1047,7 +1047,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-5';
+const APP_BUILD='20260901-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4410,6 +4410,15 @@ function getMonthFareDays(offset){
    tsRange:{start:s.startTs,end:s.endTs}
   };
  }).filter(g=>g.fare||g.toll);
+ // 出勤中でまだ退勤していない今回のシフトは、退勤するまでtaxi_shift_logに
+ // 記録が無いため上のgroupsには含まれない。この状態でそのシフト中の記録を
+ // 下のbyDateに混ぜてしまうと、日付をまたいだ夜勤の記録が暦日で分断されて
+ // 前日・翌日それぞれの列に別々に表示されてしまう（例: 8/31の夜勤中に日付が
+ // 9/1に変わると、9/1扱いの記録が発生してしまう）。退勤して本来のシフト
+ // 期間で1本にまとまるまでは、ここでは除外する（「本日の売上」に別途表示される）
+ if(isDuty&&dutyStart){
+  log.filter(e=>(e.ts||0)>=dutyStart.getTime()).forEach(e=>used.add(e));
+ }
  const byDate={};
  // どの勤務にも属さない記録だけ、月の範囲で絞り込んでdateStrでまとめる
  log.filter(e=>(e.ts||0)>=monthStart&&(e.ts||0)<monthEnd&&!used.has(e)).forEach(e=>{
