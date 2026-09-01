@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-13 -->
+<!-- v20260901-14 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -333,7 +333,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="pool-start-row" style="display:flex;align-items:center;gap:8px;width:100%;
       background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
       border-radius:8px;padding:5px 10px;box-sizing:border-box">
-      <div style="font-size:10px;font-weight:700;color:var(--muted);line-height:1.3;white-space:nowrap">入力者の<br>入力開始時間→</div>
+      <div style="font-size:10px;font-weight:700;color:var(--muted);line-height:1.3;white-space:nowrap">プールへの<br>到着時間→</div>
       <div id="pool-start-time" style="font-size:14px;font-weight:800;color:var(--gold);white-space:nowrap">−</div>
     </div>
   </div>
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-13';
+const APP_BUILD='20260901-14';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6134,7 +6134,7 @@ function renderPoolChart(){
   const startEl=document.getElementById('pool-start-time');
   if(startEl){
     startEl.textContent=sharedStartTs
-      ?`${new Date(sharedStartTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}入力開始`
+      ?new Date(sharedStartTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
       :'−';
   }
 }
@@ -6229,12 +6229,17 @@ function recordProgress(spot,amount){
   }
   const name=localStorage.getItem('taxi_name')||'自分';
   const ref=db.ref('pool_progress/'+spot);
+  // 新規セッションの「入力開始時間」は、ボタンを押した時刻(now)ではなく、
+  // 実際にプールへGPSで到着した時刻(cpArriveTs['haneda'])を使う。ボタンを
+  // 押すタイミングは到着から遅れることがあり、押した時刻を使うと実際の
+  // 待機開始より遅い時刻になってしまうため（到着時刻が取れない場合はnowにする）
+  const arriveTs=cpArriveTs['haneda']||now;
   // 20分の無操作による期限切れリセットは、別途renderPoolChart経由の
   // cleanupExpiredProgressIfNeededが該当ノードを削除する形で行うため、ここでは
   // 常に「今あるcountに加算」するだけでよい。以前はここでも独自に期限切れ判定を
   // 行っていたが、その判定に使うcurが常に最新とは限らず、連続で押すたびに
   // 加算されず毎回amountで上書きされてしまう不具合があったため削除した
-  ref.transaction(cur=>({count:(cur&&cur.count?cur.count:0)+amount,ts:now,startTs:(cur&&cur.startTs)||now,lastBy:name}));
+  ref.transaction(cur=>({count:(cur&&cur.count?cur.count:0)+amount,ts:now,startTs:(cur&&cur.startTs)||arriveTs,lastBy:name}));
   // 履歴にも「+1」「+2」として記録
   const movesRef=db.ref('pool_moves').push({spot,lane:'+'+amount,ts:now,uid:myId,name});
   myLastAction={type:'progress',spot,amount,movesKey:movesRef.key,ts:now};
