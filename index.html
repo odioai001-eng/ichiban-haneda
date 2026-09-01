@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-11 -->
+<!-- v20260901-12 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-11';
+const APP_BUILD='20260901-12';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4283,7 +4283,15 @@ function renderWorkStats(){
  const shifts=getMonthShifts();
  const workedDays=shifts.length+carry.days;
  const workedSec=shifts.reduce((a,s)=>a+(s.durationSec||0),0);
- const workedHours=workedSec/3600+carryHoursWithBonus;
+ let workedHours=workedSec/3600+carryHoursWithBonus;
+ // 出勤中はまだtaxi_shift_logに記録が無く（退勤して確定するまで記録されない）、
+ // 上のshiftsに含まれない。地図画面の「本日の出勤時間」等は出勤中の今回の
+ // シフトを反映しているのに、こちらの「今月の実績」は0のままになってしまい
+ // 食い違って見えていたため、出勤中は今回のシフトの経過時間も加算しておく
+ // （出勤日数のカウントは、退勤して1日分として確定するまでは従来通り増やさない）
+ if(isDuty&&dutyStart){
+  workedHours+=(Date.now()-dutyStart.getTime())/3600000;
+ }
  const remainDays=Math.max(targetDays-workedDays,0);
  const remainHoursGap=Math.max(MONTHLY_TARGET_HOURS-workedHours,0);
  let perDayStr='-';
