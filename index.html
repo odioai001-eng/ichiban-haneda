@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-10 -->
+<!-- v20260901-11 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-10';
+const APP_BUILD='20260901-11';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2698,6 +2698,11 @@ function connectFirebase(config){
       const txt=document.getElementById('conn-txt');
       if(conn){
         dot.style.background='var(--green)';txt.textContent='接続中 ✓';toast('📡 Firebase接続成功');loadCPsFromFirebase();checkApprovalOnConnect();
+        // 退勤中は出勤中のような定期送信(60秒おき)が無いため、月が変わった後も
+        // アプリを開き直すだけでは今月のランキング（team_sales）が古い月の
+        // 値のまま取り残されてしまっていた。接続確立のたびに一度同期しておく
+        // ことで、開き直しただけでも最新の月に更新されるようにする
+        pushTeamSales();
         // ブラウザのタブを閉じる・通信が切れる・アプリが強制終了される等で、
         // 退勤ボタンを押さないまま接続が切れると、こちらからのremove()が
         // 間に合わず仲間の地図にアイコンが残り続けてしまう。onDisconnectで
