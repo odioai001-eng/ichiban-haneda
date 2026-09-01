@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-15 -->
+<!-- v20260901-16 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -318,17 +318,16 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
     </div>
-    <!-- 国際線2列移動の間隔ログ（国際線チップの真下、右寄せ） -->
-    <div id="intl-move-log" style="display:none;font-size:10px;color:var(--cyan);text-align:right;margin-top:3px;word-break:break-all"></div>
-    <!-- Row 4: 各乗り場の列移動間隔（前回の移動から何分で移動したか。1号・3号を上段、2号・4号を下段の2行2列で表記。
-         内容が入りきらない場合は折り返さず、そのセルだけ横スクロールできるようにする -->
-    <div id="pool-info-row" style="display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:3px;width:100%;
+    <!-- Row 4: 各乗り場の列移動間隔（前回の移動から何分で移動したか。1号・3号を上段、2号・4号を下段の2行2列、
+         国際線はその下に全幅で表記。内容が入りきらない場合は折り返さず、そのセルだけ横スクロールできるようにする -->
+    <div id="pool-info-row" style="display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr) auto;gap:3px;width:100%;
       background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
       border-radius:8px;padding:4px 6px;box-sizing:border-box">
       <div id="pool-info-1号" class="pool-info-cell" style="text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">1号 −</div>
       <div id="pool-info-3号" class="pool-info-cell" style="text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">3号 −</div>
       <div id="pool-info-2号" class="pool-info-cell" style="text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">2号 −</div>
       <div id="pool-info-4号" class="pool-info-cell" style="text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">4号 −</div>
+      <div id="pool-info-国際線" class="pool-info-cell" style="grid-column:1 / span 2;text-align:left;font-size:9px;padding:2px 4px;overflow-x:auto;white-space:nowrap">国際線 −</div>
     </div>
     <!-- Row 5: 入力開始時間（共通） -->
     <div id="pool-start-row" style="display:flex;align-items:center;gap:8px;width:100%;
@@ -1047,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-15';
+const APP_BUILD='20260901-16';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6110,8 +6109,9 @@ function renderPoolChart(){
   const now=Date.now();
   const LIMIT=PROGRESS_TIMEOUT_MS; // 表示可否の判定も、データのリセット時間(20分)と揃える
   const lastAll=poolMoves.length?poolMoves[poolMoves.length-1].ts:0;
+  const lastIntl=intlPoolMoves.length?intlPoolMoves[intlPoolMoves.length-1].ts:0;
   const progressAll=Object.values(poolProgress).some(p=>p&&now-(p.ts||0)<=LIMIT);
-  const show=(lastAll&&now-lastAll<=LIMIT)||progressAll;
+  const show=(lastAll&&now-lastAll<=LIMIT)||(lastIntl&&now-lastIntl<=LIMIT)||progressAll;
   const row=document.getElementById('pool-info-row');
   const startRow=document.getElementById('pool-start-row');
   if(row)row.style.display=show?'grid':'none';
@@ -6138,6 +6138,7 @@ function renderPoolChart(){
       ?new Date(sharedStartTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
       :'−';
   }
+  renderIntlMoveLog();
 }
 
 function renderPoolButtons(){
@@ -6262,18 +6263,18 @@ function recordIntlPoolMove(){
   db.ref('intl_pool_moves').push({ts:Date.now(),uid:myId,name});
   toast('✈️ 国際線 2列移動を記録しました');
 }
+// 国際線も1号〜4号と同じ形式（「spot 間隔、間隔、…」）で表示する
 function renderIntlMoveLog(){
-  const el=document.getElementById('intl-move-log');
+  const el=document.getElementById('pool-info-国際線');
   if(!el)return;
   const todayStr=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
   const today=intlPoolMoves
     .filter(m=>new Date(m.ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'})===todayStr)
     .sort((a,b)=>a.ts-b.ts);
-  if(today.length<2){el.style.display='none';el.textContent='';return;}
+  if(today.length<2){el.textContent='国際線 −';return;}
   const intervals=[];
   for(let i=1;i<today.length;i++)intervals.push(Math.max(0,Math.round((today[i].ts-today[i-1].ts)/60000)));
-  el.style.display='block';
-  el.textContent='国際線2列移動の間隔: '+intervals.map(v=>v+'分').join('、');
+  el.textContent='国際線 '+intervals.join('、');
 }
 // 1号〜4号乗り場も国際線と同様、押した回数の累計（旧「N列」表示）ではなく、
 // その乗り場で前回押してから何分で押したか（＝前回の移動から何分で移動したか）を
