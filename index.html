@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260901-4 -->
+<!-- v20260901-5 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -577,11 +577,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
   <div class="sec">💰 売上管理（税抜）</div>
   <div class="card">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。</div>
-   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <span id="fare-day-entries-label" style="font-size:13px;font-weight:700">今月</span>
-    <button class="btn btn-g" onclick="toggleFareDayEntriesMonth()" id="fare-day-entries-toggle" style="font-size:11px;padding:5px 10px">📅 先月の記録を見る</button>
-   </div>
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。表示する月は、下の「💰 売上管理」欄の「◀ 前月 / 次月 ▶」で切り替えられます。</div>
+   <div style="margin-bottom:8px"><span id="fare-day-entries-label" style="font-size:13px;font-weight:700">今月</span></div>
    <div id="fare-day-entries-list"></div>
   </div>
   <div id="admin-lock-area">
@@ -1050,7 +1047,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260901-4';
+const APP_BUILD='20260901-5';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4235,9 +4232,12 @@ setInterval(()=>{
 // 月を基準にし、退勤直後（12時間以内）は直近の出退勤の開始月を基準にする。
 // 月末に日をまたぐ夜勤の途中でnow()の月が切り替わってしまうと、出勤〜退勤で
 // 1つの単位であるはずの売上・出勤日数が、月の変わり目でその場から今月の
-// 集計（今月の売り上げランキング等）から丸ごと抜け落ちてしまうため
+// 集計（今月の売り上げランキング等）から丸ごと抜け落ちてしまうため。
+// ただし退勤を押し忘れたまま出勤中の状態がいつまでも続いてしまっている場合、
+// dutyStartをそのまま使うと「今月」がいつまでも古い月のまま固定されてしまう。
+// この場合はgetEffectiveShiftStartと同様、直近の午前9時を基準にリセットする
 function getEffectiveMonthRefDate(){
- if(isDuty&&dutyStart)return dutyStart;
+ if(isDuty&&dutyStart)return new Date(getEffectiveShiftStart(dutyStart.getTime()));
  const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
  const lastShift=shiftLog.length?shiftLog.reduce((a,b)=>(!a||b.endTs>a.endTs)?b:a,null):null;
  if(lastShift&&(Date.now()-lastShift.endTs)<12*3600*1000)return new Date(lastShift.startTs);
@@ -4393,11 +4393,14 @@ function getMonthFareDays(offset){
  const ref=getEffectiveMonthRefDate();
  const monthStart=new Date(ref.getFullYear(),ref.getMonth()+offset,1).getTime();
  const monthEnd=new Date(ref.getFullYear(),ref.getMonth()+offset+1,1).getTime();
- const monthEntries=log.filter(e=>(e.ts||0)>=monthStart&&(e.ts||0)<monthEnd);
  const shifts=getMonthShifts(offset).filter(s=>s.endTs);
  const used=new Set();
  const groups=shifts.map(s=>{
-  const inShift=monthEntries.filter(e=>(e.ts||0)>=s.startTs&&(e.ts||0)<=s.endTs);
+  // シフトに属する記録は、月の範囲ではなくシフト自体の期間(startTs〜endTs)で
+  // 絞り込む。月の範囲で先に絞り込むと、月をまたいだシフトの日付変更後
+  // （例: 8/31の夜勤で日付が変わった後）の記録が漏れて売上が少なく
+  // 表示されてしまうため
+  const inShift=log.filter(e=>(e.ts||0)>=s.startTs&&(e.ts||0)<=s.endTs);
   inShift.forEach(e=>used.add(e));
   return {
    dateStr:s.dateStr,
@@ -4408,7 +4411,8 @@ function getMonthFareDays(offset){
   };
  }).filter(g=>g.fare||g.toll);
  const byDate={};
- monthEntries.filter(e=>!used.has(e)).forEach(e=>{
+ // どの勤務にも属さない記録だけ、月の範囲で絞り込んでdateStrでまとめる
+ log.filter(e=>(e.ts||0)>=monthStart&&(e.ts||0)<monthEnd&&!used.has(e)).forEach(e=>{
   const key=e.dateStr;
   if(!byDate[key])byDate[key]={dateStr:key,fare:0,toll:0,ts:e.ts||0,tsRange:null};
   byDate[key].fare+=(e.fare||0);
@@ -4417,20 +4421,28 @@ function getMonthFareDays(offset){
  });
  return groups.concat(Object.values(byDate));
 }
-let fareDayEntriesMonthOffset=0; // 0=今月, -1=先月
-function toggleFareDayEntriesMonth(){
- fareDayEntriesMonthOffset=fareDayEntriesMonthOffset===0?-1:0;
- const lbl=document.getElementById('fare-day-entries-label');
- const btn=document.getElementById('fare-day-entries-toggle');
- if(lbl)lbl.textContent=fareDayEntriesMonthOffset===0?'今月':'先月';
- if(btn)btn.textContent=fareDayEntriesMonthOffset===0?'📅 先月の記録を見る':'📅 今月の記録に戻る';
- renderFareDayEntries();
+let salesStatsMonthOffset=0; // 0=今月、負の数で過去の月（-1=先月、-2=先々月...）
+// 過去の月はいつでも遡って見られる（保存されているデータがある限り上限なし）。
+// 未来の月は存在しないため0（今月）より先には進めない
+function changeSalesStatsMonth(delta){
+ const next=salesStatsMonthOffset+delta;
+ if(next>0)return;
+ salesStatsMonthOffset=next;
+ renderSalesStats();
+}
+function salesStatsMonthLabel(offset){
+ if(offset===0)return '今月';
+ const ref=getEffectiveMonthRefDate();
+ const d=new Date(ref.getFullYear(),ref.getMonth()+offset,1);
+ return `${d.getFullYear()}年${d.getMonth()+1}月`;
 }
 function renderFareDayEntries(){
  const el=document.getElementById('fare-day-entries-list');
  if(!el)return;
- const days=getMonthFareDays(fareDayEntriesMonthOffset).sort((a,b)=>b.ts-a.ts);
- const monthLabel=fareDayEntriesMonthOffset===0?'今月':'先月';
+ const monthLabel=salesStatsMonthLabel(salesStatsMonthOffset);
+ const lbl=document.getElementById('fare-day-entries-label');
+ if(lbl)lbl.textContent=monthLabel;
+ const days=getMonthFareDays(salesStatsMonthOffset).sort((a,b)=>b.ts-a.ts);
  if(!days.length){el.innerHTML=`<div style="font-size:12px;color:var(--muted);padding:6px 0">${monthLabel}の記録はありません</div>`;return;}
  el.innerHTML=days.map(d=>{
   const rangeStr=d.tsRange
@@ -4452,7 +4464,7 @@ function renderFareDayEntries(){
 // その勤務（またはその日）の売上（税込・合算）を編集する。対象範囲の既存エントリを
 // すべて1件にまとめ直すことで、個々の乗車記録の内訳ではなく合計として上書きする
 function editFareDayEntry(ts){
- const g=getMonthFareDays(fareDayEntriesMonthOffset).find(d=>d.ts===ts);
+ const g=getMonthFareDays(salesStatsMonthOffset).find(d=>d.ts===ts);
  if(!g)return;
  // 表示（税抜）に合わせて、入力も税抜で受け付ける。保存はfare=税込という
  // 他の集計箇所との前提を崩さないよう、入力値を税込に変換してから保存する
@@ -4473,7 +4485,7 @@ function editFareDayEntry(ts){
  pushTeamSales();
 }
 function deleteFareDayEntry(ts){
- const g=getMonthFareDays(fareDayEntriesMonthOffset).find(d=>d.ts===ts);
+ const g=getMonthFareDays(salesStatsMonthOffset).find(d=>d.ts===ts);
  if(!g)return;
  if(!confirm(g.dateStr+' の売上記録を削除しますか？'))return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
@@ -4489,11 +4501,13 @@ function deleteFareDayEntry(ts){
 
 // 運賃の入力を忘れた日の売上を、日付を指定してあとからまとめて記録するための機能。
 // 個々の乗車記録には紐づかない（tripTs:null）1件のtaxi_fare_logエントリとして保存する
-function getMonthManualFares(){
+function getMonthManualFares(offset){
+ offset=offset||0;
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const ref=getEffectiveMonthRefDate();
- const monthStart=new Date(ref.getFullYear(),ref.getMonth(),1).getTime();
- return log.filter(e=>e.manual&&(e.ts||0)>=monthStart);
+ const monthStart=new Date(ref.getFullYear(),ref.getMonth()+offset,1).getTime();
+ const monthEnd=new Date(ref.getFullYear(),ref.getMonth()+offset+1,1).getTime();
+ return log.filter(e=>e.manual&&(e.ts||0)>=monthStart&&(e.ts||0)<monthEnd);
 }
 
 function saveManualFareEntry(){
@@ -4526,7 +4540,7 @@ function saveManualFareEntry(){
 function renderManualFareEntries(){
  const el=document.getElementById('manual-fare-entries-list');
  if(!el)return;
- const entries=getMonthManualFares().slice().sort((a,b)=>b.ts-a.ts);
+ const entries=getMonthManualFares(salesStatsMonthOffset).slice().sort((a,b)=>b.ts-a.ts);
  if(!entries.length){el.innerHTML='';return;}
  el.innerHTML=entries.map(e=>{
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -4962,20 +4976,29 @@ function renderSalesStats(){
  const out=document.getElementById('sales-stats-out');
  if(!out)return;
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
- const carry=getCarryover();
+ // 前月までの繰越額は、実際に使い始める前の実績を補うためのものなので、
+ // 今月を見ている時だけ合算する（過去の月を遡って見る時には含めない）
+ const carry=salesStatsMonthOffset===0?getCarryover():{fare:0,days:0};
  const monthRef=getEffectiveMonthRefDate();
- const monthStart=new Date(monthRef.getFullYear(),monthRef.getMonth(),1).getTime();
+ const monthStart=new Date(monthRef.getFullYear(),monthRef.getMonth()+salesStatsMonthOffset,1).getTime();
+ const monthEnd=new Date(monthRef.getFullYear(),monthRef.getMonth()+salesStatsMonthOffset+1,1).getTime();
  const todayEntries=getTodayShiftFareEntries();
- const monthEntries=log.filter(e=>e.ts>=monthStart);
+ const monthEntries=log.filter(e=>e.ts>=monthStart&&e.ts<monthEnd);
  const sum=(arr,key)=>arr.reduce((a,e)=>a+(e[key]||0),0);
  // 運賃(fare)は税込み入力なので税抜きに変換して合計する。高速代(toll)・繰越(carry.fare、
  // 既に税抜きで入力済み)はそのまま
  const sumFareExTax=(arr)=>arr.reduce((a,e)=>a+exTax(e.fare||0),0);
+ const monthLabel=salesStatsMonthLabel(salesStatsMonthOffset);
  out.innerHTML=`
   <div class="row2"><span class="rl">本日の売上（税抜）</span><span class="rv" style="color:var(--green)">¥${sumFareExTax(todayEntries).toLocaleString()}</span></div>
   <div class="row2"><span class="rl">本日の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(todayEntries,'toll').toLocaleString()}</span></div>
-  <div class="row2"><span class="rl">今月の売上（税抜・繰越込み）</span><span class="rv" style="color:var(--green)">¥${(sumFareExTax(monthEntries)+carry.fare).toLocaleString()}</span></div>
-  <div class="row2"><span class="rl">今月の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(monthEntries,'toll').toLocaleString()}</span></div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px">
+   <button class="btn btn-g" onclick="changeSalesStatsMonth(-1)" style="font-size:11px;padding:5px 10px">◀ 前月</button>
+   <span style="font-size:13px;font-weight:700;min-width:80px;text-align:center">${monthLabel}</span>
+   <button class="btn btn-g" onclick="changeSalesStatsMonth(1)" id="sales-stats-next-btn" style="font-size:11px;padding:5px 10px" ${salesStatsMonthOffset>=0?'disabled':''}>次月 ▶</button>
+  </div>
+  <div class="row2"><span class="rl">${monthLabel}の売上（税抜${salesStatsMonthOffset===0?'・繰越込み':''}）</span><span class="rv" style="color:var(--green)">¥${(sumFareExTax(monthEntries)+carry.fare).toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">${monthLabel}の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(monthEntries,'toll').toLocaleString()}</span></div>
  `;
  renderFareEntries();
  renderManualFareEntries();
