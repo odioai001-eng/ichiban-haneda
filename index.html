@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-5 -->
+<!-- v20260902-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-5';
+const APP_BUILD='20260902-6';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1292,6 +1292,14 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   // 9時の区切りをまたいだ瞬間に「本日の売り上げランキング（グループ）」から
   // 一時的に自分が消えてしまっていたため、乗務中は定期的にも送信し直す
   setInterval(()=>{if(isDuty)pushTeamSales();},60000);
+  // 上のpushTeamSales()は「自分のデータを他人の端末にも最新に見せる」ためのものだが、
+  // 既に退勤した仲間（isDutyでなくpushが走らない人）の分は、朝9時の営業日区切りを
+  // またいだ瞬間には自動で消えず、誰かのデータ更新やタブの切り替えなど、何か
+  // 再描画のきっかけが起きるまで前の営業日の古い数字が表示され続けてしまっていた。
+  // 「本日の売り上げランキング（グループ）」は既に受信済みのteamSalesを今の時刻で
+  // 絞り込み直すだけ（通信は発生しない）なので、1分おきに再描画し直すことで、
+  // 区切りをまたいだら他人の操作を待たずに自動的に消えるようにする
+  setInterval(renderRankTodayGroup,60000);
   // 同じ端末で複数タブ・ウィンドウを開いていた場合、あるタブで退勤しても
   // 開きっぱなしの別タブは「出勤中」のまま5秒おきに位置情報を送信し続けてしまい、
   // 仲間の地図・仲間リストからいつまでもアイコンが消えない原因になっていた。
