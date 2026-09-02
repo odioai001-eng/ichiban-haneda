@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>銀座乗禁地区マンガ動画プレイヤー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0e0e17;
+  --stage-border:#050508;
+  --paper:#f4ecd8;
+  --paper-ink:#2a2416;
+  --gold:#eab64b;
+  --gold-ink:#1a1206;
+  --danger:#e35a6a;
+  --teal:#49c2ba;
+  --ui-bg:#111119;
+  --ui-panel:#181822;
+  --ui-border:#2b2b3d;
+  --text:#eceef4;
+  --muted:#9294b3;
+  --accent:#eab64b;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--ui-bg)}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  color:var(--text);
+  min-height:100vh;
+  padding:20px 14px 56px;
+  max-width:760px;
+  margin:0 auto;
+  line-height:1.6;
+}
+.disp{font-family:'Zen Kaku Gothic New',-apple-system,'Hiragino Kaku Gothic ProN',sans-serif}
+h1{font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:19px;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.sub{font-size:12px;color:var(--muted);margin-bottom:16px}
+
+.stagewrap{
+  position:relative;width:100%;aspect-ratio:16/9;
+  background:var(--stage-border);border-radius:14px;overflow:hidden;
+  box-shadow:0 12px 30px -12px rgba(0,0,0,.7), 0 0 0 1px var(--ui-border);
+}
+.stage{position:absolute;inset:6px;border-radius:9px;overflow:hidden;background:#000}
+.stage svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+.chip{
+  position:absolute;top:10px;left:10px;z-index:5;
+  font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;font-size:11px;
+  background:rgba(10,10,16,.62);color:#fff;border:1px solid rgba(255,255,255,.18);
+  padding:4px 10px;border-radius:20px;backdrop-filter:blur(2px);
+  display:flex;gap:6px;align-items:center
+}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--gold)}
+
+.imgbadge{
+  position:absolute;top:10px;right:10px;z-index:5;font-size:10px;font-weight:700;
+  background:rgba(73,194,186,.16);color:#a9f3ee;border:1px solid rgba(73,194,186,.5);
+  padding:4px 9px;border-radius:20px;
+}
+
+.bubble{
+  position:absolute;left:8%;right:8%;bottom:20%;z-index:6;
+  background:var(--paper);color:var(--paper-ink);
+  border:2px solid var(--paper-ink);border-radius:16px;
+  padding:10px 14px;font-size:clamp(10.5px,2.3vw,14px);font-weight:500;line-height:1.5;
+  max-height:56%;overflow-y:auto;
+}
+.bubble .who{font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:10px;color:#6b5a2c;margin-bottom:3px;letter-spacing:.02em}
+.bubble::after{
+  content:"";position:absolute;left:14%;bottom:-14px;width:0;height:0;
+  border:9px solid transparent;border-top-color:var(--paper-ink);
+}
+.bubble::before{
+  content:"";position:absolute;left:calc(14% + 2.5px);bottom:-10.5px;width:0;height:0;
+  border:7px solid transparent;border-top-color:var(--paper);z-index:1;
+}
+
+.telop{
+  position:absolute;left:0;right:0;bottom:0;z-index:7;
+  background:linear-gradient(180deg,rgba(234,182,75,0) 0%,var(--gold) 22%);
+  padding:14px 12px 10px;
+}
+.telop span{
+  font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;
+  font-size:clamp(11px,2.9vw,15px);color:var(--gold-ink);
+  display:block;text-align:center;text-shadow:0 1px 0 rgba(255,255,255,.35);
+}
+
+.progress-row{margin-top:10px;display:flex;align-items:center;gap:10px}
+.track{flex:1;height:6px;background:var(--ui-panel);border:1px solid var(--ui-border);border-radius:20px;overflow:hidden;cursor:pointer;position:relative}
+.fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--gold));width:0%;transition:width .25s linear}
+.tlabel{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+
+.controls{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+.btn{
+  font-family:'Zen Kaku Gothic New',sans-serif;font-weight:700;font-size:13px;
+  background:var(--ui-panel);color:var(--text);border:1px solid var(--ui-border);
+  border-radius:10px;padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:6px;
+}
+.btn:hover{border-color:#3c3c58}
+.btn:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.btn.primary{background:var(--gold);color:var(--gold-ink);border-color:var(--gold)}
+.btn.toggle[aria-pressed="false"]{opacity:.5}
+.spacer{flex:1}
+.scenecount{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.caption{
+  margin-top:16px;background:var(--ui-panel);border:1px solid var(--ui-border);
+  border-radius:12px;padding:14px 16px;
+}
+.caption .lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.caption .storyboard{font-size:12px;color:#c7c9de;line-height:1.7;margin-bottom:10px}
+.caption .dialogue{font-size:13px;color:var(--text);line-height:1.75;border-left:3px solid var(--teal);padding-left:10px}
+
+.note{
+  margin-top:18px;background:var(--ui-panel);border:1px solid var(--ui-border);
+  border-radius:12px;padding:14px 16px;font-size:12px;color:var(--muted);line-height:1.85;
+}
+.note b{color:var(--text)}
+.note a{color:#8fd7f7;text-decoration:none}
+.note a:hover{text-decoration:underline}
+
+@media (prefers-reduced-motion: reduce){
+  .fill{transition:none}
+}
+</style>
+</head>
+<body>
+
+<h1>🎬 銀座乗禁地区マンガ動画プレイヤー</h1>
+<div class="sub">シナリオを再生できる形にしたプロトタイプ。▶を押すとナレーション音声つきでコマが自動的に進みます。</div>
+
+<div class="stagewrap">
+  <div class="stage" id="stage"></div>
+  <div class="chip" id="chip"><span class="dot"></span><span id="chipText">S1 · 0:00-0:10</span></div>
+  <div class="imgbadge" id="imgbadge" hidden>🖼 解説画像</div>
+  <div class="bubble" id="bubble" hidden><div class="who" id="bubbleWho"></div><div id="bubbleText"></div></div>
+  <div class="telop"><span id="telopText"></span></div>
+</div>
+
+<div class="progress-row">
+  <div class="track" id="track" role="slider" aria-label="再生位置" tabindex="0"><div class="fill" id="fill"></div></div>
+  <div class="tlabel" id="tlabel">0:00 / 3:00</div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="prevBtn" aria-label="前のコマ">⏮ 前</button>
+  <button class="btn primary" id="playBtn" aria-label="再生">▶ 再生</button>
+  <button class="btn" id="nextBtn" aria-label="次のコマ">次 ⏭</button>
+  <div class="spacer"></div>
+  <button class="btn toggle" id="voiceBtn" aria-pressed="true">🔊 音声ON</button>
+  <span class="scenecount" id="sceneCount">1 / 10</span>
+</div>
+
+<div class="caption">
+  <div class="lbl">絵コンテ(演出メモ)</div>
+  <div class="storyboard" id="capStoryboard"></div>
+  <div class="lbl">セリフ・ナレーション</div>
+  <div class="dialogue" id="capDialogue"></div>
+</div>
+
+<div class="note">
+  <b>これは何？</b> シナリオの10コマ分をブラウザ上で自動再生する「マンガ動画プレイヤー」です。イラストは簡易的なアイコン調、ナレーションはお使いの端末の音声合成(日本語音声が入っていない場合は無音になります)で読み上げます。<br><br>
+  <b>実際の動画ファイル(mp4)にするには：</b> ①このページを再生しながら画面録画する(Windowsは「Xbox Game Bar」、Macは「QuickTime Player」、スマホは標準の画面収録機能など)、②書き出した映像に、必要であれば本格的なイラスト・プロ品質のナレーション音声・BGMを差し替えて編集する、という流れが簡単です。より作り込みたい場合は、各コマの「絵コンテ」欄をイラストレーターやAI画像生成に渡し、「セリフ」欄をVOICEVOX等の音声合成やナレーター収録に渡してください。<br><br>
+  文字だけの台本は <a href="https://claude.ai/code/artifact/e6788821-7460-48d4-815f-4cf442b67dbd" target="_blank">銀座乗禁地区シナリオ(文字台本)</a> をご覧ください。
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs){
+  var el = document.createElementNS(NS, tag);
+  for (var k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+function g(attrs){ return svgEl("g", attrs || {}); }
+
+var PALETTE = {
+  takeda:{body:"#33415c", skin:"#e8b98a", hair:"#2b2320"},
+  keita:{body:"#3f7d5c", skin:"#e6b389", hair:"#20180f"},
+  guard:{body:"#232338", skin:"#dcae86", band:"#d1495b"},
+  passenger:{body:"#c97b3f", skin:"#e3b48a", hair:"#26201a"},
+  driver2:{body:"#5b4d7a", skin:"#e3b48a", hair:"#171114"}
+};
+
+function halftonePattern(id, color, opacity){
+  var defs = svgEl("defs", {});
+  var pat = svgEl("pattern", {id:id, width:6, height:6, patternUnits:"userSpaceOnUse"});
+  pat.appendChild(svgEl("circle", {cx:1.4, cy:1.4, r:1.1, fill:color, opacity:opacity}));
+  defs.appendChild(pat);
+  return defs;
+}
+
+function bgFor(mood){
+  var frag = document.createDocumentFragment();
+  var grad = svgEl("defs", {});
+  var lg = svgEl("linearGradient", {id:"g_"+mood, x1:"0", y1:"0", x2:"0", y2:"1"});
+  var stops = {
+    night:["#241a3d","#0a0716"],
+    room:["#33261a","#160f09"],
+    flash:["#3d3527","#1c1810"],
+    stand:["#123638","#061a1c"],
+    reflect:["#111536","#040414"],
+    map:["#141428","#0a0a18"],
+    end:["#111119","#0a0a10"]
+  }[mood] || ["#1a1a2c","#0a0a14"];
+  var s1 = svgEl("stop", {offset:"0%", "stop-color":stops[0]});
+  var s2 = svgEl("stop", {offset:"100%", "stop-color":stops[1]});
+  lg.appendChild(s1); lg.appendChild(s2); grad.appendChild(lg);
+  frag.appendChild(grad);
+  frag.appendChild(svgEl("rect", {x:0,y:0,width:400,height:225,fill:"url(#g_"+mood+")"}));
+
+  if(mood==="night"){
+    var colors=["#ff6fae","#4fd8ff","#ffd76f"];
+    for(var i=0;i<7;i++){
+      var x = 20 + i*54, h = 40 + (i%3)*22;
+      var r = svgEl("rect", {x:x,y:20,width:14,height:h,fill:colors[i%3],opacity:0.16});
+      frag.appendChild(r);
+    }
+    frag.appendChild(svgEl("rect",{x:0,y:150,width:400,height:75,fill:"#05040c"}));
+    frag.appendChild(svgEl("line",{x1:0,y1:150,x2:400,y2:150,stroke:"#3a3350",'stroke-width':1}));
+  }
+  if(mood==="room"){
+    frag.appendChild(svgEl("rect",{x:230,y:26,width:150,height:96,fill:"#0d0a06",stroke:"#5a4327","stroke-width":3,rx:4}));
+    for(var j=0;j<3;j++){
+      frag.appendChild(svgEl("rect",{x:240,y:36+j*28,width:130,height:20,fill: j===2? "#eab64b":"#3a3020", opacity: j===2?0.9:0.5, rx:2}));
+      var lab = svgEl("text",{x:246,y:50+j*28, fill: j===2? "#1a1206":"#cbb98a", "font-size":9, "font-weight":900});
+      lab.textContent = ["優良AAA","優良AA","優良A(現在)"][j];
+      frag.appendChild(lab);
+    }
+    frag.appendChild(svgEl("rect",{x:0,y:170,width:400,height:55,fill:"#120c07"}));
+  }
+  if(mood==="flash"){
+    frag.appendChild(svgEl("rect",{x:0,y:0,width:400,height:225,fill:"#000",opacity:0.08}));
+    for(var t=0;t<6;t++){
+      frag.appendChild(svgEl("rect",{x:40+t*54,y:150,width:34,height:26,rx:5,fill:"#5a4f39",opacity:0.9}));
+      frag.appendChild(svgEl("rect",{x:44+t*54,y:145,width:26,height:8,rx:3,fill:"#3d3626"}));
+    }
+    for(var m=0;m<10;m++){
+      frag.appendChild(svgEl("line",{x1:0,y1:40+m*14,x2:120,y2:36+m*14,stroke:"#8a7c5a",'stroke-width':1,opacity:0.25}));
+    }
+  }
+  if(mood==="stand"){
+    frag.appendChild(svgEl("rect",{x:0,y:165,width:400,height:60,fill:"#04181a"}));
+    for(var p=0;p<9;p++){
+      frag.appendChild(svgEl("rect",{x:p*46,y:163,width:26,height:4,fill:"#0d3437"}));
+    }
+  }
+  if(mood==="reflect"){
+    for(var b=0;b<8;b++){
+      var bw=18+((b*7)%20), bh=40+((b*13)%70);
+      frag.appendChild(svgEl("rect",{x:10+b*50,y:170-bh,width:bw,height:bh,fill:"#0a0a20",opacity:0.9}));
+    }
+    frag.appendChild(svgEl("rect",{x:0,y:170,width:400,height:55,fill:"#05050f"}));
+  }
+  frag.appendChild(svgEl("rect",{x:0,y:0,width:400,height:225,fill:"url(#dots)",opacity:0.5}));
+  return frag;
+}
+
+function face(cx, cy, expr){
+  var f = g({});
+  var browY = cy-6, mouthY = cy+8;
+  if(expr==="shout" || expr==="plead"){
+    f.appendChild(svgEl("path",{d:"M"+(cx-9)+" "+browY+" q9 -6 16 0", stroke:"#1c140c","stroke-width":2, fill:"none"}));
+    f.appendChild(svgEl("ellipse",{cx:cx, cy:mouthY+2, rx:7, ry:6, fill:"#3a1c14"}));
+  } else if(expr==="panic" || expr==="surprised"){
+    f.appendChild(svgEl("circle",{cx:cx-7,cy:browY,r:2.6, fill:"#1c140c"}));
+    f.appendChild(svgEl("circle",{cx:cx+7,cy:browY,r:2.6, fill:"#1c140c"}));
+    f.appendChild(svgEl("ellipse",{cx:cx, cy:mouthY+2, rx:5, ry:5, fill:"#3a1c14"}));
+    f.appendChild(svgEl("ellipse",{cx:cx+13,cy:cy-14, rx:3, ry:5, fill:"#8fd7f7", opacity:0.85}));
+  } else if(expr==="smile" || expr==="soft"){
+    f.appendChild(svgEl("path",{d:"M"+(cx-8)+" "+(browY-1)+" q8 -5 15 0", stroke:"#1c140c","stroke-width":2, fill:"none"}));
+    f.appendChild(svgEl("path",{d:"M"+(cx-8)+" "+mouthY+" q8 8 16 0", stroke:"#1c140c","stroke-width":2.4, fill:"none", "stroke-linecap":"round"}));
+  } else if(expr==="shy"){
+    f.appendChild(svgEl("path",{d:"M"+(cx-8)+" "+browY+" q8 -3 15 0", stroke:"#1c140c","stroke-width":2, fill:"none"}));
+    f.appendChild(svgEl("path",{d:"M"+(cx-6)+" "+mouthY+" q6 5 12 0", stroke:"#1c140c","stroke-width":2, fill:"none"}));
+    f.appendChild(svgEl("circle",{cx:cx-11,cy:mouthY-3,r:3.4, fill:"#e98787", opacity:0.55}));
+    f.appendChild(svgEl("circle",{cx:cx+11,cy:mouthY-3,r:3.4, fill:"#e98787", opacity:0.55}));
+  } else if(expr==="annoyed"){
+    f.appendChild(svgEl("path",{d:"M"+(cx-9)+" "+(browY-3)+" l14 5", stroke:"#1c140c","stroke-width":2.4}));
+    f.appendChild(svgEl("path",{d:"M"+(cx+9)+" "+(browY-3)+" l-14 5", stroke:"#1c140c","stroke-width":2.4}));
+    f.appendChild(svgEl("path",{d:"M"+(cx-6)+" "+(mouthY+2)+" q6 -5 12 0", stroke:"#1c140c","stroke-width":2, fill:"none"}));
+  } else if(expr==="neutral"){
+    f.appendChild(svgEl("path",{d:"M"+(cx-8)+" "+browY+" q8 -3 15 0", stroke:"#1c140c","stroke-width":2, fill:"none"}));
+    f.appendChild(svgEl("line",{x1:cx-6, y1:mouthY, x2:cx+6, y2:mouthY, stroke:"#1c140c","stroke-width":2}));
+  }
+  return f;
+}
+
+function figure(o){
+  var pal = PALETTE[o.c] || PALETTE.passenger;
+  var scale = o.scale || 1;
+  var group = g({transform:"translate("+o.x+","+o.y+") scale("+(o.flip?-scale:scale)+","+scale+")"});
+
+  var hair;
+  if(o.c==="takeda") hair = svgEl("path",{d:"M-22 -96 q22 -20 44 0 q-4 -8 -22 -8 q-18 0 -22 8Z", fill:pal.hair});
+  else if(o.c==="keita") hair = svgEl("path",{d:"M-20 -98 q20 -16 40 0 l-2 -10 q-18 -8 -36 0Z", fill:pal.hair});
+  else if(o.c==="guard") hair = svgEl("path",{d:"M-22 -100 h44 v-6 h-44Z", fill:"#111"});
+  else hair = svgEl("path",{d:"M-20 -96 q20 -18 40 0Z", fill:pal.hair||"#2a2118"});
+  group.appendChild(svgEl("rect",{x:-26,y:-64,width:52,height:66,rx:16,fill:pal.body}));
+  if(o.c==="guard"){
+    group.appendChild(svgEl("rect",{x:-26,y:-40,width:52,height:11,fill:pal.band}));
+    var lbl = svgEl("text",{x:0,y:-32,"text-anchor":"middle",fill:"#fff","font-size":7,"font-weight":900});
+    lbl.textContent="指導員"; group.appendChild(lbl);
+  }
+  if(o.c==="keita"){
+    group.appendChild(svgEl("rect",{x:-26,y:-64,width:52,height:12,fill:"#e8b64b"}));
+  }
+  group.appendChild(svgEl("circle",{cx:0,cy:-84,r:20,fill:pal.skin}));
+  group.appendChild(hair);
+  group.appendChild(face(0,-84,o.expr||"neutral"));
+
+  var armColor = pal.body;
+  if(o.pose==="point"){
+    group.appendChild(svgEl("path",{d:"M18 -70 L58 -86 L54 -92 Z", fill:armColor}));
+    group.appendChild(svgEl("circle",{cx:60,cy:-88,r:5,fill:pal.skin}));
+  } else if(o.pose==="lean" || o.pose==="plead"){
+    group.appendChild(svgEl("path",{d:"M18 -66 q26 4 34 -20", stroke:armColor,"stroke-width":11,fill:"none","stroke-linecap":"round"}));
+    group.appendChild(svgEl("circle",{cx:52,cy:-86,r:5,fill:pal.skin}));
+  } else if(o.pose==="drive"){
+    group.appendChild(svgEl("ellipse",{cx:0,cy:-40,rx:22,ry:9,fill:"none",stroke:"#1c140c","stroke-width":3}));
+    group.appendChild(svgEl("circle",{cx:-16,cy:-42,r:4.5,fill:pal.skin}));
+    group.appendChild(svgEl("circle",{cx:16,cy:-42,r:4.5,fill:pal.skin}));
+  } else if(o.pose==="walk"){
+    group.appendChild(svgEl("path",{d:"M-18 -60 q-16 10 -22 30", stroke:armColor,"stroke-width":10,fill:"none","stroke-linecap":"round"}));
+    group.appendChild(svgEl("path",{d:"M18 -60 q16 6 20 26", stroke:armColor,"stroke-width":10,fill:"none","stroke-linecap":"round"}));
+  } else {
+    group.appendChild(svgEl("path",{d:"M-24 -58 q-8 20 -4 40", stroke:armColor,"stroke-width":10,fill:"none","stroke-linecap":"round"}));
+    group.appendChild(svgEl("path",{d:"M24 -58 q8 20 4 40", stroke:armColor,"stroke-width":10,fill:"none","stroke-linecap":"round"}));
+  }
+
+  if(o.expr==="panic" || o.expr==="shy"){
+    group.appendChild(svgEl("ellipse",{cx:16,cy:-100,rx:4,ry:6,fill:"#8fd7f7"}));
+  }
+  if(o.pose==="lean" && o.expr==="shout"){
+    for(var i=0;i<4;i++){
+      group.appendChild(svgEl("line",{x1:-40-i*6,y1:-84,x2:-60-i*8,y2:-84+ (i%2? -6:6),stroke:"#eab64b","stroke-width":2,opacity:0.7}));
+    }
+  }
+  return group;
+}
+
+function drawMap(stage){
+  var s = svgEl("svg", {viewBox:"0 0 400 225"});
+  s.appendChild(halftonePattern("dots","#8fa0ff",0.05));
+  s.appendChild(bgFor("map"));
+  s.appendChild(svgEl("rect",{x:60,y:30,width:280,height:165,fill:"rgba(227,90,106,.14)",stroke:"#e35a6a","stroke-width":2,rx:8}));
+  var labels=[
+    [200,20,"晴海通り"],[200,208,"外堀通り"]
+  ];
+  labels.forEach(function(l){
+    var t=svgEl("text",{x:l[0],y:l[1],"text-anchor":"middle",fill:"#8fd7f7","font-size":11,"font-weight":700});
+    t.textContent=l[2]; s.appendChild(t);
+  });
+  var vert=[[26,112,"東京高速道路",-90],[374,112,"中央通り",90]];
+  vert.forEach(function(v){
+    var t=svgEl("text",{x:v[0],y:v[1],"text-anchor":"middle",fill:"#8fd7f7","font-size":11,"font-weight":700,
+      transform:"rotate("+v[3]+" "+v[0]+" "+v[1]+")"});
+    t.textContent=v[2]; s.appendChild(t);
+  });
+  var c1=svgEl("text",{x:200,y:108,"text-anchor":"middle",fill:"#e35a6a","font-size":14,"font-weight":900});
+  c1.textContent="乗禁エリア"; s.appendChild(c1);
+  var c2=svgEl("text",{x:200,y:124,"text-anchor":"middle",fill:"#eceef4","font-size":10});
+  c2.textContent="(銀座5〜8丁目)"; s.appendChild(c2);
+  var stands=[[110,64,"乗り場"],[300,80,"乗り場"],[180,168,"新幸橋"]];
+  stands.forEach(function(p){
+    var t=svgEl("text",{x:p[0],y:p[1],"text-anchor":"middle","font-size":16});
+    t.textContent="🚕"; s.appendChild(t);
+    var lab=svgEl("text",{x:p[0],y:p[1]+14,"text-anchor":"middle",fill:"#9294b3","font-size":8});
+    lab.textContent=p[2]; s.appendChild(lab);
+  });
+  stage.appendChild(s);
+}
+
+function drawCompare(stage){
+  var s = svgEl("svg", {viewBox:"0 0 400 225"});
+  s.appendChild(halftonePattern("dots","#8fa0ff",0.05));
+  s.appendChild(bgFor("map"));
+  function col(x, title, color, steps){
+    var cx = x;
+    var t=svgEl("text",{x:cx+90,y:26,"text-anchor":"middle",fill:color,"font-size":12,"font-weight":900});
+    t.textContent=title; s.appendChild(t);
+    steps.forEach(function(step,i){
+      var y = 42 + i*38;
+      s.appendChild(svgEl("rect",{x:cx,y:y,width:180,height:28,rx:7,fill:"rgba(255,255,255,.05)",stroke:color,"stroke-width":1.4}));
+      var lines = step.match(/.{1,13}/g) || [step];
+      lines.slice(0,2).forEach(function(ln,li){
+        var lt=svgEl("text",{x:cx+90,y:y+13+li*11,"text-anchor":"middle",fill:"#eceef4","font-size":8.4});
+        lt.textContent=ln; s.appendChild(lt);
+      });
+      if(i<steps.length-1){
+        var at=svgEl("text",{x:cx+90,y:y+36,"text-anchor":"middle",fill:"#9294b3","font-size":10});
+        at.textContent="↓"; s.appendChild(at);
+      }
+    });
+  }
+  col(14, "路上で乗せてしまう", "#e35a6a", ["路肩に停車・乗車させる","巡回指導員に現認される","会社へ通知","乗務員証停止も"]);
+  col(206, "乗り場で乗車拒否", "#eab64b", ["近距離を理由に断る","お客様が苦情","運輸局の調査","乗務員証停止も"]);
+  stage.appendChild(s);
+}
+
+function drawEnd(stage){
+  var s = svgEl("svg", {viewBox:"0 0 400 225"});
+  s.appendChild(halftonePattern("dots","#eab64b",0.05));
+  s.appendChild(bgFor("end"));
+  var t=svgEl("text",{x:200,y:96,"text-anchor":"middle","font-size":40});
+  t.textContent="🚕"; s.appendChild(t);
+  var t2=svgEl("text",{x:200,y:130,"text-anchor":"middle",fill:"#eab64b","font-size":15,"font-weight":900});
+  t2.textContent="銀座乗禁チャンネル"; s.appendChild(t2);
+  var t3=svgEl("text",{x:200,y:150,"text-anchor":"middle",fill:"#9294b3","font-size":9});
+  t3.textContent="次回：六本木・新宿の乗禁ルール"; s.appendChild(t3);
+  stage.appendChild(s);
+}
+
+var SCENES = [
+ {id:"S1",tc:"0:00-0:10",dur:10,mood:"night",who:"ナレーション(心の声)",
+  telop:"知らないと一発アウト!? 銀座“乗禁地区”の真実",
+  line:"銀座のこの一角――実は、どんなに手を挙げられても、簡単には乗せちゃいけない場所なんです。",
+  storyboard:"深夜の銀座・中央通り。酔った男性が武田さんの車に「乗せてよ!」と叫ぶが、武田さんは表情を変えず徐行を続ける。",
+  actors:[{c:"passenger",expr:"shout",pose:"lean",x:290,y:140,scale:0.85,flip:true},
+          {c:"takeda",expr:"neutral",pose:"drive",x:120,y:170,scale:0.8}]},
+ {id:"S2",tc:"0:10-0:25",dur:15,mood:"room",who:"武田さん",
+  telop:"タクシー歴28年／所属会社は東京タクシーセンター評価“A”・AAA挑戦中",
+  line:"うちの会社、東京タクシーセンターの評価で今“A”なんです。乗務員一人ひとりの対応が、そのまま会社の評価点に直結するって知ってから、僕自身どうすれば会社をAAAに近づけられるんだろう、っていつも考えてます。",
+  storyboard:"営業所の休憩室。壁に東京タクシーセンターの評価通知書。ランクの中で会社名の横に“A”の印。武田さんが少し照れくさそうに語りかける。",
+  actors:[{c:"takeda",expr:"shy",pose:"stand",x:150,y:190,scale:1.15}]},
+ {id:"S3",tc:"0:25-0:50",dur:25,mood:"map",who:"武田さん",special:"map",
+  telop:"銀座乗禁地区(通称“乗禁”) 平日22:00〜翌1:00頃は乗り場のみ",
+  line:"銀座5丁目から8丁目あたり、中央通りや外堀通り、晴海通りに囲まれたこのエリアでは、平日の夜10時から翌1時ごろまで、決められたタクシー乗り場以外でお客様を乗せることができません。",
+  storyboard:"画面が地図イラストに切り替わる。中央通り・外堀通り・晴海通り・東京高速道路に囲まれたエリアが赤く塗られ、タクシー乗り場のマークが表示される。"},
+ {id:"S4",tc:"0:50-1:05",dur:15,mood:"flash",who:"武田さん",
+  telop:"無秩序な客待ち・低速走行 → 大渋滞を防ぐための規制(1970年〜)",
+  line:"1970年、銀座の路上でお客を奪い合うように何十台ものタクシーが低速走行したり、路肩に列を作って客待ちしたり…街が大渋滞になったのがきっかけで生まれたルールなんです。",
+  storyboard:"回想。昭和レトロなタッチで、路肩に何十台も列を作って客待ちするタクシーのイラスト。"},
+ {id:"S5",tc:"1:05-1:30",dur:25,mood:"night",who:"ナレーション",
+  telop:"乗せた瞬間、その場で現認 → 会社に通知 → 乗務員証停止も",
+  line:"“すぐそこだから”って断り切れずに乗せた瞬間、東京タクシーセンターの巡回員に現認されるケース。繰り返せば乗務員証の停止、会社の処分点数が積み上がって営業所ごと停止処分になることもある。",
+  storyboard:"中央通り。圭太が千鳥足の客に頼み込まれ、断り切れず路肩に停車。数十メートル先から腕章の指導員が近づいてくる。",
+  actors:[{c:"keita",expr:"panic",pose:"stand",x:120,y:175,scale:0.85},
+          {c:"passenger",expr:"plead",pose:"lean",x:220,y:180,scale:0.8,flip:true},
+          {c:"guard",expr:"neutral",pose:"walk",x:330,y:165,scale:0.7}]},
+ {id:"S6",tc:"1:30-1:50",dur:20,mood:"stand",who:"武田さん",
+  telop:"正当な理由のない乗車拒否も違反。乗り場ではお断りNG",
+  line:"乗り場で並んでくれているお客様を“近距離だから”なんて理由で断るのも、これは乗車拒否。正当な理由がない限り、法律違反です。",
+  storyboard:"正規タクシー乗り場。列の先頭の客に近距離の行き先を告げられ、若手ドライバーが露骨に嫌な顔をして発進しようとする。",
+  actors:[{c:"driver2",expr:"annoyed",pose:"stand",x:130,y:175,scale:0.85},
+          {c:"passenger",expr:"neutral",pose:"stand",x:250,y:180,scale:0.8,flip:true}]},
+ {id:"S7",tc:"1:50-2:05",dur:15,mood:"map",who:"",special:"compare",
+  telop:"2つのNGパターン比較",
+  line:"路上で乗せてしまうケースと、乗り場で乗車拒否するケース――どちらも最終的には処分につながります。",
+  storyboard:"画面分割。左「路上で乗せてしまう」、右「乗り場で拒否する」。それぞれの結果を矢印でフローチャート表示。"},
+ {id:"S8",tc:"2:05-2:30",dur:25,mood:"night",who:"武田さん",
+  telop:"①乗り場まで一言案内 ②笑顔を崩さない ③迷ったら相談",
+  line:"“ここでは乗せられません”で終わらせず、“あちらの乗り場まですぐです、ご案内しますね”と行き先まで添える。笑顔とトーンを崩さない。迷ったら無線や指導員に相談する勇気を持つこと。",
+  storyboard:"武田さんが銀座で酔客に声をかけられるが、笑顔で最寄りの乗り場までの道順を指差して案内する。",
+  actors:[{c:"takeda",expr:"smile",pose:"point",x:130,y:175,scale:0.9},
+          {c:"passenger",expr:"neutral",pose:"walk",x:260,y:178,scale:0.8,flip:true}]},
+ {id:"S9",tc:"2:30-2:50",dur:20,mood:"reflect",who:"武田さん",
+  telop:"知っている人だけが、ちゃんと守れる ―― 会社のAAAへ、あと一歩",
+  line:"乗禁地区は“覚えるのが面倒なルール”じゃなくて、“知っているだけでお客様にもっと信頼してもらえるルール”。みんなの対応の積み重ねが、会社をAAAに近づけるんです。",
+  storyboard:"武田さんが車内から銀座の夜景を見つめ、しみじみと語る。",
+  actors:[{c:"takeda",expr:"soft",pose:"stand",x:200,y:190,scale:1.1}]},
+ {id:"S10",tc:"2:50-3:00",dur:10,mood:"end",who:"",special:"end",
+  telop:"次回予告: 六本木・新宿の乗禁ルールも解説予定",
+  line:"",
+  storyboard:"ロゴ表示。武田さんが軽く会釈。"}
+];
+
+var stageEl = document.getElementById("stage");
+var chipText = document.getElementById("chipText");
+var imgbadge = document.getElementById("imgbadge");
+var bubble = document.getElementById("bubble");
+var bubbleWho = document.getElementById("bubbleWho");
+var bubbleText = document.getElementById("bubbleText");
+var telopText = document.getElementById("telopText");
+var fill = document.getElementById("fill");
+var tlabel = document.getElementById("tlabel");
+var capStoryboard = document.getElementById("capStoryboard");
+var capDialogue = document.getElementById("capDialogue");
+var sceneCount = document.getElementById("sceneCount");
+var playBtn = document.getElementById("playBtn");
+var voiceBtn = document.getElementById("voiceBtn");
+var track = document.getElementById("track");
+
+var TOTAL = SCENES.reduce(function(a,s){return a+s.dur;},0);
+var CUM = []; (function(){var acc=0; SCENES.forEach(function(s){CUM.push(acc); acc+=s.dur;});})();
+
+var idx = 0, playing = false, voiceOn = true, timer = null;
+
+function fmt(sec){
+  var m = Math.floor(sec/60), s = Math.floor(sec%60);
+  return m+":"+(s<10?"0":"")+s;
+}
+
+function renderStage(scene){
+  stageEl.innerHTML = "";
+  var s = svgEl("svg", {viewBox:"0 0 400 225"});
+  s.appendChild(halftonePattern("dots","#ffffff",0.04));
+  if(scene.special==="map"){ drawMap(stageEl); return; }
+  if(scene.special==="compare"){ drawCompare(stageEl); return; }
+  if(scene.special==="end"){ drawEnd(stageEl); return; }
+  s.appendChild(bgFor(scene.mood));
+  (scene.actors||[]).forEach(function(a){ s.appendChild(figure(a)); });
+  stageEl.appendChild(s);
+}
+
+function render(){
+  var scene = SCENES[idx];
+  chipText.textContent = scene.id + " · " + scene.tc;
+  imgbadge.hidden = !(scene.special==="map" || scene.special==="compare");
+  telopText.textContent = scene.telop;
+  if(scene.line){
+    bubble.hidden = false;
+    bubbleWho.textContent = scene.who || "";
+    bubbleText.textContent = scene.line;
+  } else {
+    bubble.hidden = true;
+  }
+  capStoryboard.textContent = scene.storyboard;
+  capDialogue.textContent = scene.line || "(セリフなし／ロゴカット)";
+  sceneCount.textContent = (idx+1) + " / " + SCENES.length;
+  var elapsed = CUM[idx];
+  fill.style.width = Math.min(100, (elapsed/TOTAL)*100) + "%";
+  tlabel.textContent = fmt(elapsed) + " / " + fmt(TOTAL);
+  renderStage(scene);
+}
+
+function speak(text){
+  if(!voiceOn || !text || !("speechSynthesis" in window)) return;
+  try{
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = "ja-JP";
+    u.rate = 1.02;
+    var voices = window.speechSynthesis.getVoices();
+    var jv = voices.find(function(v){ return v.lang && v.lang.indexOf("ja") === 0; });
+    if(jv) u.voice = jv;
+    window.speechSynthesis.speak(u);
+  }catch(e){ /* 音声合成が使えない環境では無音のまま進行 */ }
+}
+
+function clearTimer(){ if(timer){ clearTimeout(timer); timer=null; } }
+
+function advance(){
+  clearTimer();
+  if(idx >= SCENES.length - 1){ setPlaying(false); return; }
+  idx++;
+  render();
+  speak(SCENES[idx].line);
+  if(playing) timer = setTimeout(advance, SCENES[idx].dur*1000);
+}
+
+function setPlaying(v){
+  playing = v;
+  playBtn.textContent = playing ? "⏸ 一時停止" : "▶ 再生";
+  playBtn.setAttribute("aria-label", playing ? "一時停止" : "再生");
+  if(!playing){
+    clearTimer();
+    if("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
+}
+
+playBtn.addEventListener("click", function(){
+  if(playing){ setPlaying(false); return; }
+  setPlaying(true);
+  speak(SCENES[idx].line);
+  clearTimer();
+  timer = setTimeout(advance, SCENES[idx].dur*1000);
+});
+
+document.getElementById("prevBtn").addEventListener("click", function(){
+  clearTimer();
+  if("speechSynthesis" in window) window.speechSynthesis.cancel();
+  idx = Math.max(0, idx-1);
+  render();
+  if(playing){ speak(SCENES[idx].line); timer = setTimeout(advance, SCENES[idx].dur*1000); }
+});
+document.getElementById("nextBtn").addEventListener("click", function(){
+  clearTimer();
+  if("speechSynthesis" in window) window.speechSynthesis.cancel();
+  idx = Math.min(SCENES.length-1, idx+1);
+  render();
+  if(playing){ speak(SCENES[idx].line); timer = setTimeout(advance, SCENES[idx].dur*1000); }
+});
+
+voiceBtn.addEventListener("click", function(){
+  voiceOn = !voiceOn;
+  voiceBtn.textContent = voiceOn ? "🔊 音声ON" : "🔇 音声OFF";
+  voiceBtn.setAttribute("aria-pressed", String(voiceOn));
+  if(!voiceOn && "speechSynthesis" in window) window.speechSynthesis.cancel();
+});
+
+function jumpFromClientX(clientX){
+  var rect = track.getBoundingClientRect();
+  var ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+  var target = ratio * TOTAL;
+  var found = 0;
+  for(var i=SCENES.length-1;i>=0;i--){ if(CUM[i] <= target){ found = i; break; } }
+  clearTimer();
+  if("speechSynthesis" in window) window.speechSynthesis.cancel();
+  idx = found;
+  render();
+  if(playing){ speak(SCENES[idx].line); timer = setTimeout(advance, SCENES[idx].dur*1000); }
+}
+track.addEventListener("click", function(e){ jumpFromClientX(e.clientX); });
+track.addEventListener("keydown", function(e){
+  if(e.key==="ArrowRight") document.getElementById("nextBtn").click();
+  if(e.key==="ArrowLeft") document.getElementById("prevBtn").click();
+});
+
+if("speechSynthesis" in window){
+  window.speechSynthesis.onvoiceschanged = function(){};
+}
+
+render();
+})();
+</script>
+</body>
+</html>
