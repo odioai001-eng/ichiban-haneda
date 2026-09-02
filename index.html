@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-3 -->
+<!-- v20260902-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-3';
+const APP_BUILD='20260902-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5022,6 +5022,32 @@ function getBusinessDayStart(refTs){
  const nineAm=new Date(d.getFullYear(),d.getMonth(),d.getDate(),9,0,0,0).getTime();
  return refTs>=nineAm?nineAm:nineAm-24*3600*1000;
 }
+// 「本日の売り上げランキング」用の売上記録一覧。getTodayShiftFareEntriesは
+// 出勤中なら「今回の出勤〜現在」だけに絞るため、同じ営業日（9:00〜翌9:00）の
+// 中で一旦退勤してすぐまた出勤し直した場合、直前のシフト分の売上がここから
+// 抜け落ちてランキングが0円に戻ってしまう不具合があった。ここでは、今の
+// 営業日に含まれる全てのシフト（進行中のものを含む）を対象に売上を合算する
+function getBusinessDayFareEntries(){
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const bizStart=getBusinessDayStart();
+ const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+ const ranges=[];
+ if(isDuty&&dutyStart)ranges.push({start:dutyStart.getTime(),end:Infinity});
+ shiftLog.filter(s=>s.endTs&&s.startTs>=bizStart).forEach(s=>ranges.push({start:s.startTs,end:s.endTs}));
+ if(!ranges.length){
+  // 今の営業日中にまだ乗務が無ければ、退勤直後の表示が消えないよう
+  // 直近に完了した乗務（前の営業日のものでも）を1件だけ拾う
+  const last=shiftLog.reduce((a,b)=>(!a||b.endTs>a.endTs)?b:a,null);
+  if(last)ranges.push({start:last.startTs,end:last.endTs});
+ }
+ return log.filter(e=>{
+  const ts=e.ts||0;
+  if(ranges.some(r=>ts>=r.start&&ts<=r.end))return true;
+  // どのシフトの時間帯にも属さない記録（「売上の手動記録」等）は、単発の
+  // 記録なので日をまたぐ分断の心配が無く、単純に営業日の開始時刻以降かで判定する
+  return ts>=bizStart;
+ });
+}
 function pushTeamSales(){
  if(!db)return;
  if(!isRankingOptedIn())return;
@@ -5035,10 +5061,12 @@ function pushTeamSales(){
  const monthStart=new Date(monthRef.getFullYear(),monthRef.getMonth(),1).getTime();
  const todayBizStart=getBusinessDayStart(now.getTime());
  // 運賃は税込みで入力されているため、ランキングに積み上げる際は1件ずつ税抜きに変換する。
- // 集計範囲は9時区切りではなく、出勤〜退勤のシフト単位（getTodayShiftFareEntries）に
- // する。9時区切りだと、それをまたぐ夜勤の売上が途中で分断されてしまうため
- // （todayBizStartは他端末からの表示が古くならないようにするための識別用に残す）
- const todayFare=getTodayShiftFareEntries().reduce((a,e)=>a+exTax(e.fare||0),0);
+ // 集計範囲は暦の0時区切りではなく、朝9:00〜翌9:00の営業日区切りに含まれる
+ // シフト単位で合算する（getBusinessDayFareEntries）。それをまたぐ夜勤の売上が
+ // 途中で分断されないよう、進行中のシフトはstartTs以降を丸ごと含める一方、
+ // 同じ営業日内で完了した他のシフト（一旦退勤してすぐ出勤し直した場合等）分も
+ // 漏らさず合算する
+ const todayFare=getBusinessDayFareEntries().reduce((a,e)=>a+exTax(e.fare||0),0);
  const monthFareRaw=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+exTax(e.fare||0),0)+carry.fare;
  const monthDaysRaw=getMonthShifts().length+carry.days;
  // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
