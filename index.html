@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-7 -->
+<!-- v20260902-8 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-7';
+const APP_BUILD='20260902-8';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3729,6 +3729,13 @@ function cpHasStayed1Min(cp){
   // 判定することで、本当に1分以上滞在したかどうかを正しく区別する
   return (Date.now()-getDepartureConfirmMs(cp)-ts)>=CP_STOP_CONFIRM_MS;
 }
+// cpHasStayed1Minと同じ考え方で、実際にそのチェックポイントの圏内にいた
+// おおよその時間（ミリ秒）を計算する（退場確定までの待ち時間を差し引く）
+function cpDwellMs(cp){
+  const ts=cpArriveTs[cp.id];
+  if(!ts)return 0;
+  return Math.max(0,Date.now()-getDepartureConfirmMs(cp)-ts);
+}
 // 国際線第4プール（予備）に1分以上停止していた場合の、その到着時刻。
 // 素通りしただけの場合はnullのままにし、第3プール（本プール）への到着時刻を
 // 待機開始として使う（onDepartureで第4プールを出る時に確定させ、setStatusで
@@ -3889,20 +3896,18 @@ function onDeparture(cp){
   // （「出ないことが多い」不具合の原因）。プールの外に本当に出た時（onDeparture）を
   // 基準にリセットする方が確実なため、ここでも行う
   if(cp.id==='haneda')cp.poolModalHandled=false;
-  // 「1号乗り場」〜「4号乗り場」「国際線第3/4プール」等のチェックポイントから、
+  // 「1号乗り場」〜「4号乗り場」「国際線乗り場（国際線第3プール）」のチェックポイントから、
   // 実車ボタンを押さないまま出発した場合は、押し忘れとみなして自動的に実車状態にする
-  // （乗り場・待機時間も記録される）。国際線プールは引き続き「1分以上の停止が
-  // 確認できた場合のみ」に限定し、素通りしただけで実車になってしまわないようにする。
-  // 1号〜4号乗り場は、列がノンストップで進みながら乗せる（1分以上の連続停止が
-  // 確認できないまま実車になる）ことが多いため、滞在時間を問わずエリアを出発
-  // してから60秒経過（＝通常の出発確定タイミング）した時点で確定させる。
-  // ただし、エリア自体は道路も含めて広めに取らざるを得ない場所があり、お客様を
-  // 乗せず単に近くの道路を通っただけ（走行速度が出ている）のに実車化されて
-  // しまう誤作動が報告されたため、直近の走行速度に列の徐行・停止に見合う
-  // 遅さ（時速13km未満）の記録が無ければ「素通り」とみなし対象外にする
+  // （乗り場・待機時間も記録される）。条件は「そのエリアに5秒以上いてから出発したか」
+  // だけで統一する（1号〜4号は国内線プールを、国際線乗り場は国際線第4→第3プールを
+  // 経由してたどり着く運用のため、そのエリア自体に5秒以上いれば実際に乗せたとみなせる）。
+  // 以前は走行速度（時速13km未満の記録の有無）で「列に並んでいたか」を推測していたが、
+  // 乗り場付近の曲がり角で一瞬減速しただけの素通りでも該当してしまい、誤って実車化
+  // される不具合があったため、GPSでの滞在時間そのものを見る単純な条件に変更した
   const spotLabel=spotLabelFromCheckpointName(cp.name);
-  const isNumberedSpot=/^[1-4]号乗り場$/.test(cp.name||'')&&wasLikelyQueueingRecently();
-  if(spotLabel&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&(hadConfirmedStop||isNumberedSpot)){
+  const SPOT_MIN_STOP_MS=5000;
+  const hadMinSpotStop=cpDwellMs(cp)>=SPOT_MIN_STOP_MS;
+  if(spotLabel&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&hadMinSpotStop){
     currentSpotSelection=spotLabel;
     // 号チップを手動で選んだ場合（selectSpot）と同じ「東京都大田区羽田空港◯◯乗り場」
     // の表記に揃える。待機場所ラベル・仲間に共有されるwaitSpotのいずれも、
@@ -5336,16 +5341,6 @@ function calcBearing(lat1,lng1,lat2,lng2){
 }
 function angleDiff(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d;}
 
-// 直近30秒の走行速度に、列に並んで徐行・停止しているとみなせる遅さ（時速13km≒
-// 秒速3.6m未満）の記録が1つでもあれば「列に並んでいた（＝素通りではない）」と
-// 判定する。速度データが無ければ、誤ってお客様を乗せた記録を見逃さないよう
-// 安全側（列に並んでいたとみなす）に倒す
-function wasLikelyQueueingRecently(){
-  const now=Date.now();
-  const recent=posHistory.filter(p=>now-p.ts<=30000);
-  if(!recent.length)return true;
-  return recent.some(p=>p.speed!==null&&p.speed!==undefined&&p.speed<3.6);
-}
 function updatePosHistory(lat,lng,rawSpeed){
   const now=Date.now(),prev=posHistory[posHistory.length-1];
   let speed=rawSpeed,bearing=null;
