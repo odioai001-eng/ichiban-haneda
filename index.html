@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-6 -->
+<!-- v20260902-7 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-6';
+const APP_BUILD='20260902-7';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3709,6 +3709,15 @@ function saveCpArriveTs(){
   localStorage.setItem('taxi_cp_arrive_ts',JSON.stringify(cpArriveTs));
 }
 let cpArriveTs=loadCpArriveTs();
+// 高架下などGPSが乱れやすい場所では、実際にはずっと同じ場所に停車したままでも、
+// 一瞬圏外と判定されたのが90秒以上続いてしまい「退場」が確定してしまうことがある。
+// その直後にGPSが戻ってきた時、単純に「新規到着」として扱うと、到着時刻
+// （cpArriveTs、待機時間の起点）や号選択の状態（poolModalHandled）がリセットされ、
+// 実際にはずっと待っていたのに待機時間が数分だけになってしまう不具合があった。
+// 退場確定の直前の状態をここに控えておき、短時間で同じチェックポイントに
+// 戻ってきた場合はGPSのブレとみなして元の状態を引き継ぐ
+let cpLastDepartureSnapshot={};
+const CP_REJOIN_GRACE_MS=5*60*1000; // この時間内の再入場は同じ滞在の続きとみなす
 function cpHasStayed1Min(cp){
   const ts=cpArriveTs[cp.id];
   if(!ts)return false;
@@ -3783,7 +3792,19 @@ function checkGeofences(lat,lng,isFirstFix){
     if(nowInside){
       cpLastTransitionTs[cp.id]=now;
       cpInside[cp.id]=true;
-      cpArriveTs[cp.id]=now;saveCpArriveTs();
+      // 直前に「退場確定」したばかり（CP_REJOIN_GRACE_MS以内）の再入場は、高架下等での
+      // 一時的なGPSのブレによる誤検知の可能性が高いため、新規到着として扱わず、
+      // 退場前の到着時刻・号選択の状態をそのまま引き継ぐ（待機時間の起点や
+      // 号選択がリセットされて短時間しか記録されなくなる不具合を防ぐ）
+      const recentDep=cpLastDepartureSnapshot[cp.id];
+      if(recentDep&&(now-recentDep.ts)<CP_REJOIN_GRACE_MS){
+        cpArriveTs[cp.id]=recentDep.arriveTs;
+        cp.poolModalHandled=recentDep.poolModalHandled;
+        delete cpLastDepartureSnapshot[cp.id];
+      }else{
+        cpArriveTs[cp.id]=now;
+      }
+      saveCpArriveTs();
       onArrival(cp,Math.round(dist));
     } else {
       // 退場は即確定せず、一定時間（通常90秒、1〜4号乗り場は10秒、国際線第3プールは60秒）後も
@@ -3796,6 +3817,8 @@ function checkGeofences(lat,lng,isFirstFix){
         if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M))return; // 境界付近だった（誤検知）
         cpLastTransitionTs[cp.id]=Date.now();
         cpInside[cp.id]=false;
+        // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
+        cpLastDepartureSnapshot[cp.id]={arriveTs:cpArriveTs[cp.id],poolModalHandled:!!cp.poolModalHandled,ts:Date.now()};
         // onDeparture内で「1分以上滞在したか」の判定にcpArriveTsを使うため、
         // 消去はonDepartureの呼び出しが終わった後に行う
         onDeparture(cp);
