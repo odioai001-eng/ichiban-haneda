@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-7 -->
+<!-- v20260902-8 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-7';
+const APP_BUILD='20260902-8';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5336,15 +5336,19 @@ function calcBearing(lat1,lng1,lat2,lng2){
 }
 function angleDiff(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d;}
 
-// 直近30秒の走行速度に、列に並んで徐行・停止しているとみなせる遅さ（時速13km≒
-// 秒速3.6m未満）の記録が1つでもあれば「列に並んでいた（＝素通りではない）」と
-// 判定する。速度データが無ければ、誤ってお客様を乗せた記録を見逃さないよう
-// 安全側（列に並んでいたとみなす）に倒す
+// 直近30秒の走行速度のうち、半分以上が列に並んで徐行・停止しているとみなせる
+// 遅さ（時速13km≒秒速3.6m未満）であれば「列に並んでいた（＝素通りではない）」と
+// 判定する。以前は1点でも遅い記録があれば列に並んでいたとみなしていたが、
+// 乗り場付近の曲がり角で一瞬減速しただけの素通り（お客様を乗せていない）でも
+// これに該当してしまい、実車として誤って自動記録される不具合があったため、
+// 「継続的に遅い」ことを求めるようにした。速度データが無ければ、誤って
+// お客様を乗せた記録を見逃さないよう安全側（列に並んでいたとみなす）に倒す
 function wasLikelyQueueingRecently(){
   const now=Date.now();
-  const recent=posHistory.filter(p=>now-p.ts<=30000);
+  const recent=posHistory.filter(p=>now-p.ts<=30000&&p.speed!==null&&p.speed!==undefined);
   if(!recent.length)return true;
-  return recent.some(p=>p.speed!==null&&p.speed!==undefined&&p.speed<3.6);
+  const slowCount=recent.filter(p=>p.speed<3.6).length;
+  return slowCount/recent.length>=0.5;
 }
 function updatePosHistory(lat,lng,rawSpeed){
   const now=Date.now(),prev=posHistory[posHistory.length-1];
