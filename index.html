@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-8 -->
+<!-- v20260902-9 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-8';
+const APP_BUILD='20260902-9';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3549,7 +3549,11 @@ function renderRankMonthGroup(){
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
   el.innerHTML=(list.length
     ?list.map((d,i)=>{
-      const days=d.monthDays||0,fare=round10(d.monthFare||0);
+      // 手動修正(monthAdjust)は「その時点の自動集計値との差分」として保存されるため、
+      // 本人がその後あまり乗務せず自動集計値(monthDaysRaw)が修正時より小さいまま
+      // 何ヶ月も経つと、差分を足した結果が0日を下回ってしまうことがあった
+      // （実際の出勤日数はマイナスになり得ないため、表示上は0未満にならないようにする）
+      const days=Math.max(0,d.monthDays||0),fare=round10(d.monthFare||0);
       const fareForAvg=d.monthFareForAvg!=null?d.monthFareForAvg:fare;
       const avg=days>0?Math.round(fareForAvg/days):0;
       const sub=`1日平均 ¥${avg.toLocaleString()}（${days}日出勤）`;
@@ -5123,7 +5127,11 @@ function pushTeamSales(){
  // 「今のズレだけ直す」を実現する
  const adjust=(teamSales&&teamSales[myId]&&teamSales[myId].monthAdjust)||{days:0,fare:0};
  const monthFare=monthFareRaw+(adjust.fare||0);
- const monthDays=monthDaysRaw+(adjust.days||0);
+ // monthAdjust.daysは「修正した時点の自動集計値との差分」を保持しているだけなので、
+ // その後あまり乗務せず自動集計値(monthDaysRaw)が修正時より小さいまま月をまたぐ等すると、
+ // 差分を足した結果がマイナスになってしまうことがあった。実際の出勤日数はマイナスに
+ // ならないため、0未満にはしない
+ const monthDays=Math.max(0,monthDaysRaw+(adjust.days||0));
  // 1日平均は「退勤して1日分として確定した」売上・日数だけで計算する。
  // まだ退勤していない当日分の売上は、日数の方はまだ+1されていないため、
  // 平均の分子からも除いておく（退勤した瞬間にその日の売上と日数が両方まとめて加わる）
@@ -5734,7 +5742,13 @@ function deleteMyAccount(){
   if(db){
     db.ref('drivers/'+myId).remove();
     db.ref('team_dests/'+myId).remove();
+    // ここでteam_sales（売り上げランキング）を消さずにmyIdだけ削除すると、
+    // 次回以降は新しいmyIdでteam_salesに記録されるため、古いmyIdの記録が
+    // 「0円・0日出勤」の空アカウントとしてランキングに残り、同じ人が2行に
+    // 分かれて表示される不具合の原因になっていた
+    db.ref('team_sales/'+myId).remove();
   }
+  localStorage.removeItem('taxi_ranking_optin');
   localStorage.removeItem('taxi_name');
   localStorage.removeItem('taxi_car');
   localStorage.removeItem('taxi_my_id');
