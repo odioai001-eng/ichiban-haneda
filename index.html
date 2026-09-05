@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-15 -->
+<!-- v20260902-16 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1062,7 +1062,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-15';
+const APP_BUILD='20260902-16';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1089,7 +1089,7 @@ const PEER_ALIVE_MS=60*1000;
 let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0,arrivalAutoTimer=null;
 let dutyStart=null,dutyInterval=null,myLat=null,myLng=null;
 let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
-let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={};
+let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={},teamDestsLoaded=false;
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
 let poolMoves=[],poolLocks={},poolLockTimer=null,myLastAction=null;
 let poolProgress={};
@@ -2883,6 +2883,7 @@ function connectFirebase(config){
     });
     db.ref('team_dests').on('value',snap=>{
       teamDests=snap.val()||{};
+      teamDestsLoaded=true;
       // 自分の送先もFirebaseから同期（追加）
       const ownEntries=Object.values(teamDests[myId]||{});
       const fbTsSet=new Set(ownEntries.map(e=>e.ts).filter(Boolean));
@@ -3670,6 +3671,14 @@ function renderRankAllTimeGroup(){
   if(!el)return;
   if(!isRankingOptedIn()){
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px">上の「本日の売り上げランキング（グループ）」から入室してください</div>';
+    return;
+  }
+  // team_destsは仲間全員分の送り先データをまとめて読み込むため、電波状況等に
+  // よっては表示までに数秒かかることがある。読み込みが終わる前に「記録が
+  // ありません」と表示すると、データが消えたと誤解されてしまうため、
+  // 初回の読み込みが完了するまでは「読み込み中」と表示する
+  if(!teamDestsLoaded){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">読み込み中...</div>';
     return;
   }
   let allTrips=[];
