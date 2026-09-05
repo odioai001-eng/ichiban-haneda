@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-9 -->
+<!-- v20260902-10 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1046,7 +1046,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-9';
+const APP_BUILD='20260902-10';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1065,8 +1065,11 @@ const TILE_DEFS={
 let currentTileKey='osm',tileLayer=null;
 // 仲間の位置情報がこの時間以上更新されていなければ、地図のピン・仲間リストの
 // どちらからも「乗務中」とはみなさない（退勤済み、またはアプリ強制終了等で
-// 退勤処理が正常に走らなかった場合の両方をカバーする基準）
-const PEER_ALIVE_MS=5*60*1000;
+// 退勤処理が正常に走らなかった場合の両方をカバーする基準）。退勤後は
+// プライバシーに関わるため、以前の5分は長すぎるという指摘を受けて1分に短縮した。
+// 乗務中は5秒おきに位置情報を送信し続けているため、通常の電波状況であれば
+// 1分の猶予でも一時的な圏外・GPS不調による誤消滅は起きにくい
+const PEER_ALIVE_MS=60*1000;
 let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0,arrivalAutoTimer=null;
 let dutyStart=null,dutyInterval=null,myLat=null,myLng=null;
 let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
@@ -6997,9 +7000,11 @@ setInterval(()=>renderPoolChart(),60000);
 // 退勤時のFirebase削除（remove）が何らかの理由（通信エラー・ルール等）で
 // 失敗し、child_removedイベントが一度も届かなかった場合、そのままだと
 // 誰か別のドライバーの更新イベントが届くまで地図・仲間一覧から消えない
-// ままになってしまう。5分以上更新の無いドライバーは、新しいイベントを
-// 待たずに定期的に自分から一覧・地図をチェックして消すことで、
-// 「退勤しているのに消えない」状態がいつまでも残らないようにする
+// ままになってしまう。PEER_ALIVE_MS（1分）以上更新の無いドライバーは、
+// 新しいイベントを待たずに定期的に自分から一覧・地図をチェックして消すことで、
+// 「退勤しているのに消えない」状態がいつまでも残らないようにする。
+// 退勤後はプライバシーに関わるため、チェック間隔もPEER_ALIVE_MS短縮に合わせて
+// 10秒に短縮した
 setInterval(()=>{
   const now=Date.now();
   let changed=false;
@@ -7011,7 +7016,7 @@ setInterval(()=>{
     }
   });
   if(changed)updateDriverList();
-},30000);
+},10000);
 
 function toHMS(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return`${pad(h)}:${pad(m)}:${pad(sec)}`;}
 function pad(n){return String(n).padStart(2,'0');}
