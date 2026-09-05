@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-13 -->
+<!-- v20260902-14 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1062,7 +1062,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-13';
+const APP_BUILD='20260902-14';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3541,8 +3541,14 @@ function renderRankTodayPersonal(){
     else{rangeStart=getBusinessDayStart();rangeEnd=rangeStart+24*3600*1000;}
   }
   const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0&&(d.ts||0)>=rangeStart&&(d.ts||0)<rangeEnd).slice().sort((a,b)=>(b.fare||0)-(a.fare||0));
+  // 時刻（乗車〜降車時刻）は表示せず、降車地の住所を大きめの文字で見やすく表示する
   el.innerHTML=trips.length
-    ?trips.map((d,i)=>rankRowHtml(i,esc(d.boardTime||'--:--')+'→'+esc(d.alightTime||'--:--'),esc(d.alightAddr||''),exTax(d.fare),adminDelBtnHtml(`deleteTripFare(${d.ts})`))).join('')
+    ?trips.map((d,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:22px;font-weight:800;color:${i===0?'var(--gold)':'var(--muted)'}">${i+1}</div>
+      <div style="flex:1;font-size:15px;font-weight:700">${esc(d.alightAddr||'')}</div>
+      <div style="font-size:14px;font-weight:800;color:var(--green);white-space:nowrap">¥${exTax(d.fare).toLocaleString()}</div>
+      ${adminDelBtnHtml(`deleteTripFare(${d.ts})`)}
+    </div>`).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の記録がありません</div>';
 }
 // ② 本日の売り上げランキング（グループ・送先売上の合計）
