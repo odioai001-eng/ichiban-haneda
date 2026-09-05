@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-12 -->
+<!-- v20260902-13 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -156,13 +156,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 #page-settings .sec{font-size:16px;color:var(--accent);text-transform:none;letter-spacing:normal}
 #page-spotdest .sec{font-size:16px;color:var(--accent);text-transform:none;letter-spacing:normal}
 /* ランキングタブは各項目のタイトルを大きく・金色にして目立たせる */
-#page-ranking .sec{font-size:16px;color:var(--gold);text-transform:none;letter-spacing:normal}
+#page-ranking .sec{font-size:16px;color:var(--gold);text-transform:none;letter-spacing:normal;margin-top:0}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
   padding:14px;margin-bottom:10px}
 /* 設定タブは、項目ごとの区切りが分かりやすいよう白枠で囲う */
 #page-settings .card{border-color:#fff}
-/* ランキングタブは、項目ごとに金色の枠で囲う */
-#page-ranking .card{border-color:var(--gold)}
+/* ランキングタブは、タイトルから中身まで項目ごとひとまとめに金色の枠で囲う。
+   中の.cardは枠を二重にしないよう枠無しにする */
+.rank-sec-box{border:2px solid var(--gold);border-radius:14px;padding:12px 14px;margin-bottom:16px}
+.rank-sec-box .card{border:none;border-radius:0;padding:0;margin-bottom:0;background:transparent}
 .timer-big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;
   letter-spacing:1px;color:var(--gold)}
 .timer-med{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--cyan)}
@@ -475,21 +477,31 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <div class="page" id="page-ranking">
 <div class="pc">
-  <div class="sec">🏆 本日の売り上げランキング（グループ）</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
-  <div class="card"><div id="rank-today-group"></div></div>
-  <div class="sec" style="margin-top:18px">🏆 今月の売り上げランキング（グループ）</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
-  <div class="card"><div id="rank-month-group"></div></div>
-  <div class="sec" style="margin-top:18px">🏆 本日の売り上げランキング（本人）</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
-  <div class="card"><div id="rank-today-personal"></div></div>
-  <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（グループ）</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
-  <div class="card"><div id="rank-alltime-group"></div></div>
-  <div class="sec" style="margin-top:18px">🏆 歴代送り先ランキング（本人）</div>
-  <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
-  <div class="card"><div id="rank-alltime-personal"></div></div>
+  <div class="rank-sec-box">
+    <div class="sec">🏆 本日の売り上げランキング（グループ）</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
+    <div class="card"><div id="rank-today-group"></div></div>
+  </div>
+  <div class="rank-sec-box">
+    <div class="sec">🏆 今月の売り上げランキング（グループ）</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※合計金額は消費税抜き（入力した運賃から10%を差し引いた額）で表示しています</div>
+    <div class="card"><div id="rank-month-group"></div></div>
+  </div>
+  <div class="rank-sec-box">
+    <div class="sec">🏆 本日の売り上げランキング（本人）</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
+    <div class="card"><div id="rank-today-personal"></div></div>
+  </div>
+  <div class="rank-sec-box">
+    <div class="sec">🏆 歴代送り先ランキング（グループ）</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
+    <div class="card"><div id="rank-alltime-group"></div></div>
+  </div>
+  <div class="rank-sec-box">
+    <div class="sec">🏆 歴代送り先ランキング（本人）</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">※金額は消費税抜き（入力した運賃から10%を差し引き、四捨五入した額）で表示しています</div>
+    <div class="card"><div id="rank-alltime-personal"></div></div>
+  </div>
 </div>
 </div>
 
@@ -1050,7 +1062,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-12';
+const APP_BUILD='20260902-13';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
