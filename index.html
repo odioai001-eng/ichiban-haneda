@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-20 -->
+<!-- v20260902-21 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -436,6 +436,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="map-ctrl-btn" id="border-station-btn" onclick="toggleBorderStations()" title="最終電車が出ると神奈川・埼玉・千葉方面へタクシーでしか行けなくなる駅を地図にハイライト">🌉</button>
     <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/train_status_hub.html'" title="運行情報ハブ（人身事故・故障等）">🚨</button>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -1063,7 +1064,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-20';
+const APP_BUILD='20260902-21';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
