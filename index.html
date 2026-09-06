@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-19 -->
+<!-- v20260902-20 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -433,6 +433,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         <span id="online-count" style="color:var(--cyan)">0人</span>
       </div>
     </div>
+    <button class="map-ctrl-btn" id="border-station-btn" onclick="toggleBorderStations()" title="最終電車が出ると神奈川・埼玉・千葉方面へタクシーでしか行けなくなる駅を地図にハイライト">🌉</button>
     <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
   </div>
@@ -1062,7 +1063,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-19';
+const APP_BUILD='20260902-20';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1596,6 +1597,62 @@ function toggleStations(){
   stationLayer.addTo(leafletMap);
   stationsShown=true;
   toast(`🚉 地下鉄以外の主要駅 ${Object.keys(STATION_COORDS).length}件を地図に表示しました`);
+}
+
+// 上のSTATION_COORDSは「最終電車後に人が滞留しやすい都心の主要ターミナル駅」を
+// 対象にしているのに対し、こちらは対象が異なる：都県境に近く、最終電車が出ると
+// その先（神奈川・埼玉・千葉方面）へは鉄道の手段が無くなり、タクシーでしか
+// 移動できなくなる駅をハイライトする。lastTrainは平日の最終電車時刻（下り、
+// 都県境を越える方向）。ダイヤ改正で変わるため、確認できたものから随時更新する
+const BORDER_STATIONS=[
+  {name:'六郷土手駅',line:'京急本線（下り・神奈川方面）',lat:35.5407,lng:139.7078,lastTrain:null},
+  {name:'京急蒲田駅',line:'京急本線（下り・神奈川方面）',lat:35.560680,lng:139.723730,lastTrain:null},
+  {name:'多摩川駅',line:'東急東横線（下り・神奈川方面）',lat:35.589462,lng:139.668778,lastTrain:null},
+  {name:'二子玉川駅',line:'東急田園都市線（下り・神奈川方面）',lat:35.611583,lng:139.626778,lastTrain:null},
+  {name:'町田駅',line:'小田急小田原線・JR横浜線（神奈川方面）',lat:35.544214,lng:139.445297,lastTrain:null},
+  {name:'南大沢駅',line:'京王相模原線（下り・神奈川方面）',lat:35.614139,lng:139.380056,lastTrain:null},
+  {name:'矢野口駅',line:'JR南武線（川崎方面）',lat:35.641703,lng:139.520461,lastTrain:null},
+  {name:'成増駅',line:'東武東上線（下り・埼玉方面）',lat:35.777300,lng:139.632600,lastTrain:null},
+  {name:'秋津駅',line:'西武池袋線（下り・埼玉方面）',lat:35.778280,lng:139.496750,lastTrain:null},
+  {name:'西葛西駅',line:'東京メトロ東西線（下り・千葉方面）',lat:35.664683,lng:139.858992,lastTrain:null},
+  {name:'葛西臨海公園駅',line:'JR京葉線（下り・千葉方面）',lat:35.644389,lng:139.861583,lastTrain:null}
+];
+let borderStationLayer=null,borderStationsShown=false;
+function renderBorderStationLayer(){
+  if(!borderStationLayer)return;
+  borderStationLayer.clearLayers();
+  BORDER_STATIONS.forEach(s=>{
+    const color='#fb7185';
+    L.circle([s.lat,s.lng],{radius:70,color,weight:2,fillColor:color,fillOpacity:.2}).addTo(borderStationLayer);
+    const labelHtml=s.lastTrain?`<div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);
+        white-space:nowrap;background:rgba(13,13,26,.85);color:${color};font-size:11px;font-weight:700;
+        padding:1px 6px;border-radius:6px;border:1px solid ${color}">最終${esc(s.lastTrain)}</div>`:'';
+    const icon=L.divIcon({
+      html:`<div style="position:relative;width:60px;height:30px;display:flex;align-items:center;justify-content:center">
+        <div style="position:relative;background:${color};border:2px solid #fff;border-radius:50%;
+          width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+          font-size:13px;box-shadow:0 0 6px rgba(251,113,133,.8)">🌉</div>
+        ${labelHtml}
+      </div>`,
+      className:'',iconAnchor:[30,13]
+    });
+    L.marker([s.lat,s.lng],{icon}).bindPopup(`<b>🌉 ${esc(s.name)}</b><br>${esc(s.line)}${s.lastTrain?`<br>最終電車: ${esc(s.lastTrain)}`:'<br><span style="color:var(--muted)">最終電車の時刻は未確認です</span>'}`).addTo(borderStationLayer);
+  });
+}
+function toggleBorderStations(){
+  const btn=document.getElementById('border-station-btn');
+  if(borderStationsShown){
+    if(borderStationLayer)leafletMap.removeLayer(borderStationLayer);
+    borderStationsShown=false;
+    if(btn)btn.classList.remove('on');
+    return;
+  }
+  if(btn)btn.classList.add('on');
+  if(!borderStationLayer)borderStationLayer=L.layerGroup();
+  renderBorderStationLayer();
+  borderStationLayer.addTo(leafletMap);
+  borderStationsShown=true;
+  toast(`🌉 最終電車後にタクシーのみとなる駅 ${BORDER_STATIONS.length}件を地図に表示しました`);
 }
 
 // 羽田・成田空港行きの需要が見込める、都内の大型ビジネス・シティホテルをハイライトする。
