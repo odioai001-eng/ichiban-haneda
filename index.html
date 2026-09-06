@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-21 -->
+<!-- v20260902-22 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1064,7 +1064,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-21';
+const APP_BUILD='20260902-22';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3843,6 +3843,12 @@ function cpDwellMs(cp){
 // 待機開始として使う（onDepartureで第4プールを出る時に確定させ、setStatusで
 // 実車になった時点で一度だけ読み取って使い切る）
 let intlPool4ArriveTs=null;
+// 国際線第3プールでの実車自動判定に「第4プールを経由してきたか」を条件に
+// 加えるための、直近に第4プールへ到着した時刻（消費せず、到着のたびに
+// 上書きするだけ。intlPool4ArriveTsは待機時間の起点用に別途使い切られるため
+// 目的が異なり、こちらは触らない）
+let lastIntlPool4EntryTs=null;
+const INTL_POOL4_VIA_WINDOW_MS=60*60*1000; // 第4プール到着からこの時間内の第3プール出発のみ対象にする
 function findIntlPoolCp(poolNum){
   return checkpoints.find(c=>c.name&&c.name.includes('国際線')&&c.name.includes(poolNum));
 }
@@ -4005,11 +4011,18 @@ function onDeparture(cp){
   // 経由してたどり着く運用のため、そのエリア自体に5秒以上いれば実際に乗せたとみなせる）。
   // 以前は走行速度（時速13km未満の記録の有無）で「列に並んでいたか」を推測していたが、
   // 乗り場付近の曲がり角で一瞬減速しただけの素通りでも該当してしまい、誤って実車化
-  // される不具合があったため、GPSでの滞在時間そのものを見る単純な条件に変更した
+  // される不具合があったため、GPSでの滞在時間そのものを見る単純な条件に変更した。
+  // ただし国際線乗り場（第3プール）は周辺道路を含めエリア自体が広く、5秒程度の
+  // 滞在は素通りでも普通に発生してしまい、まだ誤作動が報告されたため、国際線に
+  // 限り「直近1時間以内に第4プールを経由してきたか」も条件に加える（本当の
+  // 乗車フローは必ず第4→第3の順で通るため、素通りだけでは満たせない）
   const spotLabel=spotLabelFromCheckpointName(cp.name);
   const SPOT_MIN_STOP_MS=5000;
   const hadMinSpotStop=cpDwellMs(cp)>=SPOT_MIN_STOP_MS;
-  if(spotLabel&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&hadMinSpotStop){
+  const isIntlSpot=spotLabel==='国際線';
+  const wentViaPool4=!!lastIntlPool4EntryTs&&(Date.now()-lastIntlPool4EntryTs)<INTL_POOL4_VIA_WINDOW_MS;
+  const hadMinSpotStopFinal=isIntlSpot?(hadMinSpotStop&&wentViaPool4):hadMinSpotStop;
+  if(spotLabel&&isDuty&&!testMode&&currentStatus!=='jitsusha'&&hadMinSpotStopFinal){
     currentSpotSelection=spotLabel;
     // 号チップを手動で選んだ場合（selectSpot）と同じ「東京都大田区羽田空港◯◯乗り場」
     // の表記に揃える。待機場所ラベル・仲間に共有されるwaitSpotのいずれも、
@@ -4036,6 +4049,7 @@ function onDeparture(cp){
 
 function onArrival(cp,dist){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  if(cp.name&&cp.name.includes('国際線')&&cp.name.includes('第4'))lastIntlPool4EntryTs=Date.now();
   // 同じ滞在中にGPSの揺れ等で到着イベントが再発火しても、すでに選んだ号・到着時刻を消さない
   const isFreshStay=!cp.poolModalHandled;
   if(isFreshStay){
