@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-22 -->
+<!-- v20260902-23 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -937,7 +937,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
     <div style="display:flex;gap:10px">
-      <button onclick="cancelEndDuty()" class="btn btn-g" style="flex:1">キャンセル</button>
+      <button onclick="cancelEndDuty()" class="btn btn-g" style="flex:1;font-size:12px">取消して乗務続行</button>
       <button onclick="confirmEndDuty()" class="btn btn-p" style="flex:1">退勤する</button>
     </div>
   </div>
@@ -1064,7 +1064,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-22';
+const APP_BUILD='20260902-23';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2211,8 +2211,14 @@ function endDutyImmediate(){
 // 一切記録されない不具合の直接の原因）。ここでendDutyImmediate()の内容を
 // きちんと巻き戻すようにする
 function cancelEndDuty(){
+  if(isDuty||!dutyStart){
+    document.getElementById('duty-end-confirm-modal').style.display='none';
+    return; // 既に乗務中、または出勤情報が無ければ何もしない
+  }
+  // 「キャンセル」は退勤を取り消して乗務を継続する、影響の大きいボタンのため、
+  // 誤タップでそのまま乗務中に戻ってしまわないよう、ここでもう一度確認する
+  if(!confirm('退勤を取り消して、乗務を続けますか？'))return;
   document.getElementById('duty-end-confirm-modal').style.display='none';
-  if(isDuty||!dutyStart)return; // 既に乗務中、または出勤情報が無ければ何もしない
   isDuty=true;
   try{
     const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
@@ -3149,10 +3155,26 @@ function makeDriverRow(id, d, isMe){
       ${!isMe?`<button onclick="event.stopPropagation();toggleDriverDests('${id}')"
         style="background:var(--surface2);border:1px solid var(--border);
         border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--accent)">📋</button>`:''}
+      ${!isMe&&alive&&isAdmin?`<button onclick="event.stopPropagation();adminForceOfflineDriver('${id}','${esc(d.name||'不明').replace(/'/g,"\\'")}')"
+        title="退勤し忘れている等で地図・一覧に残り続けている場合に、強制的にオフラインにする"
+        style="background:var(--surface2);border:1px solid var(--red);
+        border-radius:8px;padding:4px 8px;font-size:12px;cursor:pointer;color:var(--red)">🔌</button>`:''}
     </div>
   </div>
   ${!isMe?`<div id="ddests-${id}" style="display:none;padding:0 10px 10px"></div>`:''}`;
 
+}
+// 退勤し忘れ（スリープ防止をオンにしたまま等）で、何日も地図・仲間一覧に
+// 残り続けてしまう仲間を、管理者が強制的にオフラインにするための機能。
+// 本人のisDutyがtrueのまま動き続けていても、Firebase側のレコードさえ消せば
+// 見た目上は退勤済みと同じ扱いになる（本人のGPS送信自体は止まらないため、
+// 次の位置情報送信でまた再表示されてしまう点に注意。根本的には本人が
+// 実際に「退勤する」を押す必要がある）
+function adminForceOfflineDriver(uid,name){
+  if(!isAdmin){toast('⚠️ 管理者のみ操作できます');return;}
+  if(!confirm(`${name}さんを強制的にオフラインにしますか？\n（本人が退勤を忘れている場合の応急処置です。本人の端末が動き続けていると、再び表示されることがあります）`))return;
+  if(db)db.ref('drivers/'+uid).remove();
+  toast(`🔌 ${name}さんを強制的にオフラインにしました`);
 }
 
 function updateDriverList(){
