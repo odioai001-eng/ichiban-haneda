@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-23 -->
+<!-- v20260902-24 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -658,7 +658,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <div class="sec">🗑 アカウント管理</div>
     <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Firebaseに登録されているドライバーを削除できます。</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Firebaseに登録されているドライバーを管理できます。「📴 強制オフライン」は地図・仲間リストから一時的に外すだけで、送り先の記録は残ります（次に出勤すればまた表示されます）。「削除」は送り先の記録ごと完全に削除します。</div>
       <div id="account-list"></div>
       <button class="btn btn-g" onclick="loadAccountList()" style="width:100%;margin-top:4px">🔄 最新の一覧を取得</button>
     </div>
@@ -1063,7 +1063,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-23';
+const APP_BUILD='20260902-24';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5976,11 +5976,28 @@ function loadAccountList(){
           <div style="font-size:11px;color:var(--muted)">最終更新: ${tsStr}</div>
           <div style="font-size:10px;color:var(--muted);font-family:monospace">${id}</div>
         </div>
-        ${!isMe?`<button class="btn btn-d" style="font-size:11px;padding:5px 10px;flex-shrink:0"
+        ${!isMe?`<button class="btn btn-g" style="font-size:11px;padding:5px 10px;flex-shrink:0"
+          onclick="forceOffline('${id}','${esc(d.name||'このアカウント')}')">📴 強制オフライン</button>
+        <button class="btn btn-d" style="font-size:11px;padding:5px 10px;flex-shrink:0"
           onclick="deleteAccount('${id}','${esc(d.name||'このアカウント')}')">削除</button>`:'<span style="font-size:11px;color:var(--muted)">自分</span>'}
       </div>`;
     }).join('');
   });
+}
+
+// 「削除」は送り先の記録ごと完全に消してしまうため、退勤し忘れ等で地図に
+// 残ったままの人を一時的に地図から外したいだけの場合には強すぎる。
+// drivers（現在地・オンライン状態）だけを消し、team_dests（送り先の履歴）は
+// 残す軽い操作として用意する。本人が次に出勤すればまた通常通り表示される
+function forceOffline(id,name){
+  if(!confirm(name+'を強制的にオフラインにしますか？\n（送り先の記録は削除されません。本人が次に出勤すると再び表示されます）'))return;
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  db.ref('drivers/'+id).remove()
+    .then(()=>{
+      toast('📴 '+name+' を強制オフラインにしました');
+      loadAccountList();
+    })
+    .catch(e=>toast('⚠️ 失敗しました: '+e.message));
 }
 
 function deleteAccount(id,name){
