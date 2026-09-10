@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-24 -->
+<!-- v20260902-25 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1063,7 +1063,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-24';
+const APP_BUILD='20260902-25';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2503,6 +2503,15 @@ function applyDutyPlanChoice(){
   }else{
     localStorage.removeItem('taxi_today_target_hours');
   }
+  // 「本日の売り上げランキング（グループ）」に出庫・帰庫予定時刻を表示するため、
+  // 自分の上がり予定時刻（帰庫予定）をdrivers/{myId}にも共有しておく。
+  // プラン未選択（skip）の場合はnullにして「未設定」扱いにする
+  if(db&&!testMode&&dutyStart){
+    const storedPlan=JSON.parse(localStorage.getItem('taxi_today_target_hours')||'null');
+    const planFinishTs=(storedPlan&&storedPlan.shiftStartTs===dutyStart.getTime())
+      ?dutyStart.getTime()+Math.round(storedPlan.hours*3600*1000):null;
+    db.ref('drivers/'+myId).update({planFinishTs});
+  }
 }
 
 function cancelDutyCarModal(){
@@ -3684,8 +3693,20 @@ function renderRankTodayGroup(){
   if(!isRankingOptedIn()){el.innerHTML=rankingLockHtml();return;}
   const bizStart=getBusinessDayStart();
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.todayBizStart===bizStart).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
+  // 出庫（出勤）・帰庫予定（上がり予定）時刻は、各自がdrivers/{uid}に共有している
+  // dutyStartTs・planFinishTsから取得する（出勤中の人のみ分かるため、既に退勤済みの
+  // 場合はdriverDataに無く表示されない）
   el.innerHTML=list.length
-    ?list.map((d,i)=>rankRowHtml(i,esc(d.name||'不明'),'',d.todayFare,adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`))).join('')
+    ?list.map((d,i)=>{
+      const dd=driverData[d.uid];
+      let sub='';
+      if(dd&&dd.dutyStartTs){
+        const outStr=esc(new Date(dd.dutyStartTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}));
+        const backStr=dd.planFinishTs?esc(new Date(dd.planFinishTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})):'未設定';
+        sub=`出庫${outStr}、帰庫予定${backStr}`;
+      }
+      return rankRowHtml(i,esc(d.name||'不明'),sub,d.todayFare,adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`));
+    }).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>';
 }
 // ③ 今月の売り上げランキング（グループ・送先売上の合計）
