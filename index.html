@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-31 -->
+<!-- v20260902-32 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-31';
+const APP_BUILD='20260902-32';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -7295,16 +7295,23 @@ setInterval(()=>renderPoolChart(),60000);
 // 失敗し、child_removedイベントが一度も届かなかった場合、そのままだと
 // 誰か別のドライバーの更新イベントが届くまで地図・仲間一覧から消えない
 // ままになってしまう。PEER_ALIVE_MS（1分）以上更新の無いドライバーは、
-// 新しいイベントを待たずに定期的に自分から一覧・地図をチェックして消すことで、
-// 「退勤しているのに消えない」状態がいつまでも残らないようにする。
+// 新しいイベントを待たずに定期的に自分から地図上のアイコン（位置情報）を
+// 消すことで、「退勤しているのに消えない」状態がいつまでも残らないようにする。
 // 退勤後はプライバシーに関わるため、チェック間隔もPEER_ALIVE_MS短縮に合わせて
-// 10秒に短縮した
+// 10秒に短縮した。
+//
+// 以前はここでdriverData自体（そのドライバーの出庫時刻・帰庫予定等を含む
+// レコード全体）も削除していたが、GPSは停車中（プールでの待機中など）に
+// 更新間隔が1分を超えることが珍しくなく、その度に「本日の売り上げランキング
+// （グループ）」の出庫・帰庫予定表示が本人はまだ乗務中にもかかわらず消えて
+// しまう不具合の原因になっていた（実際に退勤した場合はdb.ref('drivers').
+// on('child_removed',...)が確実に検知してdriverDataを削除するため、地図上の
+// アイコンだけをここで消せば十分）
 setInterval(()=>{
   const now=Date.now();
   let changed=false;
   Object.entries(driverData).forEach(([id,d])=>{
-    if(now-(d.ts||0)>=PEER_ALIVE_MS){
-      delete driverData[id];
+    if(now-(d.ts||0)>=PEER_ALIVE_MS&&peerMarkers[id]){
       removePeerMarker(id);
       changed=true;
     }
