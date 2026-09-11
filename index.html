@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-28 -->
+<!-- v20260902-29 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1063,7 +1063,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-28';
+const APP_BUILD='20260902-29';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1879,12 +1879,7 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak,poolLabel){
     background:#f59e0b;border-radius:50%;width:14px;height:14px;
     font-size:9px;display:flex;align-items:center;justify-content:center;
     border:1px solid #fff">⚠</div>`:'';
-  const poolBadge=poolLabel?`<div style="position:absolute;top:50%;left:100%;
-    transform:translateY(-50%);margin-left:5px;white-space:nowrap;
-    background:rgba(0,0,0,.82);color:#fbbf24;font-size:11px;font-weight:800;
-    padding:3px 7px;border-radius:6px;text-align:center;line-height:1.3">
-    ${esc(poolLabel.spot)}<br>${poolLabel.mins}分
-  </div>`:'';
+  const poolBadge=poolLabel?` <span style="color:#fbbf24">${esc(poolLabel.spot)} ${poolLabel.mins}分</span>`:'';
   return L.divIcon({
     html:`<div style="background:${cfg.color};border:3px solid #fff;border-radius:50%;
       width:36px;height:36px;
@@ -1893,12 +1888,11 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak,poolLabel){
       ${initial}
       ${gpsDot}
       ${weakBadge}
-      ${poolBadge}
       <div style="position:absolute;bottom:${labelBottom};left:50%;
         transform:translateX(-50%);
         white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
         font-size:11px;padding:2px 7px;border-radius:5px;font-weight:700;text-align:center">
-        ${esc(name)}${isMe?' (自分)':''}
+        ${esc(name)}${isMe?' (自分)':''}${poolBadge}
         ${gpsWeak?'<div style="font-size:9px;color:#fbbf24">📶 GPS弱</div>':''}
         ${carLines}
       </div>
