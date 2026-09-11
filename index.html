@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-26 -->
+<!-- v20260902-27 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1063,7 +1063,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-26';
+const APP_BUILD='20260902-27';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3704,14 +3704,29 @@ function renderRankTodayGroup(){
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.todayBizStart===bizStart).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
   // 出庫（出勤）・帰庫予定（上がり予定）時刻は、各自がdrivers/{uid}に共有している
   // dutyStartTs・planFinishTsから取得する（出勤中の人のみ分かるため、既に退勤済みの
-  // 場合はdriverDataに無く表示されない）
+  // 場合はdriverDataに無く表示されない）。
+  // driverDataは「自分以外」のドライバーしか保持していない（db.ref('drivers').on(...)側で
+  // 自分のidは常にスキップされる仕組みのため）。そのため自分の行だけはdriverDataではなく
+  // 自分自身のグローバル変数（dutyStart・taxi_today_target_hours）から直接計算しないと、
+  // 自分の画面では自分の出庫・帰庫予定だけが常に空欄になってしまっていた
   el.innerHTML=list.length
     ?list.map((d,i)=>{
-      const dd=driverData[d.uid];
+      let dutyStartTs=null,planFinishTs=null;
+      if(d.uid===myId){
+        if(isDuty&&dutyStart){
+          dutyStartTs=dutyStart.getTime();
+          const storedPlan=JSON.parse(localStorage.getItem('taxi_today_target_hours')||'null');
+          planFinishTs=(storedPlan&&storedPlan.shiftStartTs===dutyStartTs)
+            ?dutyStartTs+Math.round(storedPlan.hours*3600*1000):null;
+        }
+      }else{
+        const dd=driverData[d.uid];
+        if(dd&&dd.dutyStartTs){dutyStartTs=dd.dutyStartTs;planFinishTs=dd.planFinishTs||null;}
+      }
       let sub='';
-      if(dd&&dd.dutyStartTs){
-        const outStr=esc(new Date(dd.dutyStartTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}));
-        const backStr=dd.planFinishTs?esc(new Date(dd.planFinishTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})):'未設定';
+      if(dutyStartTs){
+        const outStr=esc(new Date(dutyStartTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}));
+        const backStr=planFinishTs?esc(new Date(planFinishTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})):'未設定';
         sub=`出庫${outStr}、帰庫予定${backStr}`;
       }
       return rankRowHtml(i,esc(d.name||'不明'),sub,d.todayFare,adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`));
