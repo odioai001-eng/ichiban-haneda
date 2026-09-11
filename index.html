@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-27 -->
+<!-- v20260902-28 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1063,7 +1063,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-27';
+const APP_BUILD='20260902-28';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1849,7 +1849,20 @@ function gpsAgeDot(ageSec){
   return '#ef4444';                  // 赤: 2分超
 }
 
-function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
+// 国内線プール（1〜4号乗り場）の中にいる間だけ、アイコンの右隣に「○号」「○○分」を
+// 表示するためのラベル情報を計算する。プールの外にいる、号がまだ選ばれていない、
+// 待機タイマーが動いていない、のいずれかに該当する場合はnull（非表示）を返す
+function domesticPoolLabel(lat,lng,waitSpotText,waitSinceTs){
+  if(lat===null||lat===undefined||lng===null||lng===undefined)return null;
+  const hCp=checkpoints.find(c=>c.id==='haneda');
+  if(!hCp||hCp.lat===null)return null;
+  if(haversine(Number(lat),Number(lng),hCp.lat,hCp.lng)>hCp.radius)return null;
+  const m=(waitSpotText||'').match(/([1-4]号)/);
+  if(!m||!waitSinceTs)return null;
+  const mins=Math.max(0,Math.floor((Date.now()-waitSinceTs)/60000));
+  return {spot:m[1],mins};
+}
+function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak,poolLabel){
   const cfg=statusCfg[status]||statusCfg.offline;
   const initial=(name||'?').slice(0,1);
   const ring=isMe?`box-shadow:0 0 0 3px #fff,0 0 0 6px ${cfg.color};`:'';
@@ -1866,6 +1879,12 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
     background:#f59e0b;border-radius:50%;width:14px;height:14px;
     font-size:9px;display:flex;align-items:center;justify-content:center;
     border:1px solid #fff">⚠</div>`:'';
+  const poolBadge=poolLabel?`<div style="position:absolute;top:50%;left:100%;
+    transform:translateY(-50%);margin-left:5px;white-space:nowrap;
+    background:rgba(0,0,0,.82);color:#fbbf24;font-size:11px;font-weight:800;
+    padding:3px 7px;border-radius:6px;text-align:center;line-height:1.3">
+    ${esc(poolLabel.spot)}<br>${poolLabel.mins}分
+  </div>`:'';
   return L.divIcon({
     html:`<div style="background:${cfg.color};border:3px solid #fff;border-radius:50%;
       width:36px;height:36px;
@@ -1874,6 +1893,7 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak){
       ${initial}
       ${gpsDot}
       ${weakBadge}
+      ${poolBadge}
       <div style="position:absolute;bottom:${labelBottom};left:50%;
         transform:translateX(-50%);
         white-space:nowrap;background:rgba(0,0,0,.82);color:#fff;
@@ -1892,7 +1912,11 @@ function updateMyMarker(lat,lng){
   const plate=localStorage.getItem('taxi_number')||'';
   const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
   const isWeak=ageSec!==null&&ageSec>20;
-  const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak);
+  const waitSpotLblEl=document.getElementById('wait-spot-lbl');
+  const poolLabel=(waitInterval&&waitStart)
+    ?domesticPoolLabel(lat,lng,waitSpotLblEl?waitSpotLblEl.textContent:'',waitStart)
+    :null;
+  const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak,poolLabel);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
 }
@@ -1908,7 +1932,8 @@ function updatePeerMarker(id,d){
   if(!alive){removePeerMarker(id);return;}
   const status=d.status||'kuusha';
   const ageSec=Math.floor(age/1000);
-  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak);
+  const poolLabel=domesticPoolLabel(d.lat,d.lng,d.waitSpot,d.waitSince);
+  const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak,poolLabel);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)panMapTo(()=>leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5}));
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
   else if(d.lat&&d.lng){
