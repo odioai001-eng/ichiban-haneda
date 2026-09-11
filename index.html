@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-33 -->
+<!-- v20260902-34 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-33';
+const APP_BUILD='20260902-34';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2615,6 +2615,11 @@ function _startDuty(){
     // 接続確立時（.info/connected）にも登録しているが、既に接続済みの状態で
     // 出勤した場合はそのイベントが再発火しないため、ここでも登録しておく
     db.ref('drivers/'+myId).onDisconnect().remove();
+    // team_salesは1分ごとの自動送信（isDuty中）や運賃記録時にしか更新して
+    // いなかったため、まだ一度も運賃を記録していない出勤直後は「本日の売り上げ
+    // ランキング（グループ）」に自分の行自体がまだ現れず、出庫・帰庫予定も
+    // 表示できなかった。出勤した瞬間から行が現れるよう、ここで即座に送信する
+    pushTeamSales();
   }
   renderDests();
   requestNotificationPermission();
