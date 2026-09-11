@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-29 -->
+<!-- v20260902-30 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -283,10 +283,13 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <div class="hdr">
   <div class="hdr-title">✈️ イチバン<br>羽田チームアプリ</div>
   <div style="display:flex;align-items:center;gap:8px">
+    <!-- 地図右上の「＋」（拡大）ボタンのすぐ上に「退勤する」ボタンが来ると誤タップしやすいため、
+         誤タップしても実害の無いスリープ防止ボタンを一番右端に、退勤ボタンはそこから
+         離した位置に配置する -->
+    <button class="duty-btn off" id="duty-btn" onclick="toggleDuty()">出勤する</button>
+    <div style="width:18px"></div>
     <span style="font-size:11px;color:var(--muted)" id="duty-label">休み中</span>
     <button class="sleep-btn" id="sleep-btn" onclick="toggleWakeLock()" title="スリープ防止">📺</button>
-    <div style="width:14px"></div>
-    <button class="duty-btn off" id="duty-btn" onclick="toggleDuty()">出勤する</button>
   </div>
 </div>
 
@@ -1063,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-29';
+const APP_BUILD='20260902-30';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
