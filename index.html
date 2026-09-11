@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-30 -->
+<!-- v20260902-31 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-30';
+const APP_BUILD='20260902-31';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2880,6 +2880,14 @@ function setStatus(s){
       ?new Date(waitStartTsUsed).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})
       :((hCpAll&&hCpAll.arrivalTimeStr)||'−');
     if(hCpAll&&!staysInPool){hCpAll.currentSpot=null;hCpAll.arrivalTimeStr=null;hCpAll.poolModalHandled=false;}
+    // 列移動の表示（各乗り場の間隔・待機開始時間）も、待機タイマー・号選択と同じ
+    // ここ（実車ボタンを押した時点）で確定させる。以前はGPSでプールの外に出たことを
+    // 検知するonDeparture側だけで確定させていたが、実際に乗せて走り出すと
+    // アプリがバックグラウンドに回ったり、90秒の退場確定を待つ前に画面を閉じたり
+    // することが多く、確定処理自体が実行されずに前回の入力内容が残り続けてしまう
+    // （「列移動の表示が前回から継続している」）不具合の原因になっていた。実車ボタンは
+    // 必ず押される操作のため、ここでも確定させることで確実性を上げる
+    if(myPoolInputActive&&hCpAll&&!staysInPool)finalizePoolMoveHistory();
     if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
     renderSpotRow();
     hidePoolPanel();hidePoolHistory();syncPoolPanel();
