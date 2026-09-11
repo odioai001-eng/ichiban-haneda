@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-26 -->
+<!-- v20260902-27 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1063,7 +1063,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-26';
+const APP_BUILD='20260902-27';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1094,6 +1094,7 @@ let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
 let poolMoves=[],poolLocks={},poolLockTimer=null,myLastAction=null;
 let poolProgress={};
+let poolSessionMeta={}; // 入力者がプールを出発した時刻など、列移動表示の表示/非表示を判断するための情報
 let intlPoolMoves=[]; // 国際線2列移動の記録 {ts,uid,name}
 let poolMoveHistory=[]; // 列移動の記録セッション履歴 {startTs,endTs,counts,by}
 // 今回のプール滞在中に自分が列移動を入力したか（出発時の履歴保存の要否判定に使う）。
@@ -1105,6 +1106,10 @@ let myPoolInputActive=localStorage.getItem('taxi_pool_input_active')==='1';
 function markMyPoolInputActive(){
   myPoolInputActive=true;
   localStorage.setItem('taxi_pool_input_active','1');
+  // 再度プールに到着して入力を始めた時は、前回退出時に記録した「非表示タイマー」の
+  // 起点を消しておく。これをしないと、直前のセッションの退出時刻を基準にした
+  // 5分後の非表示判定が新しいセッションにまで影響してしまう
+  if(db&&!testMode)db.ref('pool_session_meta/endTs').remove();
 }
 let unreadChatCount=0,voiceRecog=null,voiceActive=false;
 let chatReadMap={};
@@ -3018,6 +3023,10 @@ function connectFirebase(config){
     });
     db.ref('pool_progress').on('value',snap=>{
       poolProgress=snap.val()||{};
+      renderPoolChart();
+    });
+    db.ref('pool_session_meta').on('value',snap=>{
+      poolSessionMeta=snap.val()||{};
       renderPoolChart();
     });
     db.ref('chat_reads').on('value',snap=>{
@@ -6456,13 +6465,27 @@ function syncPoolHistoryBottom(){
   });
 }
 
+const POOL_HIDE_AFTER_DEPARTURE_MS=5*60*1000; // 入力者がプールを出発してから5分で列移動表示を非表示にする
 function renderPoolChart(){
   const now=Date.now();
-  const LIMIT=PROGRESS_TIMEOUT_MS; // 表示可否の判定も、データのリセット時間(20分)と揃える
-  const lastAll=poolMoves.length?poolMoves[poolMoves.length-1].ts:0;
+  const LIMIT=PROGRESS_TIMEOUT_MS; // 明示的な退出シグナルがまだ無い場合のフォールバック（20分）
   const lastIntl=intlPoolMoves.length?intlPoolMoves[intlPoolMoves.length-1].ts:0;
+  const intlShow=lastIntl&&now-lastIntl<=LIMIT;
   const progressAll=Object.values(poolProgress).some(p=>p&&now-(p.ts||0)<=LIMIT);
-  const show=(lastAll&&now-lastAll<=LIMIT)||(lastIntl&&now-lastIntl<=LIMIT)||progressAll;
+  // 1〜4号側は、入力者が羽田プールを出発した時刻(pool_session_meta.endTs)を基準に、
+  // 退出から5分間だけ表示を維持し、5分経過したら（新たな入力が無い限り）非表示にする。
+  // 出発シグナルがまだ一度も届いていない場合（アプリ起動直後・異常終了直後など）は
+  // 従来通り「直近の操作から20分以内か」で判定する
+  let spotShow;
+  if(progressAll){
+    spotShow=true;
+  }else if(poolSessionMeta.endTs){
+    spotShow=(now-poolSessionMeta.endTs)<=POOL_HIDE_AFTER_DEPARTURE_MS;
+  }else{
+    const lastAll=poolMoves.length?poolMoves[poolMoves.length-1].ts:0;
+    spotShow=lastAll&&now-lastAll<=LIMIT;
+  }
+  const show=spotShow||intlShow;
   const row=document.getElementById('pool-info-row');
   const startRow=document.getElementById('pool-start-row');
   if(row)row.style.display=show?'grid':'none';
@@ -6630,11 +6653,17 @@ function renderIntlMoveLog(){
 // 1号〜4号乗り場も国際線と同様、押した回数の累計（旧「N列」表示）ではなく、
 // その乗り場で前回押してから何分で押したか（＝前回の移動から何分で移動したか）を
 // 時系列（左から古い順）で並べて表示する。1回目の入力は比較対象の前回が無いため
-// 数値を出さない
+// 数値を出さない。
+// 「今日1日分」ではなく、その乗り場の「現在進行中の入力セッション」
+// （poolProgress[spot].startTs、＝出発時にリセットされる）を基準に絞り込む。
+// こうしないと、同じ日に一度プールを離れて再度戻って来た時、何時間も前の
+// （既に終わった）セッションの間隔が新しいセッションの表示に混ざって残ってしまう
 function poolMoveIntervalsText(spot){
-  const todayStr=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const prog=poolProgress[spot];
+  const sessionStart=prog&&prog.startTs?prog.startTs:null;
+  if(!sessionStart)return `${spot} −`;
   const moves=poolMoves
-    .filter(m=>m.spot===spot&&new Date(m.ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'})===todayStr)
+    .filter(m=>m.spot===spot&&m.ts>=sessionStart)
     .sort((a,b)=>a.ts-b.ts);
   if(moves.length<2)return `${spot} −`;
   const intervals=[];
@@ -6649,6 +6678,9 @@ function finalizePoolMoveHistory(){
   myPoolInputActive=false;
   localStorage.removeItem('taxi_pool_input_active');
   if(!db||testMode)return;
+  // 入力者がプールを出発した時刻を仲間全員で共有し、その5分後に列移動表示を
+  // 非表示にする（renderPoolChartのPOOL_HIDE_AFTER_DEPARTURE_MS判定で使用）
+  db.ref('pool_session_meta').set({endTs:Date.now()});
   const counts={};
   let startTs=null;
   ['1号','2号','3号','4号'].forEach(spot=>{
