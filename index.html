@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-36 -->
+<!-- v20260902-37 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-36';
+const APP_BUILD='20260902-37';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6092,7 +6092,9 @@ function loadAccountList(){
         ${!isMe?`<button class="btn btn-g" style="font-size:11px;padding:5px 10px;flex-shrink:0"
           onclick="forceOffline('${id}','${esc(d.name||'このアカウント')}')">📴 強制オフライン</button>
         <button class="btn btn-d" style="font-size:11px;padding:5px 10px;flex-shrink:0"
-          onclick="deleteAccount('${id}','${esc(d.name||'このアカウント')}')">削除</button>`:'<span style="font-size:11px;color:var(--muted)">自分</span>'}
+          onclick="deleteAccount('${id}','${esc(d.name||'このアカウント')}')">削除</button>`
+          :`<button class="btn btn-g" style="font-size:11px;padding:5px 10px;flex-shrink:0"
+          onclick="forceOfflineSelf()">📴 強制オフライン</button>`}
       </div>`;
     }).join('');
   });
@@ -6108,6 +6110,28 @@ function forceOffline(id,name){
   db.ref('drivers/'+id).remove()
     .then(()=>{
       toast('📴 '+name+' を強制オフラインにしました');
+      loadAccountList();
+    })
+    .catch(e=>toast('⚠️ 失敗しました: '+e.message));
+}
+
+// 管理者自身のアイコンを強制的にオフラインにするための、自分専用の強制オフライン。
+// 他人に対するforceOffline()はdrivers/{id}をそのまま削除するだけだが、自分自身が
+// まだ乗務中の場合は、それだけだとGPS送信・60秒おきの自動送信が生き続けていて
+// すぐにレコードが復活してしまう。乗務中なら通常の退勤ボタンと全く同じ処理
+// （toggleDuty→endDutyImmediate、退勤時刻確認モーダル）を呼ぶことで、GPS停止・
+// isDutyのリセット・勤務記録の確定まで含めて確実に反映されるようにする
+function forceOfflineSelf(){
+  if(isDuty){
+    if(!confirm('自分自身を強制的にオフラインにしますか？\n現在乗務中のため、通常の「退勤する」ボタンと同じ処理が行われます。'))return;
+    toggleDuty();
+    return;
+  }
+  if(!confirm('自分自身を強制的にオフラインにしますか？\n（現在は乗務中ではありません。送り先の記録は削除されません）'))return;
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  db.ref('drivers/'+myId).remove()
+    .then(()=>{
+      toast('📴 自分を強制オフラインにしました');
       loadAccountList();
     })
     .catch(e=>toast('⚠️ 失敗しました: '+e.message));
