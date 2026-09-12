@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-37 -->
+<!-- v20260902-38 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -567,40 +567,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <label>ナンバープレート</label><input type="text" id="s-plate" inputmode="numeric" placeholder="例: 1234">
     <button class="btn btn-p" onclick="saveSettings()" style="width:100%">保存する</button>
   </div>
-  <div class="sec">🔔 プッシュ通知設定</div>
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div>
-        <div style="font-size:14px;font-weight:600">到着・出発の通知を受け取る</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">チェックポイント入出時にスマホ通知</div>
-      </div>
-      <button class="toggle-sw" id="notif-toggle" onclick="toggleNotifSetting()"></button>
-    </div>
-    <button class="btn btn-g" onclick="requestNotificationPermission()" style="width:100%;font-size:12px">
-      🔔 OS通知を許可する（初回）
-    </button>
-    <div id="notif-status" style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center"></div>
-    <button class="btn btn-g" onclick="openLocationSettings()" style="width:100%;font-size:12px;margin-top:8px">
-      📍 位置情報の設定を開く（「常に許可」にしてください）
-    </button>
-  </div>
-  <div class="sec">📅 勤務時間管理</div>
-  <div class="card">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">自分の出勤・退勤時間の記録一覧です。押し忘れ・押し間違いがあった場合は、下の「編集」「削除」から直接修正できます。</div>
-   <label>今月の出勤予定日数</label>
-   <input type="number" id="s-target-days" placeholder="例: 12">
-   <label>今月の目標金額（円）</label>
-   <input type="number" id="s-target-amount" placeholder="例: 900000">
-   <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
-   <div id="work-stats-out" style="margin-top:10px"></div>
-   <div id="shift-entries-list" style="margin-top:10px"></div>
-  </div>
-  <div class="sec">💰 売上管理（税抜）</div>
-  <div class="card">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。表示する月は、下の「💰 売上管理」欄の「◀ 前月 / 次月 ▶」で切り替えられます。</div>
-   <div style="margin-bottom:8px"><span id="fare-day-entries-label" style="font-size:13px;font-weight:700">今月</span></div>
-   <div id="fare-day-entries-list"></div>
-  </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
       <input type="password" id="pin-input" placeholder="管理者PIN"
@@ -678,6 +644,40 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       </div>
       <button class="btn btn-g" onclick="showSetup()" style="margin-top:8px;width:100%">Firebase設定を変更する</button>
     </div>
+  </div>
+  <div class="sec">🔔 プッシュ通知設定</div>
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <div style="font-size:14px;font-weight:600">到着・出発の通知を受け取る</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">チェックポイント入出時にスマホ通知</div>
+      </div>
+      <button class="toggle-sw" id="notif-toggle" onclick="toggleNotifSetting()"></button>
+    </div>
+    <button class="btn btn-g" onclick="requestNotificationPermission()" style="width:100%;font-size:12px">
+      🔔 OS通知を許可する（初回）
+    </button>
+    <div id="notif-status" style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center"></div>
+    <button class="btn btn-g" onclick="openLocationSettings()" style="width:100%;font-size:12px;margin-top:8px">
+      📍 位置情報の設定を開く（「常に許可」にしてください）
+    </button>
+  </div>
+  <div class="sec">📅 勤務時間管理</div>
+  <div class="card">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">自分の出勤・退勤時間の記録一覧です。押し忘れ・押し間違いがあった場合は、下の「編集」「削除」から直接修正できます。</div>
+   <label>今月の出勤予定日数</label>
+   <input type="number" id="s-target-days" placeholder="例: 12">
+   <label>今月の目標金額（円）</label>
+   <input type="number" id="s-target-amount" placeholder="例: 900000">
+   <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
+   <div id="work-stats-out" style="margin-top:10px"></div>
+   <div id="shift-entries-list" style="margin-top:10px"></div>
+  </div>
+  <div class="sec">💰 売上管理（税抜）</div>
+  <div class="card">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。表示する月は、下の「💰 売上管理」欄の「◀ 前月 / 次月 ▶」で切り替えられます。</div>
+   <div style="margin-bottom:8px"><span id="fare-day-entries-label" style="font-size:13px;font-weight:700">今月</span></div>
+   <div id="fare-day-entries-list"></div>
   </div>
   <div class="sec">🔍 住所デバッグ</div>
   <div class="card">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-37';
+const APP_BUILD='20260902-38';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
