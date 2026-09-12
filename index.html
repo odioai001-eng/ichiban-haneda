@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-35 -->
+<!-- v20260902-36 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-35';
+const APP_BUILD='20260902-36';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2540,6 +2540,12 @@ function applyDutyPlanChoice(){
 // applyDutyPlanChoice()だけでなく接続確立時（.info/connected）にも呼び出す
 function pushMyPlanFinish(){
   if(!db||testMode||!isDuty||!dutyStart)return;
+  // pushMyPosition()と同じ理由（バックグラウンドに残ったままの古いタブ・
+  // インスタンスが、メモリ上のisDutyがtrueのまま固まった状態で接続確立
+  // イベントを受け取ると、既に退勤済みのdrivers/{myId}を復活させてしまう）
+  // で、ここでも退勤時に必ず削除される永続化状態（taxi_runtime_state）を
+  // 確認し、実際には既に退勤済みであれば送信しない
+  if(!localStorage.getItem('taxi_runtime_state'))return;
   const storedPlan=JSON.parse(localStorage.getItem('taxi_today_target_hours')||'null');
   const planFinishTs=(storedPlan&&storedPlan.shiftStartTs===dutyStart.getTime())
     ?dutyStart.getTime()+Math.round(storedPlan.hours*3600*1000):null;
@@ -2959,8 +2965,14 @@ function connectFirebase(config){
         // この機能の追加前から出勤していた人は一度も送信されていなかった。
         // dutyStart自体はリロードをまたいでも保存・復元されるため、出勤し直さず
         // アプリを更新して開き直すだけで仲間のランキングに反映されるよう、
-        // 接続確立のたびにも送っておく
-        if(isDuty&&dutyStart&&!testMode)db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
+        // 接続確立のたびにも送っておく。ただしpushMyPosition()と同じ理由で、
+        // バックグラウンドに残ったままの古いタブ（メモリ上のisDutyがtrueの
+        // まま固まっている）が、既に退勤済みのdrivers/{myId}をこの接続確立
+        // イベントで復活させてしまわないよう、taxi_runtime_stateで実際に
+        // まだ出勤中かどうかを必ず確認する
+        if(isDuty&&dutyStart&&!testMode&&localStorage.getItem('taxi_runtime_state')){
+          db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
+        }
         // 帰庫予定（planFinishTs）は出勤時にしか送っていなかったため、この機能の
         // 追加前から出勤していた人は再出勤しないと反映されなかった。接続確立の
         // たびにも送ることで、アプリを更新して開き直すだけで反映されるようにする
