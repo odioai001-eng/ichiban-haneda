@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-43 -->
+<!-- v20260902-44 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-43';
+const APP_BUILD='20260902-44';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6694,7 +6694,7 @@ function renderPoolChart(){
   let sharedStartTs=null;
   ['1号','2号','3号','4号'].forEach(spot=>{
     const el=document.getElementById('pool-info-'+spot);
-    if(el)el.textContent=allExpired?`${spot} −`:poolMoveIntervalsText(spot);
+    if(el)el.innerHTML=allExpired?`${esc(spot)} −`:poolMoveIntervalsText(spot);
     const prog=poolProgress[spot];
     const progCount=allExpired?0:(prog&&prog.count?prog.count:0);
     if(progCount>0&&prog&&prog.startTs&&(sharedStartTs===null||prog.startTs<sharedStartTs)){
@@ -6856,14 +6856,19 @@ function renderIntlMoveLog(){
 function poolMoveIntervalsText(spot){
   const prog=poolProgress[spot];
   const sessionStart=prog&&prog.startTs?prog.startTs:null;
-  if(!sessionStart)return `${spot} −`;
+  if(!sessionStart)return `${esc(spot)} −`;
   const moves=poolMoves
     .filter(m=>m.spot===spot&&m.ts>=sessionStart)
     .sort((a,b)=>a.ts-b.ts);
-  if(moves.length<2)return `${spot} −`;
-  const intervals=[];
-  for(let i=1;i<moves.length;i++)intervals.push(Math.max(0,Math.round((moves[i].ts-moves[i-1].ts)/60000)));
-  return `${spot} ${intervals.join('、')}`;
+  if(moves.length<2)return `${esc(spot)} −`;
+  const parts=[];
+  for(let i=1;i<moves.length;i++){
+    const mins=Math.max(0,Math.round((moves[i].ts-moves[i-1].ts)/60000));
+    // 1列（+1）だけの移動だった場合は、2列以上の移動と見分けやすいよう数字の色を変える
+    const isOneCarMove=moves[i].lane==='+1';
+    parts.push(isOneCarMove?`<span style="color:var(--cyan)">${mins}</span>`:String(mins));
+  }
+  return `${esc(spot)} ${parts.join('、')}`;
 }
 
 // 自分がプールを出発する時点での各乗り場の列数を、1件の履歴として保存する。
