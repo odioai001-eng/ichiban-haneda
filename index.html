@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-41 -->
+<!-- v20260902-42 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-41';
+const APP_BUILD='20260902-42';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6631,14 +6631,14 @@ function syncPoolHistoryBottom(){
 const POOL_HIDE_AFTER_DEPARTURE_MS=5*60*1000; // 入力者がプールを出発してから5分で列移動表示を非表示にする
 function renderPoolChart(){
   const now=Date.now();
-  const LIMIT=PROGRESS_TIMEOUT_MS; // 明示的な退出シグナルがまだ無い場合のフォールバック（20分）
+  const LIMIT=PROGRESS_TIMEOUT_MS; // 明示的な退出シグナルがまだ無い場合のフォールバック（5分）
   const lastIntl=intlPoolMoves.length?intlPoolMoves[intlPoolMoves.length-1].ts:0;
   const intlShow=lastIntl&&now-lastIntl<=LIMIT;
   const progressAll=Object.values(poolProgress).some(p=>p&&now-(p.ts||0)<=LIMIT);
   // 1〜4号側は、入力者が羽田プールを出発した時刻(pool_session_meta.endTs)を基準に、
   // 退出から5分間だけ表示を維持し、5分経過したら（新たな入力が無い限り）非表示にする。
   // 出発シグナルがまだ一度も届いていない場合（アプリ起動直後・異常終了直後など）は
-  // 従来通り「直近の操作から20分以内か」で判定する
+  // 従来通り「直近の操作から5分以内か」で判定する
   let spotShow;
   if(progressAll){
     spotShow=true;
@@ -6654,7 +6654,7 @@ function renderPoolChart(){
   if(row)row.style.display=show?'grid':'none';
   if(startRow)startRow.style.display=show?'flex':'none';
   if(!show)return;
-  // 4つの乗り場のうち、一番新しい最終入力時刻から10分以上経過していたら、まとめてリセットする
+  // 4つの乗り場のうち、一番新しい最終入力時刻から5分以上経過していたら、まとめてリセットする
   const allSpotTs=['1号','2号','3号','4号'].map(s=>(poolProgress[s]&&poolProgress[s].ts)||0);
   const globalLastActivity=Math.max(0,...allSpotTs);
   const allExpired=(now-globalLastActivity)>PROGRESS_TIMEOUT_MS;
@@ -6727,7 +6727,7 @@ function recordPoolMove(spot,lane){
   poolLockTimer=setTimeout(()=>renderPoolButtons(),61000);
 }
 
-const PROGRESS_TIMEOUT_MS=20*60*1000; // 全乗り場で20分間操作がなければリセット
+const PROGRESS_TIMEOUT_MS=5*60*1000; // 全乗り場で5分間操作がなければリセット（退出シグナルが無い場合のフォールバックも、明示的な退出時と同じ5分に統一）
 let lastCleanupGlobalTs=0;
 
 function cleanupExpiredProgressIfNeeded(globalLastActivity,now){
@@ -6773,7 +6773,7 @@ function recordProgress(spot,amount){
   // 押すタイミングは到着から遅れることがあり、押した時刻を使うと実際の
   // 待機開始より遅い時刻になってしまうため（到着時刻が取れない場合はnowにする）
   const arriveTs=cpArriveTs['haneda']||now;
-  // 20分の無操作による期限切れリセットは、別途renderPoolChart経由の
+  // 5分の無操作による期限切れリセットは、別途renderPoolChart経由の
   // cleanupExpiredProgressIfNeededが該当ノードを削除する形で行うため、ここでは
   // 常に「今あるcountに加算」するだけでよい。以前はここでも独自に期限切れ判定を
   // 行っていたが、その判定に使うcurが常に最新とは限らず、連続で押すたびに
@@ -6835,7 +6835,7 @@ function poolMoveIntervalsText(spot){
 }
 
 // 自分がプールを出発する時点での各乗り場の列数を、1件の履歴として保存する。
-// 「入力開始」はその時点でまだ有効な（20分でリセットされていない）列数の中で
+// 「入力開始」はその時点でまだ有効な（5分でリセットされていない）列数の中で
 // 最も古いstartTsを使い、「入力終了」は出発した今の時刻とする
 function finalizePoolMoveHistory(){
   myPoolInputActive=false;
@@ -6856,7 +6856,7 @@ function finalizePoolMoveHistory(){
   const endTs=Date.now();
   // 累計列数（counts）だけでなく、地図画面と同じ「前回の移動から何分か」の
   // 間隔（intervals）も、このセッション中の生の押下記録(poolMoves)から
-  // 算出してあわせて保存しておく。押下記録自体は件数上限・20分の自動整理で
+  // 算出してあわせて保存しておく。押下記録自体は件数上限・5分の自動整理で
   // いずれ失われるため、履歴として残す時点で確定させておく必要がある
   const intervals={};
   ['1号','2号','3号','4号'].forEach(spot=>{
@@ -6868,7 +6868,7 @@ function finalizePoolMoveHistory(){
   const name=localStorage.getItem('taxi_name')||'自分';
   db.ref('pool_move_history').push({startTs,endTs,counts,intervals,by:name});
   // 次に誰かが入力を始める時に必ず0列からスタートできるよう、履歴に保存した分の
-  // 列数はここでリセットする（20分の自動タイムアウトを待たない）
+  // 列数はここでリセットする（5分の自動タイムアウトを待たない）
   ['1号','2号','3号','4号'].forEach(spot=>db.ref('pool_progress/'+spot).remove());
 }
 function deletePoolMoveHistory(key){
