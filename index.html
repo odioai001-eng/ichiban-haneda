@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-45 -->
+<!-- v20260902-46 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -326,6 +326,14 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <!-- Row 3: 1号・2号・3号・4号・国際線 -->
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
+    </div>
+    <!-- 列移動表示（Row 4・Row 5）の手動オン/オフボタン。表自体が非表示の間も
+         必ず操作できるよう、表とは別の行として常に表示しておく -->
+    <div style="display:flex;justify-content:flex-end;width:100%">
+      <button id="pool-table-toggle-btn" onclick="togglePoolTableVisible()"
+        title="列移動表示のオン/オフ"
+        style="background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
+        border-radius:8px;padding:2px 9px;font-size:13px;cursor:pointer;line-height:1.5">💡</button>
     </div>
     <!-- Row 4: 各乗り場の列移動間隔（前回の移動から何分で移動したか。1号・3号を上段、2号・4号を下段の2行2列、
          国際線はその下に全幅で表記。内容が入りきらない場合は折り返さず、そのセルだけ横スクロールできるようにする -->
@@ -1066,7 +1074,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-45';
+const APP_BUILD='20260902-46';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6660,7 +6668,23 @@ function syncPoolHistoryBottom(){
   });
 }
 
+// 列移動表示（1〜4号・国際線の間隔表と、プールへの到着時間）を手動でオン/オフする
+// ためのスイッチ。初期状態は点灯（表示）。localStorageに保存し、リロードをまたいでも
+// 選んだ状態を保持する
+let poolTableVisible=localStorage.getItem('taxi_pool_table_visible')!=='0';
+function togglePoolTableVisible(){
+  poolTableVisible=!poolTableVisible;
+  localStorage.setItem('taxi_pool_table_visible',poolTableVisible?'1':'0');
+  renderPoolChart();
+}
+function syncPoolTableToggleBtn(){
+  const btn=document.getElementById('pool-table-toggle-btn');
+  if(!btn)return;
+  btn.style.opacity=poolTableVisible?'1':'0.35';
+  btn.title=poolTableVisible?'列移動表示: 点灯中（タップで消灯）':'列移動表示: 消灯中（タップで点灯）';
+}
 function renderPoolChart(){
+  syncPoolTableToggleBtn();
   const now=Date.now();
   const LIMIT=PROGRESS_TIMEOUT_MS; // 明示的な退出シグナルがまだ無い場合のフォールバック（5分）
   const lastIntl=intlPoolMoves.length?intlPoolMoves[intlPoolMoves.length-1].ts:0;
@@ -6680,7 +6704,8 @@ function renderPoolChart(){
     const lastAll=poolMoves.length?poolMoves[poolMoves.length-1].ts:0;
     spotShow=lastAll&&now-lastAll<=LIMIT;
   }
-  const show=spotShow||intlShow;
+  // 手動スイッチが消灯中の場合は、自動判定の結果に関わらず必ず非表示にする
+  const show=poolTableVisible&&(spotShow||intlShow);
   const row=document.getElementById('pool-info-row');
   const startRow=document.getElementById('pool-start-row');
   if(row)row.style.display=show?'grid':'none';
