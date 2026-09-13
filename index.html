@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-40 -->
+<!-- v20260902-41 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1066,7 +1066,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-40';
+const APP_BUILD='20260902-41';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1287,6 +1287,7 @@ function init(){
 const pastToggleEl=document.getElementById('dest-list-past-toggle');
 if(pastToggleEl)pastToggleEl.addEventListener('click',toggleOwnPastDests);
 loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory(); renderTeamDests(); initMap(); initLocalChat(); tryFirebase();
+  syncMapButtonStackLayout(); // 端末ごとの画面サイズに合わせて地図ボタン群の位置を初回調整
   restoreAppState(); // リロード後の状態復元
   restoreFollowState(); // オートフォロー・仲間フォローの状態復元（出退勤に関わらず常に）
   if(localStorage.getItem('taxi_wakelock')==='1')toggleWakeLock(); // スリープ防止を復元
@@ -1398,6 +1399,45 @@ function syncZoomCtrlVisibility(visible){
   const zc=document.getElementById('zoom-ctrl');
   if(zc)zc.style.display=visible?'flex':'none';
 }
+
+// 地図左下・右下のボタン群（.map-btn-stack）は通常CSSのbottom:8pxで
+// 自動的に下から積み上がるが、これは上側のステータスバー（空車/実車/回送・
+// 待機タイマー・号選択・列移動情報など）の高さを一切考慮していない。
+// ステータスバーの内容は機能追加のたびに増えて縦に長くなっており、画面の
+// 縦幅が小さい端末（画面比率・ブラウザのアドレスバー等により実際に使える
+// 高さが端末ごとに大きく異なる）では、ボタン群がステータスバーの下側の行
+// （列移動情報・プール到着時間の表示）に重なって隠れてしまうことがあった。
+// ここでは、実際に測定したステータスバーの下端を下回らない位置まで、
+// 必要な時だけボタン群を押し下げる（重ならない端末では従来通りbottom基準の
+// 位置のまま動かさない）
+function syncMapButtonStackLayout(){
+  const mapEl=document.getElementById('map');
+  const statusBar=document.getElementById('status-bar');
+  if(!mapEl||!statusBar)return;
+  const stacks=document.querySelectorAll('.map-btn-stack');
+  if(!stacks.length)return;
+  const mapRect=mapEl.getBoundingClientRect();
+  if(mapRect.height<=0)return; // 地図タブが非表示の間は何もしない
+  const GAP=10;
+  const statusBarBottom=statusBar.getBoundingClientRect().bottom;
+  const minTop=Math.max(8,statusBarBottom-mapRect.top+GAP);
+  stacks.forEach(stack=>{
+    const stackHeight=stack.scrollHeight;
+    const naturalTop=mapRect.height-8-stackHeight; // 通常のbottom:8pxが実現する位置に相当
+    if(naturalTop<minTop){
+      stack.style.top=minTop+'px';
+      stack.style.bottom='auto';
+    }else{
+      stack.style.top='';
+      stack.style.bottom='';
+    }
+  });
+}
+window.addEventListener('resize',syncMapButtonStackLayout);
+window.addEventListener('orientationchange',()=>setTimeout(syncMapButtonStackLayout,300));
+// ステータスバーの内容（列移動情報の表示/非表示など）はJS側で動的に変わるため、
+// リサイズ以外のタイミングでも定期的に再計算して追従させる
+setInterval(syncMapButtonStackLayout,1500);
 
 // event_hub.html（イベント終演ハブ）に載っている会場名→座標の対応表。
 // event_hub.html自体には緯度経度が無いため、地図にハイライト表示するための
