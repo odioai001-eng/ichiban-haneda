@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-47 -->
+<!-- v20260902-48 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -397,14 +397,14 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="map-layer-chip"     id="layer-gsat"   onclick="setTileLayer('gsat')"  >衛星</div>
   </div>
   <!-- 地図右下のボタン群（下から順にDOMへ並べ、flexboxで自動的に積み上げる） -->
+  <!-- このスタック（.map-btn-stack）はflex-direction:column-reverseで積み上がるため、
+       画面上での見た目の並び順（上から【仲間の状況】【自車位置】【オートフォロー】
+       【工事規制情報】【料金検索】【地図切り替え】）にするには、HTMLの記述順は
+       その逆（下から並べたい順）にする必要がある -->
   <div class="map-btn-stack right">
-    <button class="driver-panel-btn" onclick="toggleDriverPanel()" title="仲間リスト">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-    </button>
     <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替">🗺</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索">💴</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報">🚦</button>
     <button class="map-ctrl-btn on" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー">🎯</button>
     <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -412,8 +412,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         <circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/>
       </svg>
     </button>
-    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報">🚦</button>
-    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索">💴</button>
+    <button class="driver-panel-btn" onclick="toggleDriverPanel()" title="仲間リスト">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    </button>
     <!-- 移動記録ボタン -->
     <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;
       background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
@@ -1072,7 +1076,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-47';
+const APP_BUILD='20260902-48';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
