@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-50 -->
+<!-- v20260902-51 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -957,7 +957,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
     <div style="margin-bottom:20px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">営業終了メーター（6桁・車両メーターの値）</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">営業終了メーター（車両メーターの値・4〜6桁）</div>
       <input id="duty-meter-end" type="text" inputmode="numeric" placeholder="例: 216537" maxlength="6"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
@@ -1030,7 +1030,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
     <div style="margin-bottom:20px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">営業開始メーター（6桁・車両メーターの値）</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">営業開始メーター（車両メーターの値・4〜6桁）</div>
       <input id="duty-meter-start" type="text" inputmode="numeric" placeholder="例: 216207" maxlength="6"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
@@ -1071,6 +1071,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div style="margin-bottom:16px">
    <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円・税込）</div>
    <input id="fare-input" type="number" inputmode="numeric" placeholder="例: 3200">
+  </div>
+  <div style="margin-bottom:16px">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">高速代（円・ETC）※発生した場合のみ入力</div>
+   <input id="fare-etc-input" type="number" inputmode="numeric" placeholder="0" value="0">
   </div>
   <div style="margin-bottom:18px">
    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">
@@ -1139,9 +1143,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="color:var(--muted)">QRコード</span><span id="settlement-qr" style="font-weight:700">¥0</span>
    </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
-    <span style="color:var(--muted)">ETC（高速代）</span>
-    <input id="settlement-etc-input" type="number" inputmode="numeric" oninput="onSettlementFieldEdit()"
-     style="width:100px;text-align:right;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:13px;font-weight:700;color:var(--fg)">
+    <span style="color:var(--muted)">ETC（高速代）</span><span id="settlement-etc" style="font-weight:700">¥0</span>
    </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
     <span style="color:var(--muted)">自腹高速</span><span id="settlement-highway" style="font-weight:700;color:var(--red)">−¥0</span>
@@ -1176,7 +1178,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-50';
+const APP_BUILD='20260902-51';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5306,6 +5308,7 @@ let pendingFareTripTs=null;
 function showFareModal(tripTs){
  pendingFareTripTs=tripTs||null;
  document.getElementById('fare-input').value='';
+ document.getElementById('fare-etc-input').value='0';
  document.getElementById('fare-discount-check').checked=false;
  document.getElementById('fare-discount-input').value='';
  toggleFareDiscountInput();
@@ -5320,13 +5323,14 @@ function toggleFareDiscountInput(){
 
 // 支払い方法（現金・クレジット・電子マネー・チケット・QRコード）ボタンから
 // 呼ばれる。運賃は共通の1つの入力欄に入れた金額をそのまま使い、押した
-// ボタンで支払い方法だけをタグ付けする。障害者割引は支払い方法とは独立して
-// （どの支払い方法とも同時に）記録できる
+// ボタンで支払い方法だけをタグ付けする。障害者割引・高速代（ETC）は
+// 支払い方法とは独立して（どの支払い方法とも同時に）記録できる
 function confirmFareModal(method){
  const fare=parseInt(document.getElementById('fare-input').value)||0;
+ const etc=parseInt(document.getElementById('fare-etc-input').value)||0;
  const discountChecked=document.getElementById('fare-discount-check').checked;
  const discount=discountChecked?(parseInt(document.getElementById('fare-discount-input').value)||0):0;
- saveFareEntry(fare,0,pendingFareTripTs,method,discount);
+ saveFareEntry(fare,0,pendingFareTripTs,method,discount,etc);
  attachFareToTrip(pendingFareTripTs,fare,0);
  document.getElementById('fare-modal').style.display='none';
 }
@@ -5525,13 +5529,13 @@ function skipFareModal(){
  document.getElementById('fare-modal').style.display='none';
 }
 
-function saveFareEntry(fare,toll,tripTs,paymentMethod,discount){
+function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const now=new Date();
  log.push({
   dateStr:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
   fare,toll,ts:now.getTime(),tripTs:tripTs||null,
-  paymentMethod:paymentMethod||null,discount:discount||0
+  paymentMethod:paymentMethod||null,discount:discount||0,etc:etc||0
  });
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast(`💰 運賃 ¥${fare.toLocaleString()} を記録しました`);
@@ -5558,6 +5562,7 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   const ticket=ticketEntries.reduce((a,e)=>a+(e.fare||0),0);
   const ticketCount=ticketEntries.length;
   const qr=sumByMethod('qr');
+  const etc=shiftFares.reduce((a,e)=>a+(e.etc||0),0); // 運賃記録時に入力した高速代（ETC）の合計
   const fuel=Array.isArray(fuelEntriesArg)?fuelEntriesArg:[];
   const highway=Array.isArray(highwayEntriesArg)?highwayEntriesArg:[];
   const fuelTotal=fuel.reduce((a,e)=>a+(e.amount||0),0);
@@ -5571,7 +5576,7 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
     highwayTotal,highwayEntries:highway,
     revenueBeforeDiscount,discountTotal,revenueAfterDiscount,
     credit,emoney,ticket,ticketCount,qr,
-    etc:0,uncollected:0 // 自動追跡していないため、レポート画面で手動入力する
+    etc,uncollected:0 // 未収金は自動追跡していないため、レポート画面で手動入力する
   };
 }
 // レポートに表示する差引合計・納金額を、その場で（手入力のETC・未収金も
@@ -5613,7 +5618,7 @@ function showSettlementReport(record,onClose){
   document.getElementById('settlement-ticket-label').textContent=`チケット（${record.ticketCount||0}枚）`;
   document.getElementById('settlement-ticket').textContent=fmtYen(record.ticket);
   document.getElementById('settlement-qr').textContent=fmtYen(record.qr);
-  document.getElementById('settlement-etc-input').value=record.etc||0;
+  document.getElementById('settlement-etc').textContent=fmtYen(record.etc);
   document.getElementById('settlement-highway').textContent='−'+fmtYen(record.highwayTotal);
   document.getElementById('settlement-uncollected-input').value=record.uncollected||0;
   updateSettlementTotalsDisplay(record);
@@ -5630,7 +5635,6 @@ function updateSettlementTotalsDisplay(record){
 function onSettlementFieldEdit(){
   if(currentSettlementIndex<0||currentSettlementIndex>=settlementLog.length)return;
   const record=settlementLog[currentSettlementIndex];
-  record.etc=parseInt(document.getElementById('settlement-etc-input').value)||0;
   record.uncollected=parseInt(document.getElementById('settlement-uncollected-input').value)||0;
   updateSettlementTotalsDisplay(record);
   localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
