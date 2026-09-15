@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-52 -->
+<!-- v20260902-53 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1076,7 +1076,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-52';
+const APP_BUILD='20260902-53';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2084,6 +2084,35 @@ let gpsCatchUpUntil=0;
 // 行わないようにするための基準にする
 let pageHiddenAt=0;
 
+// 地下駐車場やビルの谷間など電波状況が悪い場所では、スマホがGPS衛星ではなく
+// Wi-Fi・基地局による大まかな位置推定に切り替わることがある。この推定は数百m
+// 単位でズレることがあり、位置情報の利用許可自体は正しく許可されていても、
+// 地図上の自分の位置が行ったり来たり・瞬間移動して見える不具合の主な原因になる。
+// 明らかに精度の悪いフィックス（accuracyの値が大きい）や、直前に採用した位置からの
+// 実効速度が物理的にありえないフィックス（ノイズによる一瞬の飛び）は採用せず、
+// 直前の採用済み位置をそのまま使い続けることで、地図上の位置を安定させる
+const GPS_MAX_ACCURACY_M=100; // これより精度（半径）が悪いフィックスは無視する
+const GPS_MAX_PLAUSIBLE_SPEED_MPS=40; // 直前の採用位置からの実効速度がこれを超える場合はノイズとみなす（時速144km相当、高速道路走行でも十分な余裕を持たせている）
+let lastAcceptedFix=null; // {lat,lng,ts}
+let pendingJumpFix=null; // 直前に「ノイズによる飛び」として1回だけ却下した位置
+// 新しいGPSフィックスを採用してよいか判定する。本当に大きく移動した場合
+// （バックグラウンド復帰後の長時間経過など）まで拒否し続けないよう、同じ新しい
+// 位置が2回続けて得られた場合は「実際の移動」とみなして採用する
+function shouldAcceptGpsFix(lat,lng,accuracy,now){
+  if(typeof accuracy==='number'&&accuracy>GPS_MAX_ACCURACY_M){pendingJumpFix=null;return false;}
+  if(!lastAcceptedFix)return true;
+  const dt=(now-lastAcceptedFix.ts)/1000;
+  if(dt<=0)return true;
+  const dist=haversine(lastAcceptedFix.lat,lastAcceptedFix.lng,lat,lng);
+  if(dist/dt<=GPS_MAX_PLAUSIBLE_SPEED_MPS){pendingJumpFix=null;return true;}
+  if(pendingJumpFix&&haversine(pendingJumpFix.lat,pendingJumpFix.lng,lat,lng)<=50){
+    pendingJumpFix=null;
+    return true;
+  }
+  pendingJumpFix={lat,lng};
+  return false;
+}
+
 function startGPS(){
   if(!navigator.geolocation){toast('⚠️ GPS非対応');return;}
   gpsPermissionDeniedNotified=false;
@@ -2127,9 +2156,15 @@ function _attachGPSWatch(){
     gpsLastUpdate=Date.now();
     if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
     if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
+    const fixLat=pos.coords.latitude,fixLng=pos.coords.longitude;
+    // 精度の悪いフィックスやノイズによる瞬間移動は採用せず、直前の位置のまま
+    // 次の（まともな）フィックスを待つ。isFirstFix・pendingCatchUpCheck等の
+    // 状態はここでは変更せず、実際に採用されたフィックスが来た時のために残しておく
+    if(!shouldAcceptGpsFix(fixLat,fixLng,pos.coords.accuracy,gpsLastUpdate))return;
     const isFirstFix=(myLat===null)||pendingCatchUpCheck||Date.now()<gpsCatchUpUntil;
     pendingCatchUpCheck=false;
-    myLat=pos.coords.latitude; myLng=pos.coords.longitude;
+    myLat=fixLat; myLng=fixLng;
+    lastAcceptedFix={lat:myLat,lng:myLng,ts:gpsLastUpdate};
     updateMyMarker(myLat,myLng);
     hideGpsPermissionBanner();
     document.getElementById('gps-dot').style.background='';
@@ -2191,6 +2226,7 @@ function stopGPS(){
   if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
   if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
   if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
+  lastAcceptedFix=null;pendingJumpFix=null;
   if(myMarker){leafletMap.removeLayer(myMarker);myMarker=null;}
   document.getElementById('gps-dot').classList.remove('on');
   document.getElementById('gps-txt').textContent='GPS停止中';
