@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-73 -->
+<!-- v20260902-74 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -89,26 +89,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes blinkRed{0%,49%{opacity:1}50%,100%{opacity:.15}}
 .locate-me-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);
-  border-radius:50%;width:44px;height:44px;cursor:pointer;flex-shrink:0;
+  border-radius:50%;width:calc(44px*var(--btn-scale,1));height:calc(44px*var(--btn-scale,1));
+  cursor:pointer;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 2px 8px rgba(0,0,0,.4);transition:all .2s}
+  box-shadow:0 2px 8px rgba(0,0,0,.4);transition:width .15s,height .15s}
 .locate-me-btn:active{transform:scale(.92)}
+.locate-me-btn svg{width:calc(20px*var(--btn-scale,1));height:calc(20px*var(--btn-scale,1))}
 /* 地図右下・左下のボタン群を、個別に手計算したbottom座標ではなく
    flexboxで自動的に積み上げる。端末やブラウザによって表示領域の高さが
-   変わっても、ボタン同士が重なったり隙間が詰まりすぎたりしない */
+   変わっても、ボタン同士が重なったり隙間が詰まりすぎたりしない。
+   --btn-scaleはsyncMapButtonStackLayout()がこのスタック要素に直接
+   設定するCSS変数で、ボタン・隙間のサイズをまとめて縮小するのに使う */
 .map-btn-stack{position:absolute;bottom:8px;z-index:500;
-  display:flex;flex-direction:column-reverse;align-items:center;gap:10px}
+  display:flex;flex-direction:column-reverse;align-items:center;
+  gap:calc(10px*var(--btn-scale,1))}
 .map-btn-stack.right{right:8px}
 /* あぶれボタンは「😔 あぶれ」という文字つきで他の丸ボタンより幅が広いため、
    align-items:centerのままだと丸ボタン側が中央寄せされ、あぶれの顔マーク
    （左側）の真上ではなくボタン全体の中央の真上に来てしまっていた。
    左揃えにして、丸ボタンの列があぶれの顔マークの位置にまっすぐ揃うようにする */
 .map-btn-stack.left{left:8px;align-items:flex-start}
-/* ボタンの数に対して縦の表示領域が足りない端末では、syncMapButtonStackLayout()が
-   このクラスとmax-heightを付け外しする。column-reverse＋flex-wrapにより、
-   1列に収まらない分は自動的に隣の列へ折り返される（ボタン自体のサイズは
-   変えずに保つことで、押しにくくならないようにする）。leftは地図側（右）へ、
-   rightは地図側（左）へ折り返すよう、wrapの向きをそれぞれ変える */
+/* ボタンを縮小限度（syncMapButtonStackLayout内のMIN_BTN_SCALE）まで縮めても
+   縦の表示領域に収まらない端末では、このクラスとmax-heightを付け外しする。
+   column-reverse＋flex-wrapにより、1列に収まらない分は自動的に隣の列へ
+   折り返される。leftは地図側（右）へ、rightは地図側（左）へ折り返すよう、
+   wrapの向きをそれぞれ変える */
 .map-btn-stack.left.wrap-fit{flex-wrap:wrap}
 .map-btn-stack.right.wrap-fit{flex-wrap:wrap-reverse}
 .pool-info-cell{text-align:center;font-size:13px;font-weight:700;color:#fff;line-height:1.4;
@@ -117,9 +122,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   background:rgba(79,142,247,.18);color:var(--accent);border:1.5px solid var(--accent);transition:all .2s}
 .pool-btn:disabled{opacity:.35;cursor:not-allowed}
 .map-ctrl-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);
-  border-radius:50%;width:44px;height:44px;cursor:pointer;font-size:18px;flex-shrink:0;
+  border-radius:50%;width:calc(44px*var(--btn-scale,1));height:calc(44px*var(--btn-scale,1));
+  cursor:pointer;font-size:calc(18px*var(--btn-scale,1));flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 2px 8px rgba(0,0,0,.4);transition:all .2s}
+  box-shadow:0 2px 8px rgba(0,0,0,.4);transition:width .15s,height .15s}
 .map-ctrl-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .map-ctrl-btn:active{transform:scale(.92)}
 .map-layer-bar{position:absolute;bottom:116px;left:8px;z-index:500;
@@ -129,8 +135,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap}
 .map-layer-chip.sel{background:var(--accent);border-color:var(--accent);color:#fff}
 .driver-panel-btn{background:var(--accent);color:#fff;border:none;border-radius:50%;
-  width:44px;height:44px;cursor:pointer;font-size:20px;flex-shrink:0;
+  width:calc(44px*var(--btn-scale,1));height:calc(44px*var(--btn-scale,1));
+  cursor:pointer;font-size:calc(20px*var(--btn-scale,1));flex-shrink:0;
   display:flex;align-items:center;justify-content:center}
+.driver-panel-btn svg{width:calc(22px*var(--btn-scale,1));height:calc(22px*var(--btn-scale,1))}
 .driver-panel{position:absolute;bottom:0;left:0;right:0;z-index:600;
   background:var(--surface);border-radius:16px 16px 0 0;
   border-top:1px solid var(--border);
@@ -461,9 +469,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/train_status_hub.html'" title="運行情報ハブ（人身事故・故障等）">🚨</button>
-    <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録" style="font-size:12px;font-weight:800">GAS</button>
-    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="無料高速（実質無料の高速料金）を記録" style="font-size:10px;font-weight:800;line-height:1.15">無料<br>高速</button>
-    <button class="map-ctrl-btn" onclick="promptJibaraHighwayEntry()" title="自腹高速（自分で払って戻ってこない高速料金）を記録" style="font-size:10px;font-weight:800;line-height:1.15">自腹<br>高速</button>
+    <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録" style="font-size:calc(12px*var(--btn-scale,1));font-weight:800">GAS</button>
+    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="無料高速（実質無料の高速料金）を記録" style="font-size:calc(10px*var(--btn-scale,1));font-weight:800;line-height:1.15">無料<br>高速</button>
+    <button class="map-ctrl-btn" onclick="promptJibaraHighwayEntry()" title="自腹高速（自分で払って戻ってこない高速料金）を記録" style="font-size:calc(10px*var(--btn-scale,1));font-weight:800;line-height:1.15">自腹<br>高速</button>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -1215,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-73';
+const APP_BUILD='20260902-74';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1559,6 +1567,8 @@ function syncZoomCtrlVisibility(visible){
 // ここでは、実際に測定したステータスバーの下端を下回らない位置まで、
 // 必要な時だけボタン群を押し下げる（重ならない端末では従来通りbottom基準の
 // 位置のまま動かさない）
+// これより下までボタンを縮小すると小さすぎて押しにくくなるため、縮小率の下限とする
+const MIN_BTN_SCALE=0.62;
 function syncMapButtonStackLayout(){
   const mapEl=document.getElementById('map');
   const statusBar=document.getElementById('status-bar');
@@ -1575,17 +1585,25 @@ function syncMapButtonStackLayout(){
   // スタックが1列では収まらず、下端がはみ出して押せなくなることがあった
   const availableHeight=Math.max(0,mapRect.height-8-minTop);
   stacks.forEach(stack=>{
-    // 折り返し状態のまま測ると縮んだ高さしか分からないため、まず解除してから
-    // 「1列で並べた場合の本来の高さ」を測り直す
+    // 測り直す前に一旦、縮小・折り返しのどちらも解除してから
+    // 「フルサイズ1列で並べた場合の本来の高さ」を測り直す
     stack.classList.remove('wrap-fit');
     stack.style.maxHeight='';
+    stack.style.removeProperty('--btn-scale');
     const naturalHeight=stack.scrollHeight;
-    if(naturalHeight>availableHeight&&availableHeight>0){
-      // 1列では入り切らない分だけ、ボタンのサイズは変えずに隣の列へ自動で
-      // 折り返す（flex-wrap）。列が増える分、横方向にはみ出す可能性がある
-      // 地図全体の幅の範囲であれば問題ないため、特別な上限は設けていない
-      stack.classList.add('wrap-fit');
-      stack.style.maxHeight=availableHeight+'px';
+    if(naturalHeight>availableHeight&&availableHeight>0&&naturalHeight>0){
+      // 画面が小さい端末ほど列を増やすと地図がボタンだらけで見えなくなって
+      // しまうため、まずはボタン・隙間のサイズを縮めて1列のまま収めることを
+      // 優先する（widthとgapが同じ比率で縮むため、必要な縮小率をそのまま
+      // 高さの比率から計算できる）
+      const scale=Math.max(MIN_BTN_SCALE,availableHeight/naturalHeight);
+      stack.style.setProperty('--btn-scale',scale.toFixed(3));
+      // 縮小の下限まで縮めても、ボタンの数が多すぎてまだ1列に収まらない
+      // 場合だけ、隣の列へ自動で折り返す
+      if(scale<=MIN_BTN_SCALE&&stack.scrollHeight>availableHeight){
+        stack.classList.add('wrap-fit');
+        stack.style.maxHeight=availableHeight+'px';
+      }
     }
     const stackHeight=stack.getBoundingClientRect().height;
     const naturalTop=mapRect.height-8-stackHeight; // 通常のbottom:8pxが実現する位置に相当
