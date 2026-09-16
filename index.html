@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-57 -->
+<!-- v20260902-58 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -451,7 +451,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/train_status_hub.html'" title="運行情報ハブ（人身事故・故障等）">🚨</button>
     <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録" style="font-size:12px;font-weight:800">GAS</button>
-    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="自腹で支払った高速料金を記録" style="font-size:10px;font-weight:800;line-height:1.15">無料<br>高速</button>
+    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="無料高速（実質無料の高速料金）を記録" style="font-size:10px;font-weight:800;line-height:1.15">無料<br>高速</button>
+    <button class="map-ctrl-btn" onclick="promptJibaraHighwayEntry()" title="自腹高速（自分で払って戻ってこない高速料金）を記録" style="font-size:10px;font-weight:800;line-height:1.15">自腹<br>高速</button>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -1178,7 +1179,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-57';
+const APP_BUILD='20260902-58';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2488,21 +2489,26 @@ function confirmEndDuty(){
   }catch(e){console.error('退勤時のシフト記録に失敗しました',e);}
  }
 
-  // 日次精算（営業開始〜終了メーター・燃料・自腹高速・運賃の内訳）を、
-  // シフトの状態（dutyStart・dutyMeterStart・fuelEntries・highwayEntries）が
-  // まだ残っているこの時点で確定させ、履歴に保存しておく
+  // 日次精算（営業開始〜終了メーター・燃料・無料高速・自腹高速・運賃の内訳）を、
+  // シフトの状態（dutyStart・dutyMeterStart・fuelEntries・highwayEntries・
+  // jibaraHighwayEntries）がまだ残っているこの時点で確定させる。管理者の
+  // テスト出勤中も精算レポート自体は表示して動作確認できるようにするが、
+  // 仲間と共有されない架空のデータのため、履歴（taxi_settlement_log）には
+  // 保存しない
   const meterEndEl=document.getElementById('duty-meter-end');
   const meterEndVal=meterEndEl?meterEndEl.value.trim():'';
   const dutyMeterEnd=meterEndVal?(parseInt(meterEndVal)||null):null;
   let settlementRecord=null;
-  if(dutyStart&&!testMode){
-    settlementRecord=buildSettlementRecord(dutyStart.getTime(),endTs,dutyMeterStart,dutyMeterEnd,fuelEntries,highwayEntries);
-    settlementLog.push(settlementRecord);
-    if(settlementLog.length>200)settlementLog.shift();
-    localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
-    renderSettlementLogList();
+  if(dutyStart){
+    settlementRecord=buildSettlementRecord(dutyStart.getTime(),endTs,dutyMeterStart,dutyMeterEnd,fuelEntries,highwayEntries,jibaraHighwayEntries);
+    if(!testMode){
+      settlementLog.push(settlementRecord);
+      if(settlementLog.length>200)settlementLog.shift();
+      localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
+      renderSettlementLogList();
+    }
   }
-  fuelEntries=[];highwayEntries=[];dutyMeterStart=null;
+  fuelEntries=[];highwayEntries=[];jibaraHighwayEntries=[];dutyMeterStart=null;
   localStorage.removeItem('taxi_shift_extras');
 
   dutyStart=null;
@@ -2859,13 +2865,14 @@ function _startDuty(){
     dutyStart=now;
   }
   document.getElementById('duty-start').textContent=fmtTime(dutyStart);
-  // 営業開始メーター・燃料・自腹高速は、今回の出勤（シフト）ぶんだけを対象と
-  // するため、出勤のたびにリセットしてから開始する
+  // 営業開始メーター・燃料・無料高速・自腹高速は、今回の出勤（シフト）ぶんだけを
+  // 対象とするため、出勤のたびにリセットしてから開始する
   const meterStartEl=document.getElementById('duty-meter-start');
   const meterStartVal=meterStartEl?meterStartEl.value.trim():'';
   dutyMeterStart=meterStartVal?(parseInt(meterStartVal)||null):null;
   fuelEntries=[];
   highwayEntries=[];
+  jibaraHighwayEntries=[];
   saveShiftExtras();
   if(db&&!testMode){
     db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
@@ -2913,7 +2920,8 @@ let spotChangeHistory=[];     // 今回の待機中に乗り場を変更した�
 // taxi_shift_extras（シフト開始時刻と紐付け）にも保存する =====
 let dutyMeterStart=null;  // 今回の出勤時に入力された営業開始メーター（6桁の数値）
 let fuelEntries=[];       // 燃料の給油記録 [{amount(リットル), ts}]
-let highwayEntries=[];    // 自腹で支払った高速料金の記録 [{amount(円), ts}]
+let highwayEntries=[];    // 無料高速（実質無料・差引合計から差し引く）の記録 [{amount(円), ts}]
+let jibaraHighwayEntries=[]; // 自腹高速（戻ってこない高速代・ETCに加算する）の記録 [{amount(円), ts}]
 let settlementLog=JSON.parse(localStorage.getItem('taxi_settlement_log')||'[]'); // 日次精算の保存履歴（退勤ごとに1件）
 function loadShiftExtras(){
   try{return JSON.parse(localStorage.getItem('taxi_shift_extras')||'null');}catch(e){return null;}
@@ -2921,11 +2929,12 @@ function loadShiftExtras(){
 function saveShiftExtras(){
   localStorage.setItem('taxi_shift_extras',JSON.stringify({
     shiftStartTs:dutyStart?dutyStart.getTime():null,
-    meterStart:dutyMeterStart,fuelEntries,highwayEntries
+    meterStart:dutyMeterStart,fuelEntries,highwayEntries,jibaraHighwayEntries
   }));
 }
 function fuelTotalLiters(){return fuelEntries.reduce((a,e)=>a+(e.amount||0),0);}
 function highwayTotalYen(){return highwayEntries.reduce((a,e)=>a+(e.amount||0),0);}
+function jibaraHighwayTotalYen(){return jibaraHighwayEntries.reduce((a,e)=>a+(e.amount||0),0);}
 function promptFuelEntry(){
   if(!isDuty){toast('⚠️ 出勤中のみ記録できます');return;}
   const val=prompt('給油量（リットル）\n例: 12.50');
@@ -2938,13 +2947,25 @@ function promptFuelEntry(){
 }
 function promptHighwayEntry(){
   if(!isDuty){toast('⚠️ 出勤中のみ記録できます');return;}
-  const val=prompt('自腹で支払った高速料金（円）');
+  const val=prompt('無料高速（実質無料の高速料金・円）');
   if(val===null)return;
   const amount=parseInt(val)||0;
   if(amount<=0){toast('⚠️ 正しい金額を入力してください');return;}
   highwayEntries.push({amount,ts:Date.now()});
   saveShiftExtras();
   toast(`🛣️ ¥${amount.toLocaleString()} を記録しました（本日計 ¥${highwayTotalYen().toLocaleString()}）`);
+}
+// 自分で支払って戻ってこない高速料金。無料高速とは別に記録し、精算表では
+// 差引合計から引くのではなく、ETC（高速代）に加算する
+function promptJibaraHighwayEntry(){
+  if(!isDuty){toast('⚠️ 出勤中のみ記録できます');return;}
+  const val=prompt('自腹高速（戻ってこない高速料金・円）');
+  if(val===null)return;
+  const amount=parseInt(val)||0;
+  if(amount<=0){toast('⚠️ 正しい金額を入力してください');return;}
+  jibaraHighwayEntries.push({amount,ts:Date.now()});
+  saveShiftExtras();
+  toast(`🛣️ ¥${amount.toLocaleString()} を記録しました（本日計 ¥${jibaraHighwayTotalYen().toLocaleString()}）`);
 }
 function recordSpotChange(spot){
   const last=spotChangeHistory[spotChangeHistory.length-1];
@@ -3010,7 +3031,7 @@ function restoreAppState(){
   if(lbl)lbl.textContent=testMode?'乗務中（テスト）':'乗務中';
   if(offline)offline.classList.remove('show');
   document.getElementById('duty-start').textContent=fmtTime(dutyStart);
-  // 営業開始メーター・燃料・自腹高速も、リロードをまたいで復元する。
+  // 営業開始メーター・燃料・無料高速・自腹高速も、リロードをまたいで復元する。
   // taxi_shift_extrasが今回の出勤（dutyStart）と一致する場合のみ使い、
   // 一致しない（前回の出勤の残り）場合は空のまま始める
   const shiftExtras=loadShiftExtras();
@@ -3018,8 +3039,9 @@ function restoreAppState(){
     dutyMeterStart=shiftExtras.meterStart||null;
     fuelEntries=Array.isArray(shiftExtras.fuelEntries)?shiftExtras.fuelEntries:[];
     highwayEntries=Array.isArray(shiftExtras.highwayEntries)?shiftExtras.highwayEntries:[];
+    jibaraHighwayEntries=Array.isArray(shiftExtras.jibaraHighwayEntries)?shiftExtras.jibaraHighwayEntries:[];
   }else{
-    dutyMeterStart=null;fuelEntries=[];highwayEntries=[];
+    dutyMeterStart=null;fuelEntries=[];highwayEntries=[];jibaraHighwayEntries=[];
     saveShiftExtras();
   }
   if(dutyInterval)clearInterval(dutyInterval);
@@ -5604,7 +5626,7 @@ function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc){
 // のため、ここでは税込金額として扱う。障害者割引（discount）は、fareが
 // 既に割引後の金額であることを前提に、fare+discount=割引前の税込営収として
 // 逆算する
-function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelEntriesArg,highwayEntriesArg){
+function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelEntriesArg,highwayEntriesArg,jibaraHighwayEntriesArg){
   const fareLog=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
   const shiftFares=fareLog.filter(e=>(e.ts||0)>=shiftStartTs&&(e.ts||0)<=shiftEndTs);
   const revenueAfterDiscount=shiftFares.reduce((a,e)=>a+(e.fare||0),0);
@@ -5617,11 +5639,15 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   const ticket=ticketEntries.reduce((a,e)=>a+(e.fare||0),0);
   const ticketCount=ticketEntries.length;
   const qr=sumByMethod('qr');
-  const etc=shiftFares.reduce((a,e)=>a+(e.etc||0),0); // 運賃記録時に入力した高速代（ETC）の合計
   const fuel=Array.isArray(fuelEntriesArg)?fuelEntriesArg:[];
   const highway=Array.isArray(highwayEntriesArg)?highwayEntriesArg:[];
+  const jibaraHighway=Array.isArray(jibaraHighwayEntriesArg)?jibaraHighwayEntriesArg:[];
   const fuelTotal=fuel.reduce((a,e)=>a+(e.amount||0),0);
   const highwayTotal=highway.reduce((a,e)=>a+(e.amount||0),0);
+  const jibaraHighwayTotal=jibaraHighway.reduce((a,e)=>a+(e.amount||0),0);
+  // ETC（高速代）＝運賃記録時に入力した高速代の合計 ＋ 自腹高速（戻ってこない高速代）の合計。
+  // 自腹高速は無料高速と違って差引合計から引くのではなく、ETCに加算する扱いにする
+  const etc=shiftFares.reduce((a,e)=>a+(e.etc||0),0)+jibaraHighwayTotal;
   return {
     dateStr:new Date(shiftStartTs).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
     shiftStartTs,shiftEndTs,
@@ -5629,6 +5655,7 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
     meterDiff:(meterStart&&meterEnd&&meterEnd>=meterStart)?(meterEnd-meterStart):null,
     fuelTotal,fuelEntries:fuel,
     highwayTotal,highwayEntries:highway,
+    jibaraHighwayTotal,jibaraHighwayEntries:jibaraHighway,
     revenueBeforeDiscount,discountTotal,revenueAfterDiscount,
     credit,emoney,ticket,ticketCount,qr,
     etc,uncollected:0 // 未収金は自動追跡していないため、レポート画面で手動入力する
