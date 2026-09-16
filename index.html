@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-59 -->
+<!-- v20260902-60 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1148,7 +1148,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="color:var(--muted)">ETC（高速代）</span><span id="settlement-etc" style="font-weight:700">¥0</span>
    </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
-    <span style="color:var(--muted)">自腹高速</span><span id="settlement-highway" style="font-weight:700;color:var(--red)">−¥0</span>
+    <span style="color:var(--muted)">無料高速</span><span id="settlement-highway" style="font-weight:700;color:var(--red)">−¥0</span>
    </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);font-size:14px;background:rgba(251,191,36,.08)">
     <span style="font-weight:700">差引合計</span><span id="settlement-cash-total" style="font-weight:800;color:var(--gold)">¥0</span>
@@ -1180,7 +1180,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-59';
+const APP_BUILD='20260902-60';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
