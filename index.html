@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-72 -->
+<!-- v20260902-73 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1208,7 +1208,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-72';
+const APP_BUILD='20260902-73';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2102,10 +2102,14 @@ function updateMyMarker(lat,lng){
 function updatePeerMarker(id,d){
   if(id===myId)return;
   const age=Date.now()-(d.ts||0);
-  const alive=age<PEER_ALIVE_MS;
-  // 5分以上位置情報の更新が無い場合は、退勤したまま正常にレコードが
-  // 消えなかった（アプリの強制終了・通信断など）とみなし、グレーの
-  // 「オフライン」表示で残すのではなく、アイコンごと地図から消す。
+  // PEER_ALIVE_MS（1分）以上位置情報の更新が無い場合に加え、dutyActiveが
+  // trueでない場合（退勤処理で明示的にfalseにした場合、または本来の
+  // pushMyPosition以外の経路からの書き込みでdutyActiveが伴っていない場合）も
+  // 「乗務中」とはみなさない。tsだけが何らかの理由で更新され続けても、
+  // dutyActiveが伴わなければ地図から消えるようにするための二重チェック
+  const alive=age<PEER_ALIVE_MS&&d.dutyActive===true;
+  // 退勤したまま正常にレコードが消えなかった（アプリの強制終了・通信断など）
+  // 場合は、グレーの「オフライン」表示で残すのではなく、アイコンごと地図から消す。
   // 出勤して位置情報の送信が再開されればupdatePeerMarkerが再び呼ばれ、
   // 通常通りアイコンが表示される
   if(!alive){removePeerMarker(id);return;}
@@ -2436,7 +2440,7 @@ function endDutyImmediate(){
     // 0にもしておく。remove()がFirebase側のルール等で万一失敗しても、
     // 地図のピン・仲間リストはどちらもtsの新しさだけを見て「乗務中か」を
     // 判定しているため、ts:0への更新さえ通れば確実に非表示になる
-    myRef.update({ts:0}).catch(e=>console.error('退勤時のFirebase更新(ts)に失敗しました',e));
+    myRef.update({ts:0,dutyActive:false}).catch(e=>console.error('退勤時のFirebase更新(ts)に失敗しました',e));
     myRef.remove()
       .then(()=>{
         // 出勤中に予約したonDisconnect（切断時の自動削除）は、自分で明示的に
@@ -3572,11 +3576,16 @@ function pushMyPosition(gpsWeak=false){
   // （taxi_runtime_state）も毎回確認し、実際には既に退勤済みであれば送信しない
   if(!localStorage.getItem('taxi_runtime_state'))return;
   const name=localStorage.getItem('taxi_name')||'自分';
+  // dutyActive:trueは、この関数（出勤中のWeb側の通常の位置送信）からしか
+  // 送らない。Android版アプリ内蔵の位置送信サービス等、この関数を経由しない
+  // 別経路からの書き込みでtsだけが更新され続けた場合でも、dutyActiveが
+  // 伴わなければ「乗務中」とはみなさないようにするための印
   db.ref('drivers/'+myId).update({
     name,lat:myLat,lng:myLng,status:currentStatus,
     car:localStorage.getItem('taxi_car')||'',
     plate:localStorage.getItem('taxi_number')||'',
-    ts:Date.now(),gpsWeak:gpsWeak||null
+    ts:Date.now(),gpsWeak:gpsWeak||null,
+    dutyActive:true
   });
 }
 setInterval(()=>{if(isDuty)pushMyPosition();},5000);
@@ -3592,7 +3601,7 @@ setInterval(()=>{
 
 function makeDriverRow(id, d, isMe){
   const age=Date.now()-(d.ts||0);
-  const alive=isMe?isDuty:(age<PEER_ALIVE_MS);
+  const alive=isMe?isDuty:(age<PEER_ALIVE_MS&&d.dutyActive===true);
   const status=alive?(d.status||'kuusha'):'offline';
   const cfg=statusCfg[status];
   const initial=(d.name||'?').slice(0,1);
@@ -3640,11 +3649,11 @@ function updateDriverList(){
   const myD={name:myName,car:myCar,status:currentStatus,ts:Date.now(),lat:myLat,lng:myLng};
   const myRow=isDuty?makeDriverRow(myId,myD,true):'';
   if(isDuty&&myLat!==null)scheduleDriverGeocode(myId,myLat,myLng);
-  // 地図のピンと同様、5分以上位置情報の更新が無い（退勤済み、または
-  // 正常に退勤処理が走らなかった）仲間は、「オフライン」として残すのではなく
-  // 一覧から完全に外す
+  // 地図のピンと同様、PEER_ALIVE_MS（1分）以上位置情報の更新が無い、または
+  // dutyActiveがtrueでない（退勤済み、または正常に退勤処理が走らなかった）
+  // 仲間は、「オフライン」として残すのではなく一覧から完全に外す
   const entries=Object.entries(driverData)
-    .filter(([,d])=>(Date.now()-(d.ts||0))<PEER_ALIVE_MS);
+    .filter(([,d])=>(Date.now()-(d.ts||0))<PEER_ALIVE_MS&&d.dutyActive===true);
   let online=isDuty?1:0;
   const peerRows=entries.map(([id,d])=>{
     online++;
