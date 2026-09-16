@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-58 -->
+<!-- v20260902-59 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -648,6 +648,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="card">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">仲間全員分の待機/送り先データをCSVファイルとして保存してから、Firebase上のデータを削除してリセットします。毎月末の退勤時に自動でも実行されますが、ここから手動でも実行できます。</div>
       <button class="btn btn-d" onclick="exportAndResetTeamDests(true)" style="width:100%">📥 CSV保存してリセットする</button>
+      <button class="btn btn-g" onclick="adminCheckTeamDestsRange()" style="width:100%;margin-top:8px">🔍 現在の記録範囲を確認する（削除しません）</button>
     </div>
     <div class="sec">📡 Firebase接続</div>
     <div class="card">
@@ -1179,7 +1180,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-58';
+const APP_BUILD='20260902-59';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2588,6 +2589,40 @@ async function exportAndResetTeamDests(manual){
   salesLink.href=pendingSalesCsvBlobUrl;
   salesLink.download=`今月の売り上げランキング_${monthStr}.csv`;
   document.getElementById('csv-export-overlay').classList.add('open');
+}
+// 乗り場別送先リスト（spot_dest_stats）の再集計を検討する際の参考情報として、
+// team_destsに現在どれだけの期間・件数の記録が残っているかを、何も削除せず
+// 確認するためだけの関数（月末リセットで過去分は既に失われている可能性があるため）
+async function adminCheckTeamDestsRange(){
+  if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  toast('🔍 team_destsを確認中...');
+  const snap=await db.ref('team_dests').once('value');
+  const all=snap.val()||{};
+  let tripCount=0,withBoardSpot=0,minTs=null,maxTs=null,otaFromSpot=0;
+  Object.values(all).forEach(driverEntries=>{
+    Object.values(driverEntries||{}).forEach(e=>{
+      if(e.type!=='trip')return;
+      tripCount++;
+      if(e.ts){
+        if(minTs===null||e.ts<minTs)minTs=e.ts;
+        if(maxTs===null||e.ts>maxTs)maxTs=e.ts;
+      }
+      if(e.boardSpot){
+        withBoardSpot++;
+        const ward=extractWard(e.alightAddr);
+        if(ward==='大田区')otaFromSpot++;
+      }
+    });
+  });
+  const fmt=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}):'−';
+  const msg=`team_dests確認結果\n\n`+
+    `乗車記録（送迎）件数: ${tripCount}件\n`+
+    `うち乗り場からの記録: ${withBoardSpot}件\n`+
+    `うち降車地が大田区: ${otaFromSpot}件（${withBoardSpot?Math.round(otaFromSpot/withBoardSpot*100):0}%）\n`+
+    `最も古い記録: ${fmt(minTs)}\n`+
+    `最も新しい記録: ${fmt(maxTs)}`;
+  alert(msg);
 }
 // 今月の売り上げランキング（team_sales・グループ全員分）をCSV文字列にする
 function buildMonthSalesRankingCsv(){
