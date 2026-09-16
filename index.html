@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-64 -->
+<!-- v20260902-65 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1211,7 +1211,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-64';
+const APP_BUILD='20260902-65';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2546,6 +2546,15 @@ function confirmEndDuty(){
   dutyStart=null;
   const wasTestMode=testMode;
   testMode=false;
+  // テスト出勤中に実際の乗車〜降車操作を行うと、送り先（destinations）にも
+  // trueの記録として残ってしまう（Firebase・各種集計への反映は別途ガード済み
+  // だが、自分の送り先タブにはローカルに残り続けてしまう）。ここでtest:trueが
+  // 付いた記録をまとめて削除し、テスト出勤のデータが何も残らないようにする
+  if(wasTestMode){
+    const before=destinations.length;
+    destinations=destinations.filter(d=>!d.test);
+    if(destinations.length!==before){saveDests();renderDests();}
+  }
   if(wasTestMode)toast('🧪 テストモードを終了しました');
   localStorage.removeItem('taxi_runtime_state');
   const name=localStorage.getItem('taxi_name')||'自分';
@@ -3826,7 +3835,8 @@ async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs){
     alightAddr:alightAddr||'',
     waitMins:saved?saved.waitMins:null,
     waitAddr:saved?saved.waitAddr:null,
-    dateStr,ts:presetTs||now.getTime()
+    dateStr,ts:presetTs||now.getTime(),
+    test:testMode||undefined
   };
   destinations.push(entry);
   saveDests();renderDests();
@@ -4792,7 +4802,8 @@ async function recordAbure(){
     alightAddr:'あぶれ',
     waitMins:null,
     waitMinsStr,
-    dateStr,ts:now.getTime()
+    dateStr,ts:now.getTime(),
+    test:testMode||undefined
   };
   destinations.push(entry);
   saveDests();renderDests();
@@ -6323,7 +6334,7 @@ async function autoRegisterDest(lat,lng,reason,tripMins=null){
   }catch(e){}
   const now=new Date();
   const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-  const entry={name,addr,done:false,auto:true,reason,timeStr,dateStr,ts:now.getTime(),tripMins};
+  const entry={name,addr,done:false,auto:true,reason,timeStr,dateStr,ts:now.getTime(),tripMins,test:testMode||undefined};
   destinations.push(entry);
   saveDests();renderDests();
   pushDestToFirebase(entry);
@@ -7121,7 +7132,8 @@ function saveManualTrip(){
     alightTime:alightTime||'−',
     alightAddr,
     waitMins:null,
-    dateStr,ts:tripTs
+    dateStr,ts:tripTs,
+    test:testMode||undefined
   };
   if(fare>0)entry.fare=fare;
   destinations.push(entry);
