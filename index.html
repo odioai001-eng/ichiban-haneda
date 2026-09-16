@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-54 -->
+<!-- v20260902-55 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -450,8 +450,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/train_status_hub.html'" title="運行情報ハブ（人身事故・故障等）">🚨</button>
-    <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録">⛽</button>
-    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="自腹で支払った高速料金を記録">🛣️</button>
+    <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録" style="font-size:12px;font-weight:800">GAS</button>
+    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="自腹で支払った高速料金を記録" style="font-size:13px;font-weight:800">高速</button>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -1178,7 +1178,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-54';
+const APP_BUILD='20260902-55';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2826,6 +2826,12 @@ function adminForceStartDuty(){
   if(isDuty){toast('すでに乗務中です');return;}
   testMode=true;
   document.getElementById('duty-start-time').value='';
+  // 燃料・自腹高速ボタンや運賃入力・精算レポートはこのモーダルを経由しなくても
+  // そのまま動作確認できるが、営業開始メーターだけは出勤モーダルの入力欄から
+  // 読み取っている（_startDuty内）ため、テスト出勤でも精算表の車両メーター欄まで
+  // 一通り確認できるよう、ここで簡易的に入力できるようにしておく（空欄でスキップ可）
+  const meterVal=prompt('【テスト用】営業開始メーター（空欄でスキップ可）\n例: 216207');
+  document.getElementById('duty-meter-start').value=meterVal?meterVal.trim():'';
   dutyPlanChoice='skip';
   _startDuty();
   applyDutyPlanChoice();
