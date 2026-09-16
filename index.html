@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-53 -->
+<!-- v20260902-54 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -450,6 +450,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/train_status_hub.html'" title="運行情報ハブ（人身事故・故障等）">🚨</button>
+    <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録">⛽</button>
+    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="自腹で支払った高速料金を記録">🛣️</button>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -682,6 +684,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
    <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
    <div id="work-stats-out" style="margin-top:10px"></div>
    <div id="shift-entries-list" style="margin-top:10px"></div>
+  </div>
+  <div class="sec">🧾 日次精算の記録</div>
+  <div class="card">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">退勤のたびに自動で作成される精算表（燃料・メーター・運賃の内訳等）の一覧です。タップすると内容を再表示できます。</div>
+   <div id="settlement-log-list"></div>
   </div>
   <div class="sec">💰 売上管理（税抜）</div>
   <div class="card">
@@ -949,6 +956,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <input id="duty-end-time" type="text" inputmode="none" readonly placeholder="例: 18:00" onclick="openTimeKeypad('duty-end-time')"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">営業終了メーター（車両メーターの値・4〜6桁）</div>
+      <input id="duty-meter-end" type="text" inputmode="numeric" placeholder="例: 216537" maxlength="6"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
+    </div>
     <div style="display:flex;gap:10px">
       <button onclick="confirmEndDuty()" class="btn btn-p" style="flex:1">退勤する</button>
     </div>
@@ -1017,6 +1029,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <input id="duty-car-plate" type="text" inputmode="numeric" placeholder="例: 1234" maxlength="4"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">営業開始メーター（車両メーターの値・4〜6桁）</div>
+      <input id="duty-meter-start" type="text" inputmode="numeric" placeholder="例: 216207" maxlength="6"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
+    </div>
     <div style="margin-bottom:24px;background:rgba(245,158,11,.1);border:1.5px solid rgba(245,158,11,.4);border-radius:12px;padding:12px">
       <div style="font-size:13px;color:var(--text);margin-bottom:10px;text-align:center;font-weight:700">💳 決済端末は持ちましたか？</div>
       <button type="button" id="duty-payment-yes-btn" onclick="togglePaymentConfirm()"
@@ -1049,16 +1066,101 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="arrival-sub" id="arrival-sub"></div>
 </div>
 <div id="fare-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
- <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px">
+ <div style="background:var(--surface);border-radius:20px;padding:28px 22px calc(22px + env(safe-area-inset-bottom,0px));width:100%;max-width:340px;max-height:calc(100vh - 32px);overflow-y:auto">
   <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:20px">🚕 お疲れさまでした</div>
-  <div style="margin-bottom:24px">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円）（運賃のみ・税抜、割引あれば割引後）</div>
+  <div style="margin-bottom:16px">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円・税込）</div>
    <input id="fare-input" type="number" inputmode="numeric" placeholder="例: 3200">
   </div>
-  <div style="display:flex;gap:10px">
-   <button onclick="skipFareModal()" style="flex:1;padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:13px;font-weight:700">スキップ</button>
-   <button onclick="confirmFareModal()" style="flex:2;padding:12px;border:none;border-radius:10px;background:var(--green);color:#fff;font-size:15px;font-weight:700">✅ 記録する</button>
+  <div style="margin-bottom:16px">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">高速代（円・ETC）※発生した場合のみ入力</div>
+   <input id="fare-etc-input" type="number" inputmode="numeric" placeholder="0" value="0">
   </div>
+  <div style="margin-bottom:18px">
+   <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">
+     <input type="checkbox" id="fare-discount-check" onchange="toggleFareDiscountInput()" style="width:18px;height:18px;flex-shrink:0">
+     障害者割引あり
+   </label>
+   <div id="fare-discount-wrap" style="display:none;margin-top:8px">
+     <div style="font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600">割引額（円）</div>
+     <input id="fare-discount-input" type="number" inputmode="numeric" placeholder="例: 640">
+   </div>
+  </div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">支払い方法をタップして記録</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+   <button onclick="confirmFareModal('cash')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">💴 現金</button>
+   <button onclick="confirmFareModal('credit')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">💳 クレジット</button>
+   <button onclick="confirmFareModal('emoney')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">📱 電子マネー</button>
+   <button onclick="confirmFareModal('ticket')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">🎫 チケット</button>
+   <button onclick="confirmFareModal('qr')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">🔲 QRコード</button>
+  </div>
+  <button onclick="skipFareModal()" style="width:100%;padding:11px;border:2px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">スキップ</button>
+ </div>
+</div>
+
+<!-- 日次精算レポート（退勤後に自動表示、設定タブの履歴からも再表示できる） -->
+<div id="settlement-report-modal" style="position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:16px">
+ <div style="background:var(--surface);border-radius:20px;padding:22px 18px calc(18px + env(safe-area-inset-bottom,0px));width:100%;max-width:380px;max-height:calc(100vh - 32px);overflow-y:auto">
+  <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:2px">🧾 本日の精算</div>
+  <div id="settlement-date-label" style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:16px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+   <div style="border:1px solid var(--border);border-radius:10px;padding:9px">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;text-align:center;margin-bottom:6px">燃料</div>
+    <div id="settlement-fuel-rows" style="font-size:11px;color:var(--muted);line-height:1.6"></div>
+    <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:13px;font-weight:800">
+     <span>計</span><span id="settlement-fuel-total">0.00L</span>
+    </div>
+   </div>
+   <div style="border:1px solid var(--border);border-radius:10px;padding:9px">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;text-align:center;margin-bottom:6px">車両メーター</div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse">
+     <tr><td style="color:var(--muted);padding:2px 0">本日</td><td id="settlement-meter-end" style="text-align:right;font-weight:700">−</td></tr>
+     <tr><td style="color:var(--muted);padding:2px 0">前日</td><td id="settlement-meter-start" style="text-align:right;font-weight:700">−</td></tr>
+     <tr><td style="color:var(--muted);padding:2px 0">差引</td><td id="settlement-meter-diff" style="text-align:right;font-weight:800;color:var(--gold)">−</td></tr>
+    </table>
+   </div>
+  </div>
+  <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px">
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">税込営収（割引前）</span><span id="settlement-revenue-before" style="font-weight:700">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">障害者割引</span><span id="settlement-discount" style="font-weight:700">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">税込営収（割引後）</span><span id="settlement-revenue-after" style="font-weight:700">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">クレジット</span><span id="settlement-credit" style="font-weight:700">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">電子マネー</span><span id="settlement-emoney" style="font-weight:700">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span id="settlement-ticket-label" style="color:var(--muted)">チケット（0枚）</span><span id="settlement-ticket" style="font-weight:700">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">QRコード</span><span id="settlement-qr" style="font-weight:700">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">ETC（高速代）</span><span id="settlement-etc" style="font-weight:700">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">自腹高速</span><span id="settlement-highway" style="font-weight:700;color:var(--red)">−¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);font-size:14px;background:rgba(251,191,36,.08)">
+    <span style="font-weight:700">差引合計</span><span id="settlement-cash-total" style="font-weight:800;color:var(--gold)">¥0</span>
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
+    <span style="color:var(--muted)">未収金</span>
+    <input id="settlement-uncollected-input" type="number" inputmode="numeric" oninput="onSettlementFieldEdit()"
+     style="width:100px;text-align:right;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:13px;font-weight:700;color:var(--fg)">
+   </div>
+   <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;font-size:15px;background:rgba(251,191,36,.14)">
+    <span style="font-weight:800">納金額</span><span id="settlement-payment-amount" style="font-weight:800;color:var(--gold);font-size:17px">¥0</span>
+   </div>
+  </div>
+  <button onclick="closeSettlementReport()" class="btn btn-p" style="width:100%;padding:12px;font-size:15px;font-weight:700">閉じる</button>
  </div>
 </div>
 
@@ -1076,7 +1178,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-53';
+const APP_BUILD='20260902-54';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2241,6 +2343,7 @@ function toggleDuty(){
     document.getElementById('duty-start-time').value='';
     document.getElementById('duty-car-num').value=localStorage.getItem('taxi_car')||'';
     document.getElementById('duty-car-plate').value=localStorage.getItem('taxi_number')||'';
+    document.getElementById('duty-meter-start').value='';
     resetPaymentConfirm();
     resetDutyPlan();
     document.getElementById('duty-car-modal').style.display='flex';
@@ -2258,6 +2361,8 @@ function toggleDuty(){
   const mm=String(now.getMinutes()).padStart(2,'0');
   const timeInput=document.getElementById('duty-end-time');
   if(timeInput)timeInput.value=`${hh}:${mm}`;
+  const meterEndInput=document.getElementById('duty-meter-end');
+  if(meterEndInput)meterEndInput.value='';
   document.getElementById('duty-end-confirm-modal').style.display='flex';
 }
 
@@ -2383,6 +2488,23 @@ function confirmEndDuty(){
   }catch(e){console.error('退勤時のシフト記録に失敗しました',e);}
  }
 
+  // 日次精算（営業開始〜終了メーター・燃料・自腹高速・運賃の内訳）を、
+  // シフトの状態（dutyStart・dutyMeterStart・fuelEntries・highwayEntries）が
+  // まだ残っているこの時点で確定させ、履歴に保存しておく
+  const meterEndEl=document.getElementById('duty-meter-end');
+  const meterEndVal=meterEndEl?meterEndEl.value.trim():'';
+  const dutyMeterEnd=meterEndVal?(parseInt(meterEndVal)||null):null;
+  let settlementRecord=null;
+  if(dutyStart&&!testMode){
+    settlementRecord=buildSettlementRecord(dutyStart.getTime(),endTs,dutyMeterStart,dutyMeterEnd,fuelEntries,highwayEntries);
+    settlementLog.push(settlementRecord);
+    if(settlementLog.length>200)settlementLog.shift();
+    localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
+    renderSettlementLogList();
+  }
+  fuelEntries=[];highwayEntries=[];dutyMeterStart=null;
+  localStorage.removeItem('taxi_shift_extras');
+
   dutyStart=null;
   const wasTestMode=testMode;
   testMode=false;
@@ -2390,7 +2512,11 @@ function confirmEndDuty(){
   localStorage.removeItem('taxi_runtime_state');
   const name=localStorage.getItem('taxi_name')||'自分';
   document.getElementById('duty-end-msg').textContent=`${name}さん、お疲れさまでした。`;
-  document.getElementById('duty-end-modal').style.display='flex';
+  if(settlementRecord){
+    showSettlementReport(settlementRecord,()=>{document.getElementById('duty-end-modal').style.display='flex';});
+  }else{
+    document.getElementById('duty-end-modal').style.display='flex';
+  }
   checkMonthEndDestsReset();
   checkMonthEndOwnRecordCsv();
 }
@@ -2727,6 +2853,14 @@ function _startDuty(){
     dutyStart=now;
   }
   document.getElementById('duty-start').textContent=fmtTime(dutyStart);
+  // 営業開始メーター・燃料・自腹高速は、今回の出勤（シフト）ぶんだけを対象と
+  // するため、出勤のたびにリセットしてから開始する
+  const meterStartEl=document.getElementById('duty-meter-start');
+  const meterStartVal=meterStartEl?meterStartEl.value.trim():'';
+  dutyMeterStart=meterStartVal?(parseInt(meterStartVal)||null):null;
+  fuelEntries=[];
+  highwayEntries=[];
+  saveShiftExtras();
   if(db&&!testMode){
     db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
     // 接続確立時（.info/connected）にも登録しているが、既に接続済みの状態で
@@ -2767,6 +2901,45 @@ let pendingWaitCorrection=null;
 let manualWaitStartTime=null; // 待機開始ボタンを押した時刻
 let manualWaitAddr=null;      // 待機開始した場所の住所
 let spotChangeHistory=[];     // 今回の待機中に乗り場を変更した履歴 [{spot,ts}]
+// ===== 日次精算（出勤時の営業開始メーター〜退勤時の営業終了メーター、燃料・
+// 自腹高速・運賃の内訳）関連の状態。いずれも「今回の出勤（シフト）中」だけの
+// 値のため、出勤のたびにリセットする。リロードをまたいでも保持できるよう、
+// taxi_shift_extras（シフト開始時刻と紐付け）にも保存する =====
+let dutyMeterStart=null;  // 今回の出勤時に入力された営業開始メーター（6桁の数値）
+let fuelEntries=[];       // 燃料の給油記録 [{amount(リットル), ts}]
+let highwayEntries=[];    // 自腹で支払った高速料金の記録 [{amount(円), ts}]
+let settlementLog=JSON.parse(localStorage.getItem('taxi_settlement_log')||'[]'); // 日次精算の保存履歴（退勤ごとに1件）
+function loadShiftExtras(){
+  try{return JSON.parse(localStorage.getItem('taxi_shift_extras')||'null');}catch(e){return null;}
+}
+function saveShiftExtras(){
+  localStorage.setItem('taxi_shift_extras',JSON.stringify({
+    shiftStartTs:dutyStart?dutyStart.getTime():null,
+    meterStart:dutyMeterStart,fuelEntries,highwayEntries
+  }));
+}
+function fuelTotalLiters(){return fuelEntries.reduce((a,e)=>a+(e.amount||0),0);}
+function highwayTotalYen(){return highwayEntries.reduce((a,e)=>a+(e.amount||0),0);}
+function promptFuelEntry(){
+  if(!isDuty){toast('⚠️ 出勤中のみ記録できます');return;}
+  const val=prompt('給油量（リットル）\n例: 12.50');
+  if(val===null)return;
+  const amount=Math.round((parseFloat(val)||0)*100)/100;
+  if(!amount||amount<=0){toast('⚠️ 正しい数値を入力してください');return;}
+  fuelEntries.push({amount,ts:Date.now()});
+  saveShiftExtras();
+  toast(`⛽ ${amount.toFixed(2)}L を記録しました（本日計 ${fuelTotalLiters().toFixed(2)}L）`);
+}
+function promptHighwayEntry(){
+  if(!isDuty){toast('⚠️ 出勤中のみ記録できます');return;}
+  const val=prompt('自腹で支払った高速料金（円）');
+  if(val===null)return;
+  const amount=parseInt(val)||0;
+  if(amount<=0){toast('⚠️ 正しい金額を入力してください');return;}
+  highwayEntries.push({amount,ts:Date.now()});
+  saveShiftExtras();
+  toast(`🛣️ ¥${amount.toLocaleString()} を記録しました（本日計 ¥${highwayTotalYen().toLocaleString()}）`);
+}
 function recordSpotChange(spot){
   const last=spotChangeHistory[spotChangeHistory.length-1];
   if(!last||last.spot!==spot)spotChangeHistory.push({spot,ts:Date.now()});
@@ -2831,6 +3004,18 @@ function restoreAppState(){
   if(lbl)lbl.textContent=testMode?'乗務中（テスト）':'乗務中';
   if(offline)offline.classList.remove('show');
   document.getElementById('duty-start').textContent=fmtTime(dutyStart);
+  // 営業開始メーター・燃料・自腹高速も、リロードをまたいで復元する。
+  // taxi_shift_extrasが今回の出勤（dutyStart）と一致する場合のみ使い、
+  // 一致しない（前回の出勤の残り）場合は空のまま始める
+  const shiftExtras=loadShiftExtras();
+  if(shiftExtras&&shiftExtras.shiftStartTs===dutyStart.getTime()){
+    dutyMeterStart=shiftExtras.meterStart||null;
+    fuelEntries=Array.isArray(shiftExtras.fuelEntries)?shiftExtras.fuelEntries:[];
+    highwayEntries=Array.isArray(shiftExtras.highwayEntries)?shiftExtras.highwayEntries:[];
+  }else{
+    dutyMeterStart=null;fuelEntries=[];highwayEntries=[];
+    saveShiftExtras();
+  }
   if(dutyInterval)clearInterval(dutyInterval);
   dutyInterval=setInterval(()=>{
     if(!dutyStart)return;
@@ -5172,13 +5357,29 @@ let pendingFareTripTs=null;
 function showFareModal(tripTs){
  pendingFareTripTs=tripTs||null;
  document.getElementById('fare-input').value='';
+ document.getElementById('fare-etc-input').value='0';
+ document.getElementById('fare-discount-check').checked=false;
+ document.getElementById('fare-discount-input').value='';
+ toggleFareDiscountInput();
  document.getElementById('fare-modal').style.display='flex';
  setTimeout(()=>document.getElementById('fare-input').focus(),200);
 }
 
-function confirmFareModal(){
+function toggleFareDiscountInput(){
+ const checked=document.getElementById('fare-discount-check').checked;
+ document.getElementById('fare-discount-wrap').style.display=checked?'block':'none';
+}
+
+// 支払い方法（現金・クレジット・電子マネー・チケット・QRコード）ボタンから
+// 呼ばれる。運賃は共通の1つの入力欄に入れた金額をそのまま使い、押した
+// ボタンで支払い方法だけをタグ付けする。障害者割引・高速代（ETC）は
+// 支払い方法とは独立して（どの支払い方法とも同時に）記録できる
+function confirmFareModal(method){
  const fare=parseInt(document.getElementById('fare-input').value)||0;
- saveFareEntry(fare,0,pendingFareTripTs);
+ const etc=parseInt(document.getElementById('fare-etc-input').value)||0;
+ const discountChecked=document.getElementById('fare-discount-check').checked;
+ const discount=discountChecked?(parseInt(document.getElementById('fare-discount-input').value)||0):0;
+ saveFareEntry(fare,0,pendingFareTripTs,method,discount,etc);
  attachFareToTrip(pendingFareTripTs,fare,0);
  document.getElementById('fare-modal').style.display='none';
 }
@@ -5377,18 +5578,148 @@ function skipFareModal(){
  document.getElementById('fare-modal').style.display='none';
 }
 
-function saveFareEntry(fare,toll,tripTs){
+function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const now=new Date();
  log.push({
   dateStr:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
-  fare,toll,ts:now.getTime(),tripTs:tripTs||null
+  fare,toll,ts:now.getTime(),tripTs:tripTs||null,
+  paymentMethod:paymentMethod||null,discount:discount||0,etc:etc||0
  });
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast(`💰 運賃 ¥${fare.toLocaleString()} を記録しました`);
  renderSalesStats();
  updateDailyBar();
  pushTeamSales();
+}
+
+// ===== 日次精算（退勤時に自動で作成される、紙の納金票に相当する記録） =====
+// taxi_fare_log内の運賃(fare)は、メーターの税込表示をそのまま入力する運用
+// のため、ここでは税込金額として扱う。障害者割引（discount）は、fareが
+// 既に割引後の金額であることを前提に、fare+discount=割引前の税込営収として
+// 逆算する
+function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelEntriesArg,highwayEntriesArg){
+  const fareLog=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  const shiftFares=fareLog.filter(e=>(e.ts||0)>=shiftStartTs&&(e.ts||0)<=shiftEndTs);
+  const revenueAfterDiscount=shiftFares.reduce((a,e)=>a+(e.fare||0),0);
+  const discountTotal=shiftFares.reduce((a,e)=>a+(e.discount||0),0);
+  const revenueBeforeDiscount=revenueAfterDiscount+discountTotal;
+  const sumByMethod=m=>shiftFares.filter(e=>e.paymentMethod===m).reduce((a,e)=>a+(e.fare||0),0);
+  const credit=sumByMethod('credit');
+  const emoney=sumByMethod('emoney');
+  const ticketEntries=shiftFares.filter(e=>e.paymentMethod==='ticket');
+  const ticket=ticketEntries.reduce((a,e)=>a+(e.fare||0),0);
+  const ticketCount=ticketEntries.length;
+  const qr=sumByMethod('qr');
+  const etc=shiftFares.reduce((a,e)=>a+(e.etc||0),0); // 運賃記録時に入力した高速代（ETC）の合計
+  const fuel=Array.isArray(fuelEntriesArg)?fuelEntriesArg:[];
+  const highway=Array.isArray(highwayEntriesArg)?highwayEntriesArg:[];
+  const fuelTotal=fuel.reduce((a,e)=>a+(e.amount||0),0);
+  const highwayTotal=highway.reduce((a,e)=>a+(e.amount||0),0);
+  return {
+    dateStr:new Date(shiftStartTs).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
+    shiftStartTs,shiftEndTs,
+    meterStart:meterStart||null,meterEnd:meterEnd||null,
+    meterDiff:(meterStart&&meterEnd&&meterEnd>=meterStart)?(meterEnd-meterStart):null,
+    fuelTotal,fuelEntries:fuel,
+    highwayTotal,highwayEntries:highway,
+    revenueBeforeDiscount,discountTotal,revenueAfterDiscount,
+    credit,emoney,ticket,ticketCount,qr,
+    etc,uncollected:0 // 未収金は自動追跡していないため、レポート画面で手動入力する
+  };
+}
+// レポートに表示する差引合計・納金額を、その場で（手入力のETC・未収金も
+// 反映して）算出する。保存済みのrecordはetc/uncollectedを直接書き換えて
+// 呼び直すことで、後から見返した時も編集内容を保持できるようにする。
+// 計算式（ご指定の通り）:
+//   差引合計 = 税込営収(割引前) − (クレジット＋電子マネー＋チケット＋QRコード) ＋ ETC(高速代) − 自腹高速
+//   納金額   = 差引合計 − 未収金
+function computeSettlementTotals(record){
+  const electronicTotal=record.credit+record.emoney+record.ticket+record.qr;
+  const cashSettleTotal=record.revenueBeforeDiscount-electronicTotal+(record.etc||0)-(record.highwayTotal||0);
+  const paymentAmount=cashSettleTotal-(record.uncollected||0);
+  return {cashSettleTotal,paymentAmount};
+}
+
+// 現在モーダルに表示中の精算レコード（settlementLog内のインデックス）。
+// ETC・未収金を編集した時に、この番号を使ってsettlementLogへ書き戻す
+let currentSettlementIndex=-1;
+let currentSettlementOnClose=null;
+function fmtYen(n){return '¥'+Math.round(n||0).toLocaleString();}
+function showSettlementReport(record,onClose){
+  // 保存済みのsettlementLog内での位置を探す（退勤直後はpushした直後の
+  // 末尾、設定タブの履歴から開いた場合はその記録そのもの）
+  currentSettlementIndex=settlementLog.indexOf(record);
+  currentSettlementOnClose=onClose||null;
+  document.getElementById('settlement-date-label').textContent=record.dateStr||'';
+  document.getElementById('settlement-fuel-rows').innerHTML=record.fuelEntries&&record.fuelEntries.length
+    ?record.fuelEntries.map(e=>`<div>${new Date(e.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}　${e.amount.toFixed(2)}L</div>`).join('')
+    :'<div>記録なし</div>';
+  document.getElementById('settlement-fuel-total').textContent=record.fuelTotal.toFixed(2)+'L';
+  document.getElementById('settlement-meter-end').textContent=record.meterEnd!==null?record.meterEnd.toLocaleString():'−';
+  document.getElementById('settlement-meter-start').textContent=record.meterStart!==null?record.meterStart.toLocaleString():'−';
+  document.getElementById('settlement-meter-diff').textContent=record.meterDiff!==null?record.meterDiff.toLocaleString()+'km':'−';
+  document.getElementById('settlement-revenue-before').textContent=fmtYen(record.revenueBeforeDiscount);
+  document.getElementById('settlement-discount').textContent=fmtYen(record.discountTotal);
+  document.getElementById('settlement-revenue-after').textContent=fmtYen(record.revenueAfterDiscount);
+  document.getElementById('settlement-credit').textContent=fmtYen(record.credit);
+  document.getElementById('settlement-emoney').textContent=fmtYen(record.emoney);
+  document.getElementById('settlement-ticket-label').textContent=`チケット（${record.ticketCount||0}枚）`;
+  document.getElementById('settlement-ticket').textContent=fmtYen(record.ticket);
+  document.getElementById('settlement-qr').textContent=fmtYen(record.qr);
+  document.getElementById('settlement-etc').textContent=fmtYen(record.etc);
+  document.getElementById('settlement-highway').textContent='−'+fmtYen(record.highwayTotal);
+  document.getElementById('settlement-uncollected-input').value=record.uncollected||0;
+  updateSettlementTotalsDisplay(record);
+  document.getElementById('settlement-report-modal').style.display='flex';
+}
+function updateSettlementTotalsDisplay(record){
+  const {cashSettleTotal,paymentAmount}=computeSettlementTotals(record);
+  document.getElementById('settlement-cash-total').textContent=fmtYen(cashSettleTotal);
+  document.getElementById('settlement-payment-amount').textContent=fmtYen(paymentAmount);
+}
+// ETC・未収金の入力欄が編集されるたびに呼ばれる。表示中のレコードを直接
+// 書き換えて再計算し、settlementLogにも保存し直す（後から見返した時も
+// 編集内容が残るようにするため）
+function onSettlementFieldEdit(){
+  if(currentSettlementIndex<0||currentSettlementIndex>=settlementLog.length)return;
+  const record=settlementLog[currentSettlementIndex];
+  record.uncollected=parseInt(document.getElementById('settlement-uncollected-input').value)||0;
+  updateSettlementTotalsDisplay(record);
+  localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
+}
+function closeSettlementReport(){
+  document.getElementById('settlement-report-modal').style.display='none';
+  const cb=currentSettlementOnClose;
+  currentSettlementOnClose=null;
+  currentSettlementIndex=-1;
+  if(cb)cb();
+}
+// 設定タブ「🧾 日次精算の記録」の一覧。新しい日が上に来るよう表示する
+function renderSettlementLogList(){
+  const el=document.getElementById('settlement-log-list');
+  if(!el)return;
+  if(!settlementLog.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">まだ記録がありません</div>';
+    return;
+  }
+  const order=settlementLog.map((r,i)=>i).sort((a,b)=>settlementLog[b].shiftStartTs-settlementLog[a].shiftStartTs);
+  el.innerHTML=order.map(i=>{
+    const r=settlementLog[i];
+    const {paymentAmount}=computeSettlementTotals(r);
+    return `<div onclick="openSettlementFromLog(${i})" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+     <div style="flex:1;font-size:12px">
+      <span style="color:var(--muted)">${esc(r.dateStr||'')}</span>
+      <span style="font-weight:700;color:var(--gold);margin-left:6px">${fmtYen(paymentAmount)}</span>
+     </div>
+     <span style="font-size:11px;color:var(--muted)">▶</span>
+    </div>`;
+  }).join('');
+}
+function openSettlementFromLog(index){
+  const record=settlementLog[index];
+  if(!record)return;
+  showSettlementReport(record,null);
 }
 
 let teamSales={};
@@ -7421,6 +7752,7 @@ function loadSettings(){
   document.getElementById('s-carry-days').value=localStorage.getItem('taxi_carry_days')||'';
  renderCarryoverStatus();
  renderWorkStats();renderSalesStats();
+ renderSettlementLogList();
  updateDailyBar();
 }
 function saveSettings(){
