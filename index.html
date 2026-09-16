@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-66 -->
+<!-- v20260902-67 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1134,7 +1134,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <!-- 日次精算レポート（退勤後に自動表示、設定タブの履歴からも再表示できる） -->
 <div id="settlement-report-modal" style="position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:16px">
  <div style="background:var(--surface);border-radius:20px;padding:22px 18px calc(18px + env(safe-area-inset-bottom,0px));width:100%;max-width:380px;max-height:calc(100vh - 32px);overflow-y:auto">
-  <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:2px">🧾 本日の精算</div>
+  <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:2px">🧾 本日の営業</div>
   <div id="settlement-date-label" style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:16px"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
    <div style="border:1px solid var(--border);border-radius:10px;padding:9px">
@@ -1178,9 +1178,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
     <span style="color:var(--muted)">ETC（高速代）</span><span id="settlement-etc" style="font-weight:700">¥0</span>
    </div>
-   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
-    <span style="color:var(--muted)">無料高速</span><span id="settlement-highway" style="font-weight:700;color:var(--red)">−¥0</span>
-   </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);font-size:14px;background:rgba(251,191,36,.08)">
     <span style="font-weight:700">差引合計</span><span id="settlement-cash-total" style="font-weight:800;color:var(--gold)">¥0</span>
    </div>
@@ -1211,7 +1208,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-66';
+const APP_BUILD='20260902-67';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5826,8 +5823,9 @@ function showSettlementReport(record,onClose){
   document.getElementById('settlement-ticket-label').textContent=`チケット（${record.ticketCount||0}枚）`;
   document.getElementById('settlement-ticket').textContent=fmtYen(record.ticket);
   document.getElementById('settlement-qr').textContent=fmtYen(record.qr);
-  document.getElementById('settlement-etc').textContent=fmtYen(record.etc);
-  document.getElementById('settlement-highway').textContent='−'+fmtYen(record.highwayTotal);
+  // 無料高速は独立した行として表示せず、ETC（高速代）から差し引いた金額を
+  // ETC欄にまとめて表示する（差引合計・納金額の計算式自体は変えない）
+  document.getElementById('settlement-etc').textContent=fmtYen((record.etc||0)-(record.highwayTotal||0));
   document.getElementById('settlement-uncollected-input').value=record.uncollected||0;
   updateSettlementTotalsDisplay(record);
   document.getElementById('settlement-report-modal').style.display='flex';
