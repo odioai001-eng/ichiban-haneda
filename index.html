@@ -2231,7 +2231,7 @@ const GPS_MAX_PLAUSIBLE_SPEED_MPS=40; // 直前の採用位置からの実効速
 // フリーズしたまま動かなくなる（「GPSの精度が全体的に悪くなった」ように
 // 見える不具合の原因だった）。多少精度が悪くても、何も表示しないよりは
 // 定期的に更新される方が実用上望ましい
-const GPS_STALE_OVERRIDE_MS=20000;
+const GPS_STALE_OVERRIDE_MS=10000;
 let lastAcceptedFix=null; // {lat,lng,ts}
 let pendingJumpFix=null; // 直前に「ノイズによる飛び」として1回だけ却下した位置
 // 新しいGPSフィックスを採用してよいか判定する。本当に大きく移動した場合
