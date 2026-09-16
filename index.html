@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-67 -->
+<!-- v20260902-68 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1208,7 +1208,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-67';
+const APP_BUILD='20260902-68';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2225,18 +2225,30 @@ let pageHiddenAt=0;
 // 直前の採用済み位置をそのまま使い続けることで、地図上の位置を安定させる
 const GPS_MAX_ACCURACY_M=100; // これより精度（半径）が悪いフィックスは無視する
 const GPS_MAX_PLAUSIBLE_SPEED_MPS=40; // 直前の採用位置からの実効速度がこれを超える場合はノイズとみなす（時速144km相当、高速道路走行でも十分な余裕を持たせている）
+// この時間より長く位置が更新できていない場合は、精度が悪い・速度が不自然な
+// フィックスでも採用する。この上限が無いと、周辺の電波状況が常に精度100m
+// 前後の端末では正当なフィックスまで永遠に却下され続け、地図上の位置が
+// フリーズしたまま動かなくなる（「GPSの精度が全体的に悪くなった」ように
+// 見える不具合の原因だった）。多少精度が悪くても、何も表示しないよりは
+// 定期的に更新される方が実用上望ましい
+const GPS_STALE_OVERRIDE_MS=10000;
 let lastAcceptedFix=null; // {lat,lng,ts}
 let pendingJumpFix=null; // 直前に「ノイズによる飛び」として1回だけ却下した位置
 // 新しいGPSフィックスを採用してよいか判定する。本当に大きく移動した場合
 // （バックグラウンド復帰後の長時間経過など）まで拒否し続けないよう、同じ新しい
 // 位置が2回続けて得られた場合は「実際の移動」とみなして採用する
 function shouldAcceptGpsFix(lat,lng,accuracy,now){
-  if(typeof accuracy==='number'&&accuracy>GPS_MAX_ACCURACY_M){pendingJumpFix=null;return false;}
+  const stale=!lastAcceptedFix||(now-lastAcceptedFix.ts)>GPS_STALE_OVERRIDE_MS;
+  if(typeof accuracy==='number'&&accuracy>GPS_MAX_ACCURACY_M){
+    pendingJumpFix=null;
+    return stale;
+  }
   if(!lastAcceptedFix)return true;
   const dt=(now-lastAcceptedFix.ts)/1000;
   if(dt<=0)return true;
   const dist=haversine(lastAcceptedFix.lat,lastAcceptedFix.lng,lat,lng);
   if(dist/dt<=GPS_MAX_PLAUSIBLE_SPEED_MPS){pendingJumpFix=null;return true;}
+  if(stale){pendingJumpFix=null;return true;}
   if(pendingJumpFix&&haversine(pendingJumpFix.lat,pendingJumpFix.lng,lat,lng)<=50){
     pendingJumpFix=null;
     return true;
