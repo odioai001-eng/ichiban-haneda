@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-51 -->
+<!-- v20260902-54 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1178,7 +1178,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-51';
+const APP_BUILD='20260902-54';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2186,6 +2186,35 @@ let gpsCatchUpUntil=0;
 // 行わないようにするための基準にする
 let pageHiddenAt=0;
 
+// 地下駐車場やビルの谷間など電波状況が悪い場所では、スマホがGPS衛星ではなく
+// Wi-Fi・基地局による大まかな位置推定に切り替わることがある。この推定は数百m
+// 単位でズレることがあり、位置情報の利用許可自体は正しく許可されていても、
+// 地図上の自分の位置が行ったり来たり・瞬間移動して見える不具合の主な原因になる。
+// 明らかに精度の悪いフィックス（accuracyの値が大きい）や、直前に採用した位置からの
+// 実効速度が物理的にありえないフィックス（ノイズによる一瞬の飛び）は採用せず、
+// 直前の採用済み位置をそのまま使い続けることで、地図上の位置を安定させる
+const GPS_MAX_ACCURACY_M=100; // これより精度（半径）が悪いフィックスは無視する
+const GPS_MAX_PLAUSIBLE_SPEED_MPS=40; // 直前の採用位置からの実効速度がこれを超える場合はノイズとみなす（時速144km相当、高速道路走行でも十分な余裕を持たせている）
+let lastAcceptedFix=null; // {lat,lng,ts}
+let pendingJumpFix=null; // 直前に「ノイズによる飛び」として1回だけ却下した位置
+// 新しいGPSフィックスを採用してよいか判定する。本当に大きく移動した場合
+// （バックグラウンド復帰後の長時間経過など）まで拒否し続けないよう、同じ新しい
+// 位置が2回続けて得られた場合は「実際の移動」とみなして採用する
+function shouldAcceptGpsFix(lat,lng,accuracy,now){
+  if(typeof accuracy==='number'&&accuracy>GPS_MAX_ACCURACY_M){pendingJumpFix=null;return false;}
+  if(!lastAcceptedFix)return true;
+  const dt=(now-lastAcceptedFix.ts)/1000;
+  if(dt<=0)return true;
+  const dist=haversine(lastAcceptedFix.lat,lastAcceptedFix.lng,lat,lng);
+  if(dist/dt<=GPS_MAX_PLAUSIBLE_SPEED_MPS){pendingJumpFix=null;return true;}
+  if(pendingJumpFix&&haversine(pendingJumpFix.lat,pendingJumpFix.lng,lat,lng)<=50){
+    pendingJumpFix=null;
+    return true;
+  }
+  pendingJumpFix={lat,lng};
+  return false;
+}
+
 function startGPS(){
   if(!navigator.geolocation){toast('⚠️ GPS非対応');return;}
   gpsPermissionDeniedNotified=false;
@@ -2229,9 +2258,15 @@ function _attachGPSWatch(){
     gpsLastUpdate=Date.now();
     if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
     if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
+    const fixLat=pos.coords.latitude,fixLng=pos.coords.longitude;
+    // 精度の悪いフィックスやノイズによる瞬間移動は採用せず、直前の位置のまま
+    // 次の（まともな）フィックスを待つ。isFirstFix・pendingCatchUpCheck等の
+    // 状態はここでは変更せず、実際に採用されたフィックスが来た時のために残しておく
+    if(!shouldAcceptGpsFix(fixLat,fixLng,pos.coords.accuracy,gpsLastUpdate))return;
     const isFirstFix=(myLat===null)||pendingCatchUpCheck||Date.now()<gpsCatchUpUntil;
     pendingCatchUpCheck=false;
-    myLat=pos.coords.latitude; myLng=pos.coords.longitude;
+    myLat=fixLat; myLng=fixLng;
+    lastAcceptedFix={lat:myLat,lng:myLng,ts:gpsLastUpdate};
     updateMyMarker(myLat,myLng);
     hideGpsPermissionBanner();
     document.getElementById('gps-dot').style.background='';
@@ -2293,6 +2328,7 @@ function stopGPS(){
   if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
   if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
   if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
+  lastAcceptedFix=null;pendingJumpFix=null;
   if(myMarker){leafletMap.removeLayer(myMarker);myMarker=null;}
   document.getElementById('gps-dot').classList.remove('on');
   document.getElementById('gps-txt').textContent='GPS停止中';
@@ -4277,23 +4313,27 @@ let cpArriveTs=loadCpArriveTs();
 // 戻ってきた場合はGPSのブレとみなして元の状態を引き継ぐ
 let cpLastDepartureSnapshot={};
 const CP_REJOIN_GRACE_MS=5*60*1000; // この時間内の再入場は同じ滞在の続きとみなす
+// GPSが実際に「圏外に出た」と最初に示した時刻（デバウンスや退場確定待ちより前の、
+// 生のGPS観測時刻）。checkGeofences側で圏内→圏外の変化を検知した瞬間に記録する。
+// 以前はこれを持たず、Date.now()から退場確定までの待ち時間（getDepartureConfirmMs）を
+// 差し引いて逆算していたが、CP_TRANSITION_DEBOUNCE_MS（最大10秒）の間は圏外への変化の
+// 検知自体を保留するため、素通りしただけの数秒の滞在でも「デバウンスが解除されるまでの
+// 時間」が滞在時間に上乗せされ、5秒以上滞在という条件を常に満たして誤って実車化して
+// しまう不具合の原因になっていた。生の観測時刻を直接記録することでこれを解消する
+let cpExitDetectedTs={};
 function cpHasStayed1Min(cp){
   const ts=cpArriveTs[cp.id];
   if(!ts)return false;
-  // この関数はonDeparture内で「退場確定」した後に呼ばれるが、退場確定は
-  // 実際に圏外に出た瞬間から一定時間（通常90秒、1〜4号乗り場は10秒、国際線第3プールは60秒）待って
-  // から確定するため、Date.now()（＝呼び出し時点の時刻）は必ず到着時刻からその
-  // 分だけ離れてしまい、素通りしただけでも必ず1分以上に見えてしまう。実際に
-  // その場を離れた時刻（≒Date.now()からその待ち時間を差し引いた時刻）を基準に
-  // 判定することで、本当に1分以上滞在したかどうかを正しく区別する
-  return (Date.now()-getDepartureConfirmMs(cp)-ts)>=CP_STOP_CONFIRM_MS;
+  const exitTs=cpExitDetectedTs[cp.id]||Date.now();
+  return (exitTs-ts)>=CP_STOP_CONFIRM_MS;
 }
 // cpHasStayed1Minと同じ考え方で、実際にそのチェックポイントの圏内にいた
-// おおよその時間（ミリ秒）を計算する（退場確定までの待ち時間を差し引く）
+// おおよその時間（ミリ秒）を計算する
 function cpDwellMs(cp){
   const ts=cpArriveTs[cp.id];
   if(!ts)return 0;
-  return Math.max(0,Date.now()-getDepartureConfirmMs(cp)-ts);
+  const exitTs=cpExitDetectedTs[cp.id]||Date.now();
+  return Math.max(0,exitTs-ts);
 }
 // 国際線第4プール（予備）に1分以上停止していた場合の、その到着時刻。
 // 素通りしただけの場合はnullのままにし、第3プール（本プール）への到着時刻を
@@ -4352,18 +4392,26 @@ function checkGeofences(lat,lng,isFirstFix){
     if(nowInside===wasInside){
       // 内側に戻った場合は、確認待ちの退場判定をキャンセルする
       // （バックグラウンド復帰直後のGPS精度低下等による「通過」の誤検知を防ぐ）
-      if(nowInside&&pendingDepartureTimer[cp.id]){
-        clearTimeout(pendingDepartureTimer[cp.id]);
-        delete pendingDepartureTimer[cp.id];
+      if(nowInside){
+        if(pendingDepartureTimer[cp.id]){
+          clearTimeout(pendingDepartureTimer[cp.id]);
+          delete pendingDepartureTimer[cp.id];
+        }
+        delete cpExitDetectedTs[cp.id]; // 圏外への変化候補はGPSのブレだったので取り消す
       }
       return;
     }
+    // 圏内→圏外の変化をGPSが最初に示した、生の観測時刻を記録する（デバウンスや
+    // 退場確定待ちの影響を受けない）。cpDwellMs／cpHasStayed1Minはこれを基準に
+    // 実際の滞在時間を計算する
+    if(!nowInside&&wasInside&&!cpExitDetectedTs[cp.id])cpExitDetectedTs[cp.id]=now;
     // GPSのジャンプ・ジッターで直前に反転したばかりの場合は、次の反転まで一定時間待つ
     const lastT=cpLastTransitionTs[cp.id]||0;
     if(now-lastT<CP_TRANSITION_DEBOUNCE_MS)return;
     if(nowInside){
       cpLastTransitionTs[cp.id]=now;
       cpInside[cp.id]=true;
+      delete cpExitDetectedTs[cp.id]; // 新しい滞在の開始
       // 直前に「退場確定」したばかり（CP_REJOIN_GRACE_MS以内）の再入場は、高架下等での
       // 一時的なGPSのブレによる誤検知の可能性が高いため、新規到着として扱わず、
       // 退場前の到着時刻・号選択の状態をそのまま引き継ぐ（待機時間の起点や
@@ -4386,7 +4434,7 @@ function checkGeofences(lat,lng,isFirstFix){
       pendingDepartureTimer[cp.id]=setTimeout(()=>{
         delete pendingDepartureTimer[cp.id];
         if(myLat===null||myLng===null)return;
-        if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M))return; // 境界付近だった（誤検知）
+        if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M)){delete cpExitDetectedTs[cp.id];return;} // 境界付近だった（誤検知）
         cpLastTransitionTs[cp.id]=Date.now();
         cpInside[cp.id]=false;
         // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
@@ -4395,6 +4443,7 @@ function checkGeofences(lat,lng,isFirstFix){
         // 消去はonDepartureの呼び出しが終わった後に行う
         onDeparture(cp);
         delete cpArriveTs[cp.id];saveCpArriveTs();
+        delete cpExitDetectedTs[cp.id];
       },getDepartureConfirmMs(cp));
     }
   });
