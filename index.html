@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-76 -->
+<!-- v20260902-77 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1223,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-76';
+const APP_BUILD='20260902-77';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2144,15 +2144,15 @@ function updatePeerMarker(id,d){
   if(id===myId)return;
   const age=Date.now()-(d.ts||0);
   // PEER_ALIVE_MS（1分）以上位置情報の更新が無い場合に加え、dutyActiveが
-  // 明示的にfalse（退勤処理で必ずこの値を送る）の場合も「乗務中」とは
-  // みなさない。tsだけが別経路（Android版アプリの位置送信サービス等）から
-  // 更新され続けても、退勤時に一度falseを書いておけば、update()は指定した
-  // 項目しか書き換えないため、他経路からの書き込みでtsだけ新しくなっても
-  // dutyActive:falseは上書きされずに残り、消えたままになる。
-  // dutyActiveが未設定（まだ新しいコードに更新されていない端末からの
-  // 書き込み等）の場合は、判定できないため必ず表示は継続する（＝falseの
-  // 場合だけ確実に消す片方向のチェックとし、乗務中の人を誤って消さない）
-  const alive=age<PEER_ALIVE_MS&&d.dutyActive!==false;
+  // trueでない場合（退勤処理で明示的にfalseにした場合、または本来の
+  // pushMyPosition以外の経路からの書き込みでdutyActiveが伴っていない場合）も
+  // 「乗務中」とはみなさない。tsだけが何らかの理由で更新され続けても、
+  // dutyActiveが伴わなければ地図から消えるようにするための二重チェック。
+  // 一時期「dutyActiveがfalseの場合だけ消す」方式も試したが、Android版
+  // アプリのバックグラウンドサービスがdutyActive:trueも一緒に送ってしまい
+  // （退勤直後にfalseが上書きされてしまい）退勤済みの人が復活する不具合が
+  // 確認されたため、Android側の根本原因を直すまでは元のtrue必須の方式に戻す
+  const alive=age<PEER_ALIVE_MS&&d.dutyActive===true;
   // 退勤したまま正常にレコードが消えなかった（アプリの強制終了・通信断など）
   // 場合は、グレーの「オフライン」表示で残すのではなく、アイコンごと地図から消す。
   // 出勤して位置情報の送信が再開されればupdatePeerMarkerが再び呼ばれ、
@@ -3646,7 +3646,7 @@ setInterval(()=>{
 
 function makeDriverRow(id, d, isMe){
   const age=Date.now()-(d.ts||0);
-  const alive=isMe?isDuty:(age<PEER_ALIVE_MS&&d.dutyActive!==false);
+  const alive=isMe?isDuty:(age<PEER_ALIVE_MS&&d.dutyActive===true);
   const status=alive?(d.status||'kuusha'):'offline';
   const cfg=statusCfg[status];
   const initial=(d.name||'?').slice(0,1);
@@ -3695,10 +3695,10 @@ function updateDriverList(){
   const myRow=isDuty?makeDriverRow(myId,myD,true):'';
   if(isDuty&&myLat!==null)scheduleDriverGeocode(myId,myLat,myLng);
   // 地図のピンと同様、PEER_ALIVE_MS（1分）以上位置情報の更新が無い、または
-  // dutyActiveが明示的にfalse（退勤処理で必ずこの値を送る）の仲間は、
-  // 「オフライン」として残すのではなく一覧から完全に外す
+  // dutyActiveがtrueでない（退勤済み、または正常に退勤処理が走らなかった）
+  // 仲間は、「オフライン」として残すのではなく一覧から完全に外す
   const entries=Object.entries(driverData)
-    .filter(([,d])=>(Date.now()-(d.ts||0))<PEER_ALIVE_MS&&d.dutyActive!==false);
+    .filter(([,d])=>(Date.now()-(d.ts||0))<PEER_ALIVE_MS&&d.dutyActive===true);
   let online=isDuty?1:0;
   const peerRows=entries.map(([id,d])=>{
     online++;
