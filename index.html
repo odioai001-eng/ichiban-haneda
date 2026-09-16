@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-61 -->
+<!-- v20260902-62 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1206,7 +1206,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-61';
+const APP_BUILD='20260902-62';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5469,25 +5469,26 @@ function confirmFareModal(method){
  const discountChecked=document.getElementById('fare-discount-check').checked;
  const discount=discountChecked?(parseInt(document.getElementById('fare-discount-input').value)||0):0;
  saveFareEntry(fare,0,pendingFareTripTs,method,discount,etc);
- attachFareToTrip(pendingFareTripTs,fare,0);
+ attachFareToTrip(pendingFareTripTs,fare,0,method);
  document.getElementById('fare-modal').style.display='none';
 }
 
-function attachFareToTrip(tripTs,fare,retryCount){
+function attachFareToTrip(tripTs,fare,retryCount,paymentMethod){
  if(!tripTs)return;
  retryCount=retryCount||0;
  const idx=destinations.findIndex(d=>d.ts===tripTs);
  if(idx>=0){
   destinations[idx].fare=fare;
+  if(paymentMethod)destinations[idx].paymentMethod=paymentMethod;
   saveDests();renderDests();
   if(db&&isRankingOptedIn()){
    db.ref('team_dests/'+myId).orderByChild('ts').equalTo(tripTs).once('value',snap=>{
-    snap.forEach(child=>child.ref.update({fare}));
+    snap.forEach(child=>child.ref.update({fare,paymentMethod:paymentMethod||null}));
    });
   }
  }else if(retryCount<8){
   // 住所取得の非同期処理がまだ終わっていない場合は少し待って再試行
-  setTimeout(()=>attachFareToTrip(tripTs,fare,retryCount+1),500);
+  setTimeout(()=>attachFareToTrip(tripTs,fare,retryCount+1,paymentMethod),500);
  }
 }
 
@@ -6765,6 +6766,9 @@ function computeTripNumbers(tripsAscByTs){
   return numMap;
 }
 
+function paymentMethodLabel(method){
+  return {cash:'現金',credit:'クレジット',emoney:'電子マネー',ticket:'チケット',qr:'QRコード'}[method]||method;
+}
 function buildDestEntryHtml(d,numMap){
   if(d.type==='trip'){
     const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(d);
@@ -6792,7 +6796,7 @@ function buildDestEntryHtml(d,numMap){
         <button onclick="editTripWait(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
       </div>
       ${d.fare?`<div style="margin-top:5px;display:flex;align-items:center;gap:8px">
-        <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${d.fare.toLocaleString()}</div>
+        <div style="flex:1;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${d.fare.toLocaleString()}${d.paymentMethod?` <span style="font-size:11px;font-weight:700;color:var(--muted)">（${paymentMethodLabel(d.paymentMethod)}）</span>`:''}</div>
         <button onclick="editTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
         <button onclick="deleteTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer">削除</button>
       </div>`:''}
@@ -6805,6 +6809,17 @@ function buildDestEntryHtml(d,numMap){
         　<span style="color:var(--amber);font-weight:600">${esc(d.icon||'')} ${esc(d.name)}</span>
         <span style="color:var(--muted)">（${d.durMins}分）</span>
       </div>
+    </div>`;
+  } else if(d.type==='fuel'||d.type==='highway'||d.type==='jibara'){
+    // 燃料・無料高速・自腹高速の記録を、確認用に他の送り先と同じ時系列に差し込んで表示する
+    const timeStr=new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    const label=d.type==='fuel'?'⛽ 燃料':(d.type==='highway'?'🛣️ 無料高速':'🛣️ 自腹高速');
+    const valueStr=d.type==='fuel'?`${(d.amount||0).toFixed(2)}L`:`¥${(d.amount||0).toLocaleString()}`;
+    return `
+    <div style="border:1px solid var(--border);border-radius:10px;padding:8px 13px;margin-bottom:8px;background:var(--surface2);display:flex;align-items:baseline;gap:8px">
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap">${timeStr}</span>
+      <span style="font-size:12px;color:var(--muted);flex:1">${label}</span>
+      <span style="font-size:13px;font-weight:800;color:var(--fg)">${valueStr}</span>
     </div>`;
   } else {
     // 手動追加エントリ（旧フォーマット互換）
@@ -6843,6 +6858,23 @@ function applyOwnPastDestsOpenState(){
   el.style.display=ownPastDestsOpen?'block':'none';
   if(arrow)arrow.textContent=ownPastDestsOpen?'▼':'▶';
 }
+// 燃料・無料高速・自腹高速の記録は送り先（destinations）とは別の配列で管理して
+// いるため、確認用に送り先タブへ差し込んで表示するための一覧をここで作る。
+// 進行中のシフトはメモリ上のfuelEntries等を、退勤済みのシフトはsettlementLogに
+// 保存済みの内訳をそれぞれ使う（重複はしない：進行中の配列は退勤時にsettlementLog
+// へ移されて空になるため）
+function buildExtraEntriesForDests(){
+  const out=[];
+  const dateStrOf=ts=>new Date(ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+  const pushSet=(fuel,highway,jibara)=>{
+    (fuel||[]).forEach(e=>out.push({type:'fuel',ts:e.ts,amount:e.amount,dateStr:dateStrOf(e.ts)}));
+    (highway||[]).forEach(e=>out.push({type:'highway',ts:e.ts,amount:e.amount,dateStr:dateStrOf(e.ts)}));
+    (jibara||[]).forEach(e=>out.push({type:'jibara',ts:e.ts,amount:e.amount,dateStr:dateStrOf(e.ts)}));
+  };
+  if(isDuty)pushSet(fuelEntries,highwayEntries,jibaraHighwayEntries);
+  settlementLog.forEach(r=>pushSet(r.fuelEntries,r.highwayEntries,r.jibaraHighwayEntries));
+  return out;
+}
 function renderDests(){
   const el=document.getElementById('dest-list');
   const pastEl=document.getElementById('dest-list-past');
@@ -6860,7 +6892,10 @@ function renderDests(){
     if(d.tripMins===0)return false;
     return false; // その他の自動エントリも非表示
   });
-  if(!visible.length){
+  // 燃料・無料高速・自腹高速の記録は、確認用にリストへ時系列で差し込んで表示するが、
+  // 「完了送り先」の件数（done-count）には含めない
+  const extraEntries=buildExtraEntriesForDests();
+  if(!visible.length&&!extraEntries.length){
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">送り先がありません</div>';
     if(pastEl)pastEl.innerHTML='';
     if(pastSec)pastSec.style.display='none';
@@ -6888,7 +6923,7 @@ function renderDests(){
       :d=>d.dateStr===todayStr;
   }
   const todayGroups={},pastGroups={};
-  visible.forEach(d=>{
+  visible.concat(extraEntries).forEach(d=>{
     const key=d.dateStr||'日付不明';
     const target=isCurrent(d)?todayGroups:pastGroups;
     if(!target[key])target[key]=[];
