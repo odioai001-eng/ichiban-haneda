@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-62 -->
+<!-- v20260902-63 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -176,6 +176,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .btn-s{background:var(--green);color:#fff}
 .btn-g{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.fare-pay-btn{padding:10px 4px;border-radius:10px;border:2px solid var(--accent);
+  background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;
+  cursor:pointer;transition:all .15s}
+.fare-pay-btn.selected{background:var(--accent);color:#fff;box-shadow:0 0 0 2px var(--accent) inset}
 .spot-item{display:flex;align-items:center;gap:10px;padding:11px 12px;
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
   margin-bottom:8px;cursor:pointer}
@@ -1114,14 +1118,15 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
      <input id="fare-discount-input" type="number" inputmode="numeric" placeholder="例: 640">
    </div>
   </div>
-  <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">支払い方法をタップして記録</div>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-   <button onclick="confirmFareModal('cash')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">💴 現金</button>
-   <button onclick="confirmFareModal('credit')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">💳 クレジット</button>
-   <button onclick="confirmFareModal('emoney')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">📱 電子マネー</button>
-   <button onclick="confirmFareModal('ticket')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">🎫 チケット</button>
-   <button onclick="confirmFareModal('qr')" style="padding:10px 4px;border-radius:10px;border:2px solid var(--accent);background:rgba(79,142,247,.15);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer">🔲 QRコード</button>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">支払い方法をタップして選択</div>
+  <div id="fare-pay-btns" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+   <button class="fare-pay-btn" data-method="cash" onclick="selectFarePaymentMethod('cash')">💴 現金</button>
+   <button class="fare-pay-btn" data-method="credit" onclick="selectFarePaymentMethod('credit')">💳 クレジット</button>
+   <button class="fare-pay-btn" data-method="emoney" onclick="selectFarePaymentMethod('emoney')">📱 電子マネー</button>
+   <button class="fare-pay-btn" data-method="ticket" onclick="selectFarePaymentMethod('ticket')">🎫 チケット</button>
+   <button class="fare-pay-btn" data-method="qr" onclick="selectFarePaymentMethod('qr')">🔲 QRコード</button>
   </div>
+  <button onclick="confirmFareModal()" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">✅ 登録する</button>
   <button onclick="skipFareModal()" style="width:100%;padding:11px;border:2px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">スキップ</button>
  </div>
 </div>
@@ -1206,7 +1211,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-62';
+const APP_BUILD='20260902-63';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5442,6 +5447,9 @@ function deleteManualFareEntry(ts){
 
 // ===== 運賃・売上管理 =====
 let pendingFareTripTs=null;
+// 支払い方法ボタンは押した時点では確定させず、選択状態（ハイライト）にするだけに
+// して、別の「登録する」ボタンを押した時点で初めて記録する
+let selectedFarePaymentMethod=null;
 
 function showFareModal(tripTs){
  pendingFareTripTs=tripTs||null;
@@ -5450,6 +5458,8 @@ function showFareModal(tripTs){
  document.getElementById('fare-discount-check').checked=false;
  document.getElementById('fare-discount-input').value='';
  toggleFareDiscountInput();
+ selectedFarePaymentMethod=null;
+ updateFarePaymentButtonsUI();
  document.getElementById('fare-modal').style.display='flex';
  setTimeout(()=>document.getElementById('fare-input').focus(),200);
 }
@@ -5460,10 +5470,24 @@ function toggleFareDiscountInput(){
 }
 
 // 支払い方法（現金・クレジット・電子マネー・チケット・QRコード）ボタンから
-// 呼ばれる。運賃は共通の1つの入力欄に入れた金額をそのまま使い、押した
-// ボタンで支払い方法だけをタグ付けする。障害者割引・高速代（ETC）は
-// 支払い方法とは独立して（どの支払い方法とも同時に）記録できる
-function confirmFareModal(method){
+// 呼ばれる。押しても記録は確定せず、選択状態をハイライトするだけ（もう一度
+// 同じボタンを押すと選択解除できる）。実際の記録は「登録する」ボタンで行う
+function selectFarePaymentMethod(method){
+ selectedFarePaymentMethod=(selectedFarePaymentMethod===method)?null:method;
+ updateFarePaymentButtonsUI();
+}
+function updateFarePaymentButtonsUI(){
+ document.querySelectorAll('#fare-pay-btns .fare-pay-btn').forEach(btn=>{
+  btn.classList.toggle('selected',btn.dataset.method===selectedFarePaymentMethod);
+ });
+}
+
+// 「登録する」ボタンから呼ばれる。運賃は共通の1つの入力欄に入れた金額を
+// そのまま使い、選択済みの支払い方法をタグ付けして記録する。障害者割引・
+// 高速代（ETC）は支払い方法とは独立して記録できる
+function confirmFareModal(){
+ if(!selectedFarePaymentMethod){toast('⚠️ 支払い方法を選択してください');return;}
+ const method=selectedFarePaymentMethod;
  const fare=parseInt(document.getElementById('fare-input').value)||0;
  const etc=parseInt(document.getElementById('fare-etc-input').value)||0;
  const discountChecked=document.getElementById('fare-discount-check').checked;
