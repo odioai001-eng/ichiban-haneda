@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-55 -->
+<!-- v20260902-56 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -451,7 +451,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
     <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/train_status_hub.html'" title="運行情報ハブ（人身事故・故障等）">🚨</button>
     <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録" style="font-size:12px;font-weight:800">GAS</button>
-    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="自腹で支払った高速料金を記録" style="font-size:13px;font-weight:800">高速</button>
+    <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="自腹で支払った高速料金を記録" style="font-size:10px;font-weight:800;line-height:1.15">自腹<br>高速</button>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -1178,7 +1178,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-55';
+const APP_BUILD='20260902-56';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
