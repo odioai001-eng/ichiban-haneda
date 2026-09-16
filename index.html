@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-60 -->
+<!-- v20260902-61 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -885,6 +885,32 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
 </div>
 
+<!-- 数値入力用の専用テンキー。native prompt()はOSの標準キーボード（文字入力用）が
+     出てしまい、数字だけの入力でも使いにくいため、時刻入力用テンキーと同じ方式に統一する -->
+<div class="overlay" id="num-keypad-overlay" style="z-index:9500">
+  <div class="modal" style="max-width:300px">
+    <h3><span id="num-keypad-title-text">数字を入力</span> <button class="mc" onclick="cancelNumKeypad()">✕</button></h3>
+    <div id="num-keypad-display" style="text-align:center;font-size:32px;font-weight:800;
+      font-variant-numeric:tabular-nums;letter-spacing:1px;color:var(--cyan);
+      background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:14px;word-break:break-all">0</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('1')" style="padding:16px;font-size:18px">1</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('2')" style="padding:16px;font-size:18px">2</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('3')" style="padding:16px;font-size:18px">3</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('4')" style="padding:16px;font-size:18px">4</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('5')" style="padding:16px;font-size:18px">5</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('6')" style="padding:16px;font-size:18px">6</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('7')" style="padding:16px;font-size:18px">7</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('8')" style="padding:16px;font-size:18px">8</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('9')" style="padding:16px;font-size:18px">9</button>
+      <button type="button" class="btn btn-g" id="num-keypad-dot" onclick="numKeypadPress('.')" style="padding:16px;font-size:18px;color:var(--accent)">．</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadPress('0')" style="padding:16px;font-size:18px">0</button>
+      <button type="button" class="btn btn-g" onclick="numKeypadBackspace()" style="padding:16px;font-size:18px">⌫</button>
+    </div>
+    <button class="btn btn-p" onclick="confirmNumKeypad()" style="width:100%">確定</button>
+  </div>
+</div>
+
 <div class="setup-screen" id="setup-screen">
   <div class="setup-box">
     <h2>📡 Firebase設定</h2>
@@ -1180,7 +1206,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-60';
+const APP_BUILD='20260902-61';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2862,7 +2888,7 @@ function skipDutyCarModal(){
 }
 
 // 管理者用: 車番入力・決済確認・勤務時間プランをスキップして即座に乗務中にする（動作確認用）
-function adminForceStartDuty(){
+async function adminForceStartDuty(){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
   if(isDuty){toast('すでに乗務中です');return;}
   testMode=true;
@@ -2871,7 +2897,7 @@ function adminForceStartDuty(){
   // そのまま動作確認できるが、営業開始メーターだけは出勤モーダルの入力欄から
   // 読み取っている（_startDuty内）ため、テスト出勤でも精算表の車両メーター欄まで
   // 一通り確認できるよう、ここで簡易的に入力できるようにしておく（空欄でスキップ可）
-  const meterVal=prompt('【テスト用】営業開始メーター（空欄でスキップ可）\n例: 216207');
+  const meterVal=await promptNumber('【テスト用】営業開始メーター（空欄でスキップ可・例: 216207）','');
   document.getElementById('duty-meter-start').value=meterVal?meterVal.trim():'';
   dutyPlanChoice='skip';
   _startDuty();
@@ -2970,9 +2996,9 @@ function saveShiftExtras(){
 function fuelTotalLiters(){return fuelEntries.reduce((a,e)=>a+(e.amount||0),0);}
 function highwayTotalYen(){return highwayEntries.reduce((a,e)=>a+(e.amount||0),0);}
 function jibaraHighwayTotalYen(){return jibaraHighwayEntries.reduce((a,e)=>a+(e.amount||0),0);}
-function promptFuelEntry(){
+async function promptFuelEntry(){
   if(!isDuty){toast('⚠️ 出勤中のみ記録できます');return;}
-  const val=prompt('給油量（リットル）\n例: 12.50');
+  const val=await promptNumber('給油量（リットル）','',true);
   if(val===null)return;
   const amount=Math.round((parseFloat(val)||0)*100)/100;
   if(!amount||amount<=0){toast('⚠️ 正しい数値を入力してください');return;}
@@ -2980,9 +3006,9 @@ function promptFuelEntry(){
   saveShiftExtras();
   toast(`⛽ ${amount.toFixed(2)}L を記録しました（本日計 ${fuelTotalLiters().toFixed(2)}L）`);
 }
-function promptHighwayEntry(){
+async function promptHighwayEntry(){
   if(!isDuty){toast('⚠️ 出勤中のみ記録できます');return;}
-  const val=prompt('無料高速（実質無料の高速料金・円）');
+  const val=await promptNumber('無料高速（実質無料の高速料金・円）','');
   if(val===null)return;
   const amount=parseInt(val)||0;
   if(amount<=0){toast('⚠️ 正しい金額を入力してください');return;}
@@ -2992,9 +3018,9 @@ function promptHighwayEntry(){
 }
 // 自分で支払って戻ってこない高速料金。無料高速とは別に記録し、精算表では
 // 差引合計から引くのではなく、ETC（高速代）に加算する
-function promptJibaraHighwayEntry(){
+async function promptJibaraHighwayEntry(){
   if(!isDuty){toast('⚠️ 出勤中のみ記録できます');return;}
-  const val=prompt('自腹高速（戻ってこない高速料金・円）');
+  const val=await promptNumber('自腹高速（戻ってこない高速料金・円）','');
   if(val===null)return;
   const amount=parseInt(val)||0;
   if(amount<=0){toast('⚠️ 正しい金額を入力してください');return;}
@@ -4229,7 +4255,7 @@ function syncMySalesNow(){
 // 「今回のズレだけ直す」を実現する。平均金額もこの修正後の日数・金額で再計算される。
 // （ただし本人以外の場合、次にその人のpushTeamSales()が走るまでmonthDaysRaw／
 // monthFareRawの基準がここでの値のままになる点に注意）
-function editTeamMemberMonthSales(uid,name){
+async function editTeamMemberMonthSales(uid,name){
   const isSelf=uid===myId;
   if(!isSelf&&!isAdmin){toast('⚠️ 管理者のみ他の人の記録を修正できます');return;}
   if(isSelf&&!isRankingOptedIn()){toast('⚠️ グループランキングに未参加です');return;}
@@ -4237,9 +4263,9 @@ function editTeamMemberMonthSales(uid,name){
   const cur=(teamSales&&teamSales[uid])||{};
   const curDays=cur.monthDays||0;
   const curFare=cur.monthFare||0;
-  const daysStr=prompt(`${name||'この人'}の今月の出勤日数（正しい日数）を入力してください`,curDays);
+  const daysStr=await promptNumber(`${name||'この人'}の今月の出勤日数（正しい日数）`,curDays);
   if(daysStr===null)return;
-  const fareStr=prompt(`${name||'この人'}の今月の売上合計（正しい金額・円）を入力してください`,curFare);
+  const fareStr=await promptNumber(`${name||'この人'}の今月の売上合計（正しい金額・円）`,curFare);
   if(fareStr===null)return;
   const days=Math.max(0,parseInt(daysStr)||0);
   const fare=Math.max(0,parseInt(fareStr)||0);
@@ -5285,14 +5311,14 @@ function renderFareDayEntries(){
 }
 // その勤務（またはその日）の売上（税込・合算）を編集する。対象範囲の既存エントリを
 // すべて1件にまとめ直すことで、個々の乗車記録の内訳ではなく合計として上書きする
-function editFareDayEntry(ts){
+async function editFareDayEntry(ts){
  const g=getMonthFareDays(salesStatsMonthOffset).find(d=>d.ts===ts);
  if(!g)return;
  // 表示（税抜）に合わせて、入力も税抜で受け付ける。保存はfare=税込という
  // 他の集計箇所との前提を崩さないよう、入力値を税込に変換してから保存する
- const newFareExTax=prompt(`${g.dateStr} の売上合計（円・税抜）`,exTax(g.fare));
+ const newFareExTax=await promptNumber(`${g.dateStr} の売上合計（円・税抜）`,exTax(g.fare));
  if(newFareExTax===null)return;
- const newToll=prompt(`${g.dateStr} の自腹高速代合計（円）`,g.toll);
+ const newToll=await promptNumber(`${g.dateStr} の自腹高速代合計（円）`,g.toll);
  if(newToll===null)return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  log=g.tsRange
@@ -5389,11 +5415,11 @@ function renderManualFareEntries(){
  }).join('');
 }
 
-function editManualFareEntry(ts){
+async function editManualFareEntry(ts){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const idx=log.findIndex(e=>e.ts===ts);
  if(idx<0)return;
- const newFareExTax=prompt('その日の合計売上（円・税抜）',exTax(log[idx].fare));
+ const newFareExTax=await promptNumber('その日の合計売上（円・税抜）',exTax(log[idx].fare));
  if(newFareExTax===null)return;
  log[idx].fare=Math.round((parseInt(newFareExTax)||0)*1.1);
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
@@ -5465,11 +5491,11 @@ function attachFareToTrip(tripTs,fare,retryCount){
  }
 }
 
-function editTripFare(ts){
+async function editTripFare(ts){
  const idx=destinations.findIndex(d=>d.ts===ts);
  if(idx<0)return;
  const cur=destinations[idx].fare||0;
- const val=prompt('運賃（円）（運賃のみ・税抜、割引あれば割引後）',cur);
+ const val=await promptNumber('運賃（円）（運賃のみ・税抜、割引あれば割引後）',cur);
  if(val===null)return;
  const fare=parseInt(val)||0;
  destinations[idx].fare=fare;
@@ -5482,11 +5508,11 @@ function editTripFare(ts){
  }
 }
 
-function editTripWait(ts){
+async function editTripWait(ts){
  const idx=destinations.findIndex(d=>d.ts===ts);
  if(idx<0)return;
  const cur=destinations[idx].waitMins||0;
- const val=prompt('待機時間（分）※誤作動等で記録が違う場合の手動修正用',cur);
+ const val=await promptNumber('待機時間（分）※誤作動等で記録が違う場合の手動修正用',cur);
  if(val===null)return;
  const mins=parseInt(val)||0;
  destinations[idx].waitMins=mins>0?mins:null;
@@ -6051,13 +6077,13 @@ function renderFareEntries(){
  }).join('');
 }
 
-function editFareEntry(ts){
+async function editFareEntry(ts){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const idx=log.findIndex(e=>e.ts===ts);
  if(idx<0)return;
- const newFare=prompt('運賃（円）',log[idx].fare);
+ const newFare=await promptNumber('運賃（円）',log[idx].fare);
  if(newFare===null)return;
- const newToll=prompt('自腹高速代（円）',log[idx].toll||0);
+ const newToll=await promptNumber('自腹高速代（円）',log[idx].toll||0);
  if(newToll===null)return;
  log[idx].fare=parseInt(newFare)||0;
  log[idx].toll=parseInt(newToll)||0;
@@ -6373,23 +6399,23 @@ function stepCPBearing(i,delta){
 }
 function toggleCP(i){checkpoints[i].enabled=!checkpoints[i].enabled;saveCPs();renderCPs();toast(checkpoints[i].name+' 通知'+(checkpoints[i].enabled?'ON':'OFF'));}
 function setCPFromGPS(i){if(myLat===null){toast('⚠️ GPSを取得できていません');return;}checkpoints[i].lat=myLat;checkpoints[i].lng=myLng;saveCPs();renderCPs();toast('✅ '+checkpoints[i].name+' の位置を登録');}
-function openCPEdit(i){
+async function openCPEdit(i){
   const cp=checkpoints[i];
-  const lat=prompt(cp.name+'\n緯度を入力',cp.lat||'');if(lat===null)return;
-  const lng=prompt(cp.name+'\n経度を入力',cp.lng||'');if(lng===null)return;
+  const lat=await promptNumber(cp.name+' 緯度を入力',cp.lat||'',true);if(lat===null)return;
+  const lng=await promptNumber(cp.name+' 経度を入力',cp.lng||'',true);if(lng===null)return;
   const pLat=parseFloat(lat),pLng=parseFloat(lng);
   if(isNaN(pLat)||isNaN(pLng)){toast('⚠️ 数値を正しく入力してください');return;}
   checkpoints[i].lat=pLat;checkpoints[i].lng=pLng;
   if(cp.shape==='rect'){
-    const len=prompt('長さ（進行方向、m）',cp.length||90);if(len===null)return;
-    const wid=prompt('幅（m）',cp.width||40);if(wid===null)return;
-    const brg=prompt('向き（北を0°として時計回り、0〜359）',cp.bearing||0);if(brg===null)return;
+    const len=await promptNumber('長さ（進行方向、m）',cp.length||90);if(len===null)return;
+    const wid=await promptNumber('幅（m）',cp.width||40);if(wid===null)return;
+    const brg=await promptNumber('向き（北を0°として時計回り、0〜359）',cp.bearing||0);if(brg===null)return;
     const pLen=parseInt(len),pWid=parseInt(wid),pBrg=parseInt(brg);
     checkpoints[i].length=isNaN(pLen)?90:Math.max(20,pLen);
     checkpoints[i].width=isNaN(pWid)?40:Math.max(10,pWid);
     checkpoints[i].bearing=isNaN(pBrg)?0:((pBrg%360)+360)%360;
   }else{
-    const r=prompt('通知半径（m）',cp.radius||150);if(r===null)return;
+    const r=await promptNumber('通知半径（m）',cp.radius||150);if(r===null)return;
     const pR=parseInt(r);
     checkpoints[i].radius=isNaN(pR)?150:Math.max(10,pR);
   }
@@ -6944,6 +6970,46 @@ function closeTimeKeypad(){
   }
   document.getElementById('time-keypad-overlay').classList.remove('open');
   timeKeypadTargetId=null;
+}
+
+// 数値入力用の専用テンキー。prompt(message[,defaultValue])と同じ感覚で使えるよう、
+// Promiseで文字列（キャンセル時はnull）を返す。呼び出し側は
+// `const val=await promptNumber('給油量（リットル）',12.5,true);` のように使う
+let numKeypadResolve=null;
+function promptNumber(title,defaultValue,allowDecimal){
+  return new Promise(resolve=>{
+    numKeypadResolve=resolve;
+    document.getElementById('num-keypad-title-text').textContent=String(title||'').replace(/\n/g,' ');
+    const dv=(defaultValue!==undefined&&defaultValue!==null&&defaultValue!=='')?String(defaultValue):'0';
+    document.getElementById('num-keypad-display').textContent=dv;
+    document.getElementById('num-keypad-dot').style.display=allowDecimal?'':'none';
+    document.getElementById('num-keypad-overlay').classList.add('open');
+  });
+}
+function numKeypadPress(ch){
+  const disp=document.getElementById('num-keypad-display');
+  let cur=disp.textContent==='0'?'':disp.textContent;
+  if(ch==='.'){
+    if(cur.includes('.'))return;
+    cur=(cur||'0')+'.';
+  }else{
+    if(cur.length>=12)return;
+    cur+=ch;
+  }
+  disp.textContent=cur||'0';
+}
+function numKeypadBackspace(){
+  const disp=document.getElementById('num-keypad-display');
+  disp.textContent=disp.textContent.slice(0,-1)||'0';
+}
+function confirmNumKeypad(){
+  const val=document.getElementById('num-keypad-display').textContent;
+  document.getElementById('num-keypad-overlay').classList.remove('open');
+  if(numKeypadResolve){const r=numKeypadResolve;numKeypadResolve=null;r(val);}
+}
+function cancelNumKeypad(){
+  document.getElementById('num-keypad-overlay').classList.remove('open');
+  if(numKeypadResolve){const r=numKeypadResolve;numKeypadResolve=null;r(null);}
 }
 
 function openManualTripModal(){
