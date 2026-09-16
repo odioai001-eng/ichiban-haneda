@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-70 -->
+<!-- v20260902-71 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1208,7 +1208,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-70';
+const APP_BUILD='20260902-71';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3274,13 +3274,19 @@ function setStatus(s){
       waitStartTsUsed=legacyWaitStartTs();
     }
     const waitMins=waitStartTsUsed?Math.round((Date.now()-waitStartTsUsed)/60000):null;
+    // 実車ボタンの押し忘れ検知（GPS自動判定）で実車になったかどうかを記録しておく。
+    // 短時間で空車に戻された場合、GPS誤作動を疑って乗り場別送先リストの集計対象
+    // から除外するために使う（createTripEntry参照）
+    const wasAuto=pendingAutoJitsusha;
+    pendingAutoJitsusha=false;
     boardInfo={
       time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),
       lat:myLat,lng:myLng,
       spot:boardSpot,
       waitMins:(waitMins&&waitMins>0)?waitMins:null,
       waitAddr:manualWaitAddr,
-      spotHistory:spotChangeHistory.length>1?spotChangeHistory.slice():null
+      spotHistory:spotChangeHistory.length>1?spotChangeHistory.slice():null,
+      auto:wasAuto
     };
     // 実車ボタンを、まだそのエリア内にいる状態で押した場合（＝出発前に押した場合）は、
     // 押した瞬間の時刻ではなく、実際にGPSで退場が確定した時刻までを待機時間として
@@ -3352,11 +3358,15 @@ function setStatus(s){
     jitsushaStart=null;
     longJitsushaNotified=false;
     const tripTs=Date.now();
+    // 実車ボタンの押し忘れ検知（GPS自動判定）で実車になり、かつ短時間で空車に
+    // 戻された場合は、GPS誤作動で誤って実車になり、すぐ気づいて戻したものとみなし、
+    // 乗り場別送先リスト（spot_dest_stats）の集計対象から除外する
+    const wasAutoQuickRevert=!!(boardInfo&&boardInfo.auto&&fallbackBoardTs&&(tripTs-fallbackBoardTs)<AUTO_JITSUSHA_QUICK_REVERT_MS);
     // GPSが一瞬取得できていない場合に備え、直近の位置情報履歴もフォールバックとして使う
     const fbLat=myLat!==null?myLat:(posHistory.length?posHistory[posHistory.length-1].lat:null);
     const fbLng=myLng!==null?myLng:(posHistory.length?posHistory[posHistory.length-1].lng:null);
     if(fbLat!==null&&fbLng!==null){
-      createTripEntry(fbLat,fbLng,tripTs,fallbackBoardTs);
+      createTripEntry(fbLat,fbLng,tripTs,fallbackBoardTs,wasAutoQuickRevert);
       showFareModal(tripTs);
       if(!boardInfo){
         toast('⚠️ 乗車時の詳細情報が見つからず、簡易記録になりました（時刻は保持されています）');
@@ -3823,7 +3833,7 @@ function kanjiToNum(s){
   });
 }
 
-async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs){
+async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs,skipSpotDestStat){
   const saved=boardInfo; // capture before async
   const alightTime=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   const now=new Date();
@@ -3850,7 +3860,9 @@ async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs){
   destinations.push(entry);
   saveDests();renderDests();
   pushDestToFirebase(entry);
-  recordSpotDestStat(entry.boardSpot,entry.alightAddr);
+  // 押し忘れ検知（GPS自動判定）で実車になり、短時間で空車に戻された場合は、
+  // GPS誤作動を疑って乗り場別送先リストの集計対象から除外する
+  if(!skipSpotDestStat)recordSpotDestStat(entry.boardSpot,entry.alightAddr);
   toast('📍 行き先を記録しました');
 }
 
@@ -4475,6 +4487,14 @@ let intlPool4ArriveTs=null;
 // 目的が異なり、こちらは触らない）
 let lastIntlPool4EntryTs=null;
 const INTL_POOL4_VIA_WINDOW_MS=60*60*1000; // 第4プール到着からこの時間内の第3プール出発のみ対象にする
+// 実車ボタンの押し忘れ検知（GPSでの自動判定）によって実車になった場合に立てる
+// フラグ。setStatus('jitsusha')内で一度だけ読み取ってboardInfo.autoに記録し、消費する
+let pendingAutoJitsusha=false;
+// 自動検知で実車になった直後、短時間で空車に戻した場合（GPS誤作動等で誤って
+// 実車になり、すぐ気づいて戻したと考えられる）は、乗り場別送先リスト
+// （spot_dest_stats）の集計対象に含めない。本当の短時間トリップと区別するための
+// しきい値
+const AUTO_JITSUSHA_QUICK_REVERT_MS=2*60*1000;
 function findIntlPoolCp(poolNum){
   return checkpoints.find(c=>c.name&&c.name.includes('国際線')&&c.name.includes(poolNum));
 }
@@ -4691,6 +4711,7 @@ function onDeparture(cp){
       manualWaitStartTime=arrivalDate.getTime();
     }
     if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
+    pendingAutoJitsusha=true;
     setStatus('jitsusha');
     toast(`⚠️ 実車ボタンの押し忘れを検知し、${cp.name}からの実車として自動記録しました`);
   }
