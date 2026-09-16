@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-63 -->
+<!-- v20260902-64 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1211,7 +1211,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-63';
+const APP_BUILD='20260902-64';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2897,6 +2897,7 @@ async function adminForceStartDuty(){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
   if(isDuty){toast('すでに乗務中です');return;}
   testMode=true;
+  testFareLog=[]; // 前回のテスト出勤分が残らないよう、テスト運賃ログもリセットする
   document.getElementById('duty-start-time').value='';
   // 燃料・自腹高速ボタンや運賃入力・精算レポートはこのモーダルを経由しなくても
   // そのまま動作確認できるが、営業開始メーターだけは出勤モーダルの入力欄から
@@ -3844,7 +3845,7 @@ function extractWard(addr){
 // 乗り場別送先リストは月末リセットの対象外（累計し続ける）ため、
 // team_destsとは別のFirebaseパス(spot_dest_stats)に集計する
 function recordSpotDestStat(boardSpot,alightAddr){
-  if(!db||!boardSpot)return;
+  if(!db||!boardSpot||testMode)return;
   const ward=extractWard(alightAddr);
   if(!ward)return;
   db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>(cur||0)+1);
@@ -3853,7 +3854,7 @@ function recordSpotDestStat(boardSpot,alightAddr){
 // （spot_dest_stats）が古い組み合わせのまま残ってしまうため、delta（+1/-1）で
 // 補正する。乗り場（boardSpot）が無い記録はそもそも集計対象外なので何もしない
 function adjustSpotDestStat(boardSpot,alightAddr,delta){
-  if(!db||!boardSpot)return;
+  if(!db||!boardSpot||testMode)return;
   const ward=extractWard(alightAddr);
   if(!ward)return;
   db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>Math.max((cur||0)+delta,0));
@@ -3866,7 +3867,7 @@ const SPOT_WAIT_STAT_MAX_MINS=200;
 // 曜日・時間帯別の待機時間統計に記録する（team_destsとは別パスのため月末リセットの対象外）
 // 時間帯は「待機を始めた時刻（実車ボタンを押した時刻から待機時間を差し引いた時刻）」の時を使う
 function recordSpotWaitStat(boardSpot,waitMins,boardTs){
-  if(!db||!boardSpot||!waitMins||waitMins<=0)return;
+  if(!db||!boardSpot||!waitMins||waitMins<=0||testMode)return;
   if(waitMins>=SPOT_WAIT_STAT_MAX_MINS)return;
   const arrivalTs=boardTs-waitMins*60000;
   const d=new Date(arrivalTs);
@@ -5692,14 +5693,25 @@ function skipFareModal(){
  document.getElementById('fare-modal').style.display='none';
 }
 
+// 管理者のテスト出勤（testMode）中に記録した運賃は、メモリ上のここにだけ積む。
+// 本物のtaxi_fare_log（今月の売上・グループランキング等、あらゆる集計の元）には
+// 一切書き込まないことで、テストの記録が実データに混ざらないようにする。
+// 退勤時の精算レポート（buildSettlementRecord）だけは、テスト中はこちらを参照する
+let testFareLog=[];
 function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc){
- const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const now=new Date();
- log.push({
+ const entry={
   dateStr:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
   fare,toll,ts:now.getTime(),tripTs:tripTs||null,
   paymentMethod:paymentMethod||null,discount:discount||0,etc:etc||0
- });
+ };
+ if(testMode){
+  testFareLog.push(entry);
+  toast(`🧪 運賃 ¥${fare.toLocaleString()} を記録しました（テストのため実データには反映されません）`);
+  return;
+ }
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ log.push(entry);
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast(`💰 運賃 ¥${fare.toLocaleString()} を記録しました`);
  renderSalesStats();
@@ -5713,7 +5725,9 @@ function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc){
 // 既に割引後の金額であることを前提に、fare+discount=割引前の税込営収として
 // 逆算する
 function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelEntriesArg,highwayEntriesArg,jibaraHighwayEntriesArg){
-  const fareLog=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  // テスト出勤中は本物のtaxi_fare_logを一切参照せず、テスト専用のtestFareLogだけを使う
+  // （そもそも運賃記録の時点でtestFareLogにしか積まれていないため、本物には混ざらない）
+  const fareLog=testMode?testFareLog:JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
   const shiftFares=fareLog.filter(e=>(e.ts||0)>=shiftStartTs&&(e.ts||0)<=shiftEndTs);
   const revenueAfterDiscount=shiftFares.reduce((a,e)=>a+(e.fare||0),0);
   const discountTotal=shiftFares.reduce((a,e)=>a+(e.discount||0),0);
@@ -6002,6 +6016,7 @@ function getBusinessDayFareEntries(){
 function pushTeamSales(){
  if(!db)return;
  if(!isRankingOptedIn())return;
+ if(testMode)return; // テスト出勤中の売上は、仲間のグループランキング（team_sales）に反映しない
  const name=localStorage.getItem('taxi_name')||'自分';
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const carry=getCarryover();
