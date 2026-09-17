@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-77 -->
+<!-- v20260902-78 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1223,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-77';
+const APP_BUILD='20260902-78';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1569,6 +1569,40 @@ function syncZoomCtrlVisibility(visible){
 // 位置のまま動かさない）
 // これより下までボタンを縮小すると小さすぎて押しにくくなるため、縮小率の下限とする
 const MIN_BTN_SCALE=0.62;
+// 「フルサイズ・1列で並べた場合の本来の高さ」は、ボタンの数・種類が変わらない
+// 限り毎回測り直す必要が無い。この関数は1.5秒ごとに呼ばれるため、毎回
+// 縮小・折り返しを解除してから測り直すと、その一瞬だけボタンがフルサイズに
+// 戻り、transitionと相まって「常にボタンが動き続けている」ように見えて
+// しまっていた。要素ごとに測定結果をキャッシュし、ボタンの数（表示/非表示の
+// 切り替えを含む）が変わった時だけ測り直すようにする
+const mapBtnStackNaturalHeightCache=new WeakMap();
+function getStackNaturalHeight(stack){
+  // display:noneのボタン（プール移動記録ボタン等）も含めて数える。表示状態が
+  // 切り替わった時だけキャッシュを作り直すための簡易的な変化検知に使う
+  const sig=stack.children.length+':'+Array.from(stack.children).filter(el=>el.style.display!=='none').length;
+  const cached=mapBtnStackNaturalHeightCache.get(stack);
+  if(cached&&cached.sig===sig)return cached.height;
+  const prevScale=stack.style.getPropertyValue('--btn-scale');
+  const prevWrap=stack.classList.contains('wrap-fit');
+  const prevMaxHeight=stack.style.maxHeight;
+  const prevTransition=stack.style.transition;
+  // 測定中の一瞬だけ見た目がフルサイズに戻るのを隠すため、測定の間だけ
+  // transitionを止める
+  stack.style.transition='none';
+  stack.classList.remove('wrap-fit');
+  stack.style.maxHeight='';
+  stack.style.removeProperty('--btn-scale');
+  const height=stack.scrollHeight;
+  // 直前の縮小・折り返し状態にいったん戻す（呼び出し元が改めて必要な値を適用する）
+  if(prevScale)stack.style.setProperty('--btn-scale',prevScale);else stack.style.removeProperty('--btn-scale');
+  if(prevWrap)stack.classList.add('wrap-fit');
+  stack.style.maxHeight=prevMaxHeight;
+  // 次のフレームでtransitionを元に戻す（今フレーム内での戻し操作にtransitionが
+  // 適用されて動いて見えることがないようにする）
+  requestAnimationFrame(()=>{stack.style.transition=prevTransition;});
+  mapBtnStackNaturalHeightCache.set(stack,{sig,height});
+  return height;
+}
 function syncMapButtonStackLayout(){
   const mapEl=document.getElementById('map');
   const statusBar=document.getElementById('status-bar');
@@ -1585,12 +1619,7 @@ function syncMapButtonStackLayout(){
   // スタックが1列では収まらず、下端がはみ出して押せなくなることがあった
   const availableHeight=Math.max(0,mapRect.height-8-minTop);
   stacks.forEach(stack=>{
-    // 測り直す前に一旦、縮小・折り返しのどちらも解除してから
-    // 「フルサイズ1列で並べた場合の本来の高さ」を測り直す
-    stack.classList.remove('wrap-fit');
-    stack.style.maxHeight='';
-    stack.style.removeProperty('--btn-scale');
-    const naturalHeight=stack.scrollHeight;
+    const naturalHeight=getStackNaturalHeight(stack);
     if(naturalHeight>availableHeight&&availableHeight>0&&naturalHeight>0){
       // 画面が小さい端末ほど列を増やすと地図がボタンだらけで見えなくなって
       // しまうため、まずはボタン・隙間のサイズを縮めて1列のまま収めることを
