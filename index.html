@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-93 -->
+<!-- v20260902-94 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1226,7 +1226,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-93';
+const APP_BUILD='20260902-94';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6151,6 +6151,35 @@ function onSettlementFieldEdit(){
   updateSettlementTotalsDisplay(record);
   localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
 }
+// PR #205・#206で修正したのは「今後」editTripFare/editTripEtcで編集した
+// 内容がtaxi_fare_logに反映されなくなる不具合であり、修正前に行われた
+// 編集は、既にtaxi_fare_log側への反映が失敗したまま取り残されている。
+// そのため「最新の運賃記録から再集計する」を押しても、taxi_fare_log自体が
+// 古い（間違った）ままでは再集計結果も変わらない。送り先タブ（destinations）
+// に表示されている内容を正として、対象シフトの期間内のtaxi_fare_logを
+// 強制的に同期し直してから再集計することで、過去の同期漏れ分もまとめて
+// 復旧できるようにする
+function resyncFareLogFromDestinations(shiftStartTs,shiftEndTs){
+  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  let changed=false;
+  destinations.forEach(d=>{
+    if(d.type!=='trip')return;
+    if((d.ts||0)<shiftStartTs||(d.ts||0)>shiftEndTs)return;
+    if(!d.fare&&!d.etc)return; // 運賃も高速代も記録が無いトリップは対象外
+    const idx=log.findIndex(e=>e.tripTs===d.ts);
+    if(idx>=0){
+      if(d.fare&&log[idx].fare!==d.fare){log[idx].fare=d.fare;changed=true;}
+      if(d.etc&&log[idx].etc!==d.etc){log[idx].etc=d.etc;changed=true;}
+      if(d.paymentMethod&&log[idx].paymentMethod!==d.paymentMethod){log[idx].paymentMethod=d.paymentMethod;changed=true;}
+    }else if(d.fare){
+      const dateStr=new Date(d.ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+      log.push({dateStr,fare:d.fare,toll:0,ts:d.ts,tripTs:d.ts,paymentMethod:d.paymentMethod||null,discount:0,etc:d.etc||0});
+      changed=true;
+    }
+  });
+  if(changed)localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+  return changed;
+}
 // 保存済みの精算記録は退勤時点のtaxi_fare_logの内容を1回だけ集計して保存
 // したものなので、後から個々のトリップの運賃・高速代（ETC）を編集しても、
 // 保存済みの記録には自動では反映されない。editTripEtcの同期漏れ（上の
@@ -6164,6 +6193,7 @@ function recomputeSettlementFromFareLog(){
   }
   const record=settlementLog[currentSettlementIndex];
   if(!confirm('現在の運賃記録から、この日の精算内容を作り直しますか？\n（未収金の入力はそのまま残ります）'))return;
+  resyncFareLogFromDestinations(record.shiftStartTs,record.shiftEndTs);
   const fresh=buildSettlementRecord(
     record.shiftStartTs,record.shiftEndTs,record.meterStart,record.meterEnd,
     record.fuelEntries,record.highwayEntries,record.jibaraHighwayEntries
@@ -6173,7 +6203,7 @@ function recomputeSettlementFromFareLog(){
   localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
   currentSettlementRecord=record;
   showSettlementReport(record,currentSettlementOnClose);
-  toast('🔄 最新の運賃記録から再集計しました');
+  toast('🔄 送り先タブの内容と同期し、最新の運賃記録から再集計しました');
 }
 function closeSettlementReport(){
   document.getElementById('settlement-report-modal').style.display='none';
