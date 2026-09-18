@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-84 -->
+<!-- v20260902-85 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1223,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-84';
+const APP_BUILD='20260902-85';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -7156,10 +7156,29 @@ function buildExtraEntriesForDests(){
   settlementLog.forEach(r=>pushSet(r.fuelEntries,r.highwayEntries,r.jibaraHighwayEntries));
   return out;
 }
+// 高速代（ETC）を送り先の記録にも保持するようにする以前に記録されたトリップは、
+// destinations側にetcが保存されておらず「＋ 高速代を追加」の表示になってしまう。
+// 実際の金額はtaxi_fare_log側（tripTsで紐付け）に残っているため、一度だけそこから
+// 引き当てて補完する
+function backfillDestEtcFromFareLog(){
+  const fareLog=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  if(!fareLog.length)return false;
+  const etcByTripTs=new Map();
+  fareLog.forEach(e=>{if(e.tripTs&&e.etc)etcByTripTs.set(e.tripTs,e.etc);});
+  let changed=false;
+  destinations.forEach(d=>{
+    if(d.type==='trip'&&!d.etc&&etcByTripTs.has(d.ts)){
+      d.etc=etcByTripTs.get(d.ts);
+      changed=true;
+    }
+  });
+  return changed;
+}
 function renderDests(){
   const el=document.getElementById('dest-list');
   const pastEl=document.getElementById('dest-list-past');
   const pastSec=document.getElementById('dest-list-past-sec');
+  if(backfillDestEtcFromFareLog())saveDests();
   // 不要エントリをフィルタ（旧フォーマットの自動エントリは除外）
   const visible=destinations.filter(d=>{
     if(d.type==='trip'||d.type==='cp')return true;
