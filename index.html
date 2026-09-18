@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-88 -->
+<!-- v20260902-89 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1223,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-88';
+const APP_BUILD='20260902-89';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6613,18 +6613,30 @@ async function autoRegisterDest(lat,lng,reason,tripMins=null){
   toast(`📍 送り先を自動登録: ${name}`);
 }
 
-function pushDestToFirebase(entry){
-  if(!db||!isDuty||testMode)return;
+// 仲間への送り先共有（team_dests）は、以前は「isDutyがtrueであること」を
+// 送信条件にしていた。しかしisDutyはバックグラウンド復帰・複数タブ・
+// GPS再接続等のタイミングでズレることがある状態フラグであり、この関数は
+// そもそも「トリップが1件確定した」直後にしか呼ばれないため、ここでの
+// isDuty判定は不要かつ、ズレていた場合に共有だけが無音で失われるリスクの
+// 方が大きかった。db（Firebase接続）さえあれば送信を試みるようにする。
+// また、通信が一時的に不安定なだけで失敗するケースに備え、数回まで自動で
+// 再送し、それでも失敗した場合だけ本人に通知する
+function pushDestToFirebase(entry,retryCount){
+  if(!db||testMode)return;
+  retryCount=retryCount||0;
   const driverName=localStorage.getItem('taxi_name')||'自分';
-  // 以前はpush()の失敗（通信エラー・Firebaseのルール拒否等）を一切検知して
-  // おらず、仲間への送り先の共有が失敗していても本人にも他の誰にも一切
-  // 気づく手段が無かった（送り先タブの表示自体は、Firebaseへの送信結果を
-  // 待たずに完了するため、失敗していても本人の画面には正常に見える）。
-  // 失敗時にせめてトースト・コンソールへ残すようにし、原因調査ができるようにする
-  db.ref('team_dests/'+myId).push({...entry,driverName,driverId:myId}).catch(err=>{
-    console.error('team_dests push failed',err);
-    toast('⚠️ 仲間への送り先の共有に失敗しました（この端末には残っています）: '+err.message);
+  db.ref('team_dests/'+myId).push({...entry,driverName,driverId:myId}).then(()=>{
+    if(retryCount>0)console.log('team_dests push succeeded after retry '+retryCount);
+  }).catch(err=>{
+    console.error('team_dests push failed (retry '+retryCount+')',err);
+    if(retryCount<4){
+      const delayMs=[3000,8000,20000,45000][retryCount];
+      setTimeout(()=>pushDestToFirebase(entry,retryCount+1),delayMs);
+    }else{
+      toast('⚠️ 仲間への送り先の共有に失敗しました（この端末には残っています）: '+err.message);
+    }
   });
+  if(retryCount>0)return; // 古いエントリの掃除は初回のみでよい
   // 前月1日より古いエントリを削除
   const _n=new Date();const cutoff=new Date(_n.getFullYear(),_n.getMonth()-1,1).getTime();
   db.ref('team_dests/'+myId).once('value',snap=>{
