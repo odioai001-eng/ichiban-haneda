@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-80 -->
+<!-- v20260902-81 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1223,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-80';
+const APP_BUILD='20260902-81';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2104,14 +2104,16 @@ function gpsAgeDot(ageSec){
   return '#ef4444';                  // 赤: 2分超
 }
 
-// 国内線プール（1〜4号乗り場）の中にいる間だけ、アイコンの右隣に「○号」「○○分」を
-// 表示するためのラベル情報を計算する。プールの外にいる、号がまだ選ばれていない、
-// 待機タイマーが動いていない、のいずれかに該当する場合はnull（非表示）を返す
-function domesticPoolLabel(lat,lng,waitSpotText,waitSinceTs){
-  if(lat===null||lat===undefined||lng===null||lng===undefined)return null;
-  const hCp=checkpoints.find(c=>c.id==='haneda');
-  if(!hCp||hCp.lat===null)return null;
-  if(haversine(Number(lat),Number(lng),hCp.lat,hCp.lng)>hCp.radius)return null;
+// 号選択・待機タイマーが有効な間、アイコンの右隣に「○号」「○○分」を表示する
+// ためのラベル情報を計算する。号がまだ選ばれていない、待機タイマーが
+// 動いていない、のいずれかに該当する場合はnull（非表示）を返す。
+// 号選択・待機タイマーは実車ボタンを押した時に必ずクリアされるため、
+// 以前はここでさらに「プール（haneda）の円の中にいるか」も条件にしていたが、
+// 1〜4号乗り場自体はプール全体の円より外側まで広がっていることがあり、
+// 実車になる前に円の外に出ただけでラベルが消えてしまっていた。実車に
+// なるまで表示し続けたいので、位置による判定はやめ、号選択・待機タイマーの
+// 状態だけで判定する
+function domesticPoolLabel(waitSpotText,waitSinceTs){
   const m=(waitSpotText||'').match(/([1-4]号)/);
   if(!m||!waitSinceTs)return null;
   const mins=Math.max(0,Math.floor((Date.now()-waitSinceTs)/60000));
@@ -2163,7 +2165,7 @@ function updateMyMarker(lat,lng){
   const isWeak=ageSec!==null&&ageSec>20;
   const waitSpotLblEl=document.getElementById('wait-spot-lbl');
   const poolLabel=(waitInterval&&waitStart)
-    ?domesticPoolLabel(lat,lng,waitSpotLblEl?waitSpotLblEl.textContent:'',waitStart)
+    ?domesticPoolLabel(waitSpotLblEl?waitSpotLblEl.textContent:'',waitStart)
     :null;
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak,poolLabel);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
@@ -2189,7 +2191,7 @@ function updatePeerMarker(id,d){
   if(!alive){removePeerMarker(id);return;}
   const status=d.status||'kuusha';
   const ageSec=Math.floor(age/1000);
-  const poolLabel=domesticPoolLabel(d.lat,d.lng,d.waitSpot,d.waitSince);
+  const poolLabel=domesticPoolLabel(d.waitSpot,d.waitSince);
   const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak,poolLabel);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)panMapTo(()=>leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5}));
   if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
