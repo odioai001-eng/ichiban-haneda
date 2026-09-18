@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-89 -->
+<!-- v20260902-90 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1223,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-89';
+const APP_BUILD='20260902-90';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1397,7 +1397,7 @@ function loadCPs(){
 }
 function saveCPs(){
   localStorage.setItem('taxi_checkpoints',JSON.stringify(checkpoints));
-  if(db)db.ref('team_config/checkpoints').set(checkpoints);
+  if(db)db.ref('team_config/checkpoints').set(checkpoints).catch(err=>console.error('team_config/checkpoints set failed',err));
 }
 
 function loadCPsFromFirebase(){
@@ -2669,7 +2669,7 @@ function checkMonthEndDestsReset(){
   const monthKey=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'});
   db.ref('team_config/last_dests_reset_month').once('value',snap=>{
     if(snap.val()===monthKey)return; // 今月は他の誰かが既にリセット済み
-    db.ref('team_config/last_dests_reset_month').set(monthKey);
+    db.ref('team_config/last_dests_reset_month').set(monthKey).catch(err=>console.error('last_dests_reset_month set failed',err));
     exportAndResetTeamDests(false);
   });
 }
@@ -2969,7 +2969,7 @@ function pushMyPlanFinish(){
   const storedPlan=JSON.parse(localStorage.getItem('taxi_today_target_hours')||'null');
   const planFinishTs=(storedPlan&&storedPlan.shiftStartTs===dutyStart.getTime())
     ?dutyStart.getTime()+Math.round(storedPlan.hours*3600*1000):null;
-  db.ref('drivers/'+myId).update({planFinishTs});
+  db.ref('drivers/'+myId).update({planFinishTs}).catch(err=>console.error('drivers planFinishTs update failed',err));
   // 「本日の売り上げランキング（グループ）」の自分の行は、出庫・帰庫予定を
   // team_salesの更新（他の仲間の運賃記録等）を待って初めて再描画していたため、
   // 誤って退勤してすぐ出勤し直した直後は、次に誰かの売上が動くまで自分の
@@ -3054,7 +3054,7 @@ function _startDuty(){
   jibaraHighwayEntries=[];
   saveShiftExtras();
   if(db&&!testMode){
-    db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
+    db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()}).catch(err=>console.error('drivers dutyStartTs update failed',err));
     // 接続確立時（.info/connected）にも登録しているが、既に接続済みの状態で
     // 出勤した場合はそのイベントが再発火しないため、ここでも登録しておく
     db.ref('drivers/'+myId).onDisconnect().remove();
@@ -3408,7 +3408,8 @@ function setStatus(s){
       const spotPhrase=boardSpot==='国際線'?'羽田空港国際線乗り場':`${boardSpot}乗り場`;
       db.ref('chat').push({uid:myId,name,
         text:`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,
-        time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true});
+        time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true})
+        .catch(err=>console.error('chat auto push failed',err));
     }
     // 国際線乗り場からの出発（実車ボタン・押し忘れ検知のいずれも）は、本人にも通知する
     if(boardSpot==='国際線'){
@@ -3431,7 +3432,7 @@ function setStatus(s){
     // （「列移動の表示が前回から継続している」）不具合の原因になっていた。実車ボタンは
     // 必ず押される操作のため、ここでも確定させることで確実性を上げる
     if(myPoolInputActive&&hCpAll&&!staysInPool)finalizePoolMoveHistory();
-    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null});
+    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null}).catch(err=>console.error('drivers waitSince/waitSpot clear failed',err));
     renderSpotRow();
     hidePoolPanel();hidePoolHistory();syncPoolPanel();
     // 押し忘れの自動検知（onDeparture）では、実車化の直前にwaitIntervalが
@@ -3501,7 +3502,7 @@ function connectFirebase(config){
         // イベントで復活させてしまわないよう、taxi_runtime_stateで実際に
         // まだ出勤中かどうかを必ず確認する
         if(isDuty&&dutyStart&&!testMode&&localStorage.getItem('taxi_runtime_state')){
-          db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()});
+          db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()}).catch(err=>console.error('drivers dutyStartTs update failed',err));
         }
         // 帰庫予定（planFinishTs）は出勤時にしか送っていなかったため、この機能の
         // 追加前から出勤していた人は再出勤しないと反映されなかった。接続確立の
@@ -3727,7 +3728,7 @@ function pushMyPosition(gpsWeak=false){
     plate:localStorage.getItem('taxi_number')||'',
     ts:Date.now(),gpsWeak:gpsWeak||null,
     dutyActive:true
-  });
+  }).catch(err=>console.error('drivers position update failed',err));
 }
 setInterval(()=>{if(isDuty)pushMyPosition();},5000);
 // 仲間フォロー中の地図追従を、特定のイベント（Firebaseのchild_changed・自分のGPS更新）の
@@ -4030,7 +4031,8 @@ function recordSpotDestStat(boardSpot,alightAddr){
   if(!db||!boardSpot||testMode)return;
   const ward=extractWard(alightAddr);
   if(!ward)return;
-  db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>(cur||0)+1);
+  db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>(cur||0)+1)
+    .catch(err=>console.error('spot_dest_stats transaction failed',err));
 }
 // 記録後に乗車場所・送り先の住所を編集した場合、乗り場別タブの集計
 // （spot_dest_stats）が古い組み合わせのまま残ってしまうため、delta（+1/-1）で
@@ -4039,7 +4041,8 @@ function adjustSpotDestStat(boardSpot,alightAddr,delta){
   if(!db||!boardSpot||testMode)return;
   const ward=extractWard(alightAddr);
   if(!ward)return;
-  db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>Math.max((cur||0)+delta,0));
+  db.ref(`spot_dest_stats/${boardSpot}/${ward}`).transaction(cur=>Math.max((cur||0)+delta,0))
+    .catch(err=>console.error('spot_dest_stats adjust transaction failed',err));
 }
 
 const DOW_JP=['日','月','火','水','木','金','土'];
@@ -4055,7 +4058,8 @@ function recordSpotWaitStat(boardSpot,waitMins,boardTs){
   const d=new Date(arrivalTs);
   const day=DOW_JP[d.getDay()];
   const hour=d.getHours();
-  db.ref(`spot_wait_stats/${boardSpot}/${day}/${hour}`).push(waitMins);
+  db.ref(`spot_wait_stats/${boardSpot}/${day}/${hour}`).push(waitMins)
+    .catch(err=>console.error('spot_wait_stats push failed',err));
 }
 function openWaitStartModal(){
   // タイマーが既に動いている場合は、その開始時刻を修正できるようにする
@@ -4107,7 +4111,7 @@ function adjustWaitStartTime(newStartTs){
   const t=toHMS(waitSec);
   const wtEl=document.getElementById('wait-timer');if(wtEl)wtEl.textContent=t;
   const mtEl=document.getElementById('map-wait-timer');if(mtEl)mtEl.textContent=t;
-  if(db&&isDuty&&!testMode)db.ref('drivers/'+myId).update({waitSince:waitStart});
+  if(db&&isDuty&&!testMode)db.ref('drivers/'+myId).update({waitSince:waitStart}).catch(err=>console.error('drivers waitSince update failed',err));
   saveAppState();
   toast('⏱ 待機開始時刻を修正しました');
 }
@@ -4137,7 +4141,7 @@ function startWaitManual(startTs){
   const tNow=toHMS(waitSec);
   const wtEl=document.getElementById('wait-timer');if(wtEl)wtEl.textContent=tNow;
   const mtEl=document.getElementById('map-wait-timer');if(mtEl)mtEl.textContent=tNow;
-  if(db&&isDuty&&!testMode)db.ref('drivers/'+myId).update({waitSince:st,waitSpot:null});
+  if(db&&isDuty&&!testMode)db.ref('drivers/'+myId).update({waitSince:st,waitSpot:null}).catch(err=>console.error('drivers waitSince update failed',err));
   renderSpotRow();
   saveAppState();
   toast('⏱ 待機タイマー スタート');
@@ -4483,7 +4487,7 @@ async function editTeamMemberMonthSales(uid,name){
   // （そうしないと次に自動集計が走るまで、平均だけ訂正前の値のままになってしまう）
   const curFareForAvg=cur.monthFareForAvg!=null?cur.monthFareForAvg:curFare;
   const monthFareForAvg=Math.max(0,curFareForAvg+(fare-curFare));
-  db.ref('team_sales/'+uid).update({monthAdjust,monthDays:days,monthFare:fare,monthFareForAvg});
+  db.ref('team_sales/'+uid).update({monthAdjust,monthDays:days,monthFare:fare,monthFareForAvg}).catch(err=>console.error('team_sales monthAdjust update failed',err));
   toast('✅ 今月の出勤日数・売上を修正しました（自動計算は今後も継続します）');
 }
 // ④ 歴代送り先ランキング（本人・1回の送先ごと、日付含む）
@@ -4560,7 +4564,7 @@ function adminResetTodaySales(uid){
   if(!isAdmin){toast('⚠️ 管理者のみ操作できます');return;}
   if(!confirm('この人の「本日の売上」だけをリセットしますか？（今月分の累計はそのまま残ります）'))return;
   if(!db)return;
-  db.ref('team_sales/'+uid).update({todayFare:0,todayBizStart:null});
+  db.ref('team_sales/'+uid).update({todayFare:0,todayBizStart:null}).catch(err=>console.error('team_sales reset update failed',err));
   toast('🔄 本日分をリセットしました');
 }
 function renderRankingPage(){
@@ -4875,7 +4879,7 @@ function onDeparture(cp){
     if(hCpForLabel)hCpForLabel.currentSpot=fullSpotLabel;
     const waitSpotLblEl=document.getElementById('wait-spot-lbl');
     if(waitSpotLblEl)waitSpotLblEl.textContent='待機場所: '+fullSpotLabel;
-    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSpot:fullSpotLabel});
+    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSpot:fullSpotLabel}).catch(err=>console.error('drivers waitSpot update failed',err));
     if(cp.arrivalTimeStr){
       const [ah,am]=cp.arrivalTimeStr.split(':').map(Number);
       const nowD=new Date();
@@ -4949,7 +4953,7 @@ function selectSpot(spotName){
   const fullSpot='東京都大田区羽田空港'+currentSpotSelection+'乗り場';
   hCp.currentSpot=fullSpot;
   document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
-  if(db&&!testMode)db.ref('drivers/'+myId).update({waitSpot:fullSpot});
+  if(db&&!testMode)db.ref('drivers/'+myId).update({waitSpot:fullSpot}).catch(err=>console.error('drivers waitSpot update failed',err));
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
   if(!waitInterval){
     const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
@@ -5063,7 +5067,7 @@ function startWaitAt(cp,spotName,dist,timeStr){
       document.getElementById('wait-timer').textContent=t;
       const m=document.getElementById('map-wait-timer');if(m)m.textContent=t;
     },1000);
-    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:spotName});
+    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSince:Date.now(),waitSpot:spotName}).catch(err=>console.error('drivers waitSince/waitSpot update failed',err));
     // GPS到着による自動スタートの場合、これまでここでsaveAppState()が呼ばれておらず、
     // 直後（最大15秒間）にアプリが再読み込みされると待機タイマーの開始情報が
     // 保存されておらずリセットされたように見えていたため、開始直後に必ず保存する
@@ -6335,7 +6339,8 @@ function pushTeamSales(){
  const ongoingFare=(isDuty&&dutyStart)?log.filter(e=>(e.ts||0)>=dutyStart.getTime()).reduce((a,e)=>a+exTax(e.fare||0),0):0;
  const monthFareForAvg=Math.max(0,monthFare-ongoingFare);
  // .set()だと手動修正(monthAdjust)が毎回消えてしまうため、.update()で他フィールドを保ったまま更新する
- db.ref('team_sales/'+myId).update({name,todayFare,todayBizStart,monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw,ts:Date.now()});
+ db.ref('team_sales/'+myId).update({name,todayFare,todayBizStart,monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw,ts:Date.now()})
+   .catch(err=>console.error('team_sales update failed',err));
 }
 
 
@@ -6948,7 +6953,7 @@ function saveAdminAccount(){
   document.getElementById('s-name').value=name;
   document.getElementById('s-car').value=car;
   if(db&&isDuty){
-    db.ref('drivers/'+myId).update({name,car,ts:Date.now()});
+    db.ref('drivers/'+myId).update({name,car,ts:Date.now()}).catch(err=>console.error('drivers name/car update failed',err));
   }
   toast('✅ アカウントを更新しました');
 }
@@ -7697,9 +7702,10 @@ function recordPoolMove(spot,lane){
   }
   const name=localStorage.getItem('taxi_name')||'自分';
   const ref=db.ref('pool_moves').push({spot,lane,ts:now,uid:myId,name});
+  ref.catch(err=>console.error('pool_moves push failed',err));
   myLastAction={type:'move',key:ref.key,spot,lane,ts:now};
   markMyPoolInputActive();
-  db.ref('pool_locks/'+key).set({ts:now,name,uid:myId});
+  db.ref('pool_locks/'+key).set({ts:now,name,uid:myId}).catch(err=>console.error('pool_locks set failed',err));
   renderUndoBtn();
   refreshPoolHistory(spot);
   if(poolLockTimer)clearTimeout(poolLockTimer);
@@ -7760,9 +7766,10 @@ function recordProgress(spot,amount){
   ref.transaction(cur=>({count:(cur&&cur.count?cur.count:0)+amount,ts:now,startTs:(cur&&cur.startTs)||arriveTs,lastBy:name}));
   // 履歴にも「+1」「+2」として記録
   const movesRef=db.ref('pool_moves').push({spot,lane:'+'+amount,ts:now,uid:myId,name});
+  movesRef.catch(err=>console.error('pool_moves push failed',err));
   myLastAction={type:'progress',spot,amount,movesKey:movesRef.key,ts:now};
   markMyPoolInputActive();
-  db.ref('pool_locks/'+spot).set({ts:now,name,uid:myId});
+  db.ref('pool_locks/'+spot).set({ts:now,name,uid:myId}).catch(err=>console.error('pool_locks set failed',err));
   renderUndoBtn();
   refreshPoolHistory(spot);
   if(poolLockTimer)clearTimeout(poolLockTimer);
@@ -7776,7 +7783,7 @@ function recordIntlPoolMove(){
   if(!db){toast('⚠️ Firebase未接続');return;}
   if(testMode){toast('🧪 テストモード中は仲間と共有されるデータを変更できません');return;}
   const name=localStorage.getItem('taxi_name')||'自分';
-  db.ref('intl_pool_moves').push({ts:Date.now(),uid:myId,name});
+  db.ref('intl_pool_moves').push({ts:Date.now(),uid:myId,name}).catch(err=>console.error('intl_pool_moves push failed',err));
   toast('✈️ 国際線 2列移動を記録しました');
 }
 // 国際線も1号〜4号と同じ形式（「spot 間隔、間隔、…」）で表示する
@@ -7827,7 +7834,7 @@ function finalizePoolMoveHistory(){
   if(!db||testMode)return;
   // 入力者がプールを出発した時刻を仲間全員で共有し、renderPoolChart側で
   // これを見て即座に列移動表示を非表示にする
-  db.ref('pool_session_meta').set({endTs:Date.now()});
+  db.ref('pool_session_meta').set({endTs:Date.now()}).catch(err=>console.error('pool_session_meta set failed',err));
   const counts={};
   let startTs=null;
   ['1号','2号','3号','4号'].forEach(spot=>{
@@ -7850,7 +7857,7 @@ function finalizePoolMoveHistory(){
     intervals[spot]=ivs;
   });
   const name=localStorage.getItem('taxi_name')||'自分';
-  db.ref('pool_move_history').push({startTs,endTs,counts,intervals,by:name});
+  db.ref('pool_move_history').push({startTs,endTs,counts,intervals,by:name}).catch(err=>console.error('pool_move_history push failed',err));
   // 次に誰かが入力を始める時に必ず0列からスタートできるよう、履歴に保存した分の
   // 列数はここでリセットする（5分の自動タイムアウトを待たない）
   ['1号','2号','3号','4号'].forEach(spot=>db.ref('pool_progress/'+spot).remove());
@@ -8019,7 +8026,8 @@ function checkApprovalOnConnect(){
   // 既存ユーザー（名前あり）は自動承認登録
   if(name){
     db.ref('users_approved/'+myId).once('value',snap=>{
-      if(!snap.val())db.ref('users_approved/'+myId).set({name,ts:Date.now(),auto:true});
+      if(!snap.val())db.ref('users_approved/'+myId).set({name,ts:Date.now(),auto:true})
+        .catch(err=>console.error('users_approved auto set failed',err));
     });
     return;
   }
@@ -8042,7 +8050,8 @@ function applyAdminPin(){
   if(input!==saved){toast('⚠️ PINが違います');return;}
   const name=document.getElementById('apply-name').value.trim()||localStorage.getItem('taxi_name')||'管理者';
   const car=document.getElementById('apply-car').value.trim()||localStorage.getItem('taxi_car')||'';
-  if(db)db.ref('users_approved/'+myId).set({name,car,ts:Date.now()});
+  if(db)db.ref('users_approved/'+myId).set({name,car,ts:Date.now()})
+    .catch(err=>{console.error('users_approved set failed',err);toast('⚠️ 登録の反映に失敗しました。電波状況を確認してください');});
   localStorage.setItem('taxi_name',name);
   if(car)localStorage.setItem('taxi_car',car);
   document.getElementById('apply-screen').style.display='none';
@@ -8061,9 +8070,17 @@ function submitApply(){
   const name=document.getElementById('apply-name').value.trim();
   const car=document.getElementById('apply-car').value.trim();
   if(!name){toast('⚠️ 名前を入力してください');return;}
-  db.ref('users_pending/'+myId).set({name,car,ts:Date.now(),status:'pending'});
-  document.getElementById('apply-screen').style.display='none';
-  showPendingScreen(name);
+  // 送信が失敗した場合、以前はそれに気づく手段が無いまま「承認待ち」画面に
+  // 進んでしまい、実際には申請がFirebaseに届いておらず、管理者側にはいつまで
+  // たっても表示されない（本人だけがずっと承認待ちのまま止まる）状態になり得た。
+  // 書き込みが確認できてから承認待ち画面に進むようにする
+  db.ref('users_pending/'+myId).set({name,car,ts:Date.now(),status:'pending'}).then(()=>{
+    document.getElementById('apply-screen').style.display='none';
+    showPendingScreen(name);
+  }).catch(err=>{
+    console.error('users_pending set failed',err);
+    toast('⚠️ 申請の送信に失敗しました。電波状況を確認してもう一度お試しください');
+  });
   listenApproval();
 }
 function listenApproval(){
@@ -8100,16 +8117,26 @@ function renderPendingList(){
 }
 function approveUser(uid,name,car){
   if(!confirm(name+'を承認しますか？'))return;
-  db.ref('users_approved/'+uid).set({name,car,ts:Date.now()});
-  db.ref('users_pending/'+uid+'/status').set('approved');
-  toast('✅ '+name+' を承認しました');
-  renderPendingList();
+  Promise.all([
+    db.ref('users_approved/'+uid).set({name,car,ts:Date.now()}),
+    db.ref('users_pending/'+uid+'/status').set('approved')
+  ]).then(()=>{
+    toast('✅ '+name+' を承認しました');
+    renderPendingList();
+  }).catch(err=>{
+    console.error('approveUser failed',err);
+    toast('⚠️ 承認の反映に失敗しました。電波状況を確認してもう一度お試しください');
+  });
 }
 function rejectUser(uid,name){
   if(!confirm(name+'の申請を拒否しますか？'))return;
-  db.ref('users_pending/'+uid).remove();
-  toast('🚫 '+name+' を拒否しました');
-  renderPendingList();
+  db.ref('users_pending/'+uid).remove().then(()=>{
+    toast('🚫 '+name+' を拒否しました');
+    renderPendingList();
+  }).catch(err=>{
+    console.error('rejectUser failed',err);
+    toast('⚠️ 拒否の反映に失敗しました');
+  });
 }
 
 function showImgFull(src){
@@ -8152,7 +8179,7 @@ async function uploadChatMedia(input, mediaType){
     });
     const m={uid:myId,name,text:'',time,ts:Date.now(),
       mediaUrl:base64,mediaType:'image',fileName:file.name};
-    db.ref('chat').push(m);
+    await db.ref('chat').push(m);
   }catch(e){
     console.error('画像送信エラー:',e);
     toast('⚠️ 送信失敗: '+(e.message||'不明なエラー'));
@@ -8165,7 +8192,17 @@ function sendChat(){
   const name=localStorage.getItem('taxi_name')||'自分';
   const m={uid:myId,name,text,time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now()};
   inp.value='';
-  if(db){db.ref('chat').push(m);}
+  if(db){
+    // 送信自体が失敗（通信エラー等）してもこれまで一切分からず、送信したはずの
+    // メッセージが無音で消えていた（db接続時は、このpush()がFirebase側の
+    // リアルタイム通知を経て初めて自分の画面にも表示される作りのため、失敗すると
+    // 自分にも他の誰にも届かない）。失敗時は通知し、入力内容を復元して再送できるようにする
+    db.ref('chat').push(m).catch(err=>{
+      console.error('chat push failed',err);
+      toast('⚠️ メッセージの送信に失敗しました');
+      inp.value=text;
+    });
+  }
   else{
     appendChatBubble(m,true);
     const hist=JSON.parse(localStorage.getItem('taxi_chat_hist')||'[]');
@@ -8387,7 +8424,7 @@ function showPage(name,btn){
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
     setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
-    if(db){db.ref('chat_reads/'+myId).set(Date.now());}
+    if(db){db.ref('chat_reads/'+myId).set(Date.now()).catch(err=>console.error('chat_reads set failed',err));}
   }else{chatOnPage=false;}
 }
 
