@@ -3622,12 +3622,23 @@ function connectFirebase(config){
           changed=true;
         }
       });
-      // Firebase側で削除された記録を、ローカルからも除去（15秒以上前のtrip/cpのみ対象）
-      const graceMs=15000;
+      // Firebase側で削除された記録（管理者による削除・月末リセット等）を、
+      // ローカルからも除去する。以前は「作成から15秒以上経過していて、かつ
+      // Firebase側に見当たらない」ことだけを条件にしていたが、このリスナーは
+      // 仲間の誰かが記録するたびに毎回呼ばれるため、電波状況やisDutyの
+      // タイミングのずれでFirebaseへのpush（送信）自体がまだ完了・反映されて
+      // いないだけの記録まで「削除された」と誤判定し、待機/送り先リストから
+      // 記録ごと消えてしまう不具合があった。Firebase側に一度でも存在が確認できた
+      // （synced済みの）記録が、その後Firebase側から無くなった場合だけを
+      // 「本当に削除された」とみなして除去するようにし、まだ送信・反映が
+      // 済んでいないだけの記録は年数が経っていても消さないようにする
+      destinations.forEach(d=>{
+        if((d.type==='trip'||d.type==='cp')&&fbTsSet.has(d.ts))d.synced=true;
+      });
       const before=destinations.length;
       destinations=destinations.filter(d=>{
         if(d.type!=='trip'&&d.type!=='cp')return true;
-        if((Date.now()-(d.ts||0))<graceMs)return true;
+        if(!d.synced)return true;
         return fbTsSet.has(d.ts);
       });
       if(destinations.length!==before)changed=true;
