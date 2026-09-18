@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-86 -->
+<!-- v20260902-87 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1223,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-86';
+const APP_BUILD='20260902-87';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2727,16 +2727,24 @@ async function adminCheckTeamDestsRange(){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
   if(!db){toast('⚠️ Firebase未接続');return;}
   toast('🔍 team_destsを確認中...');
+  // db.ref('team_dests').once('value')はリアルタイムリスナーを一切経由しない
+  // 一発読み込みのため、「特定の端末だけteam_destsの表示が更新されない」問題が
+  // 実際にはFirebase側にデータが届いていないこと（送信側の問題）が原因なのか、
+  // それともこの端末での受信・表示側の問題なのかを切り分けるのに使える
   const snap=await db.ref('team_dests').once('value');
   const all=snap.val()||{};
   let tripCount=0,withBoardSpot=0,minTs=null,maxTs=null,otaFromSpot=0;
-  Object.values(all).forEach(driverEntries=>{
+  const perDriver=[];
+  Object.entries(all).forEach(([driverId,driverEntries])=>{
+    let driverMaxTs=null,driverName='',driverTripCount=0;
     Object.values(driverEntries||{}).forEach(e=>{
+      if(e.driverName)driverName=e.driverName;
       if(e.type!=='trip')return;
-      tripCount++;
+      tripCount++;driverTripCount++;
       if(e.ts){
         if(minTs===null||e.ts<minTs)minTs=e.ts;
         if(maxTs===null||e.ts>maxTs)maxTs=e.ts;
+        if(driverMaxTs===null||e.ts>driverMaxTs)driverMaxTs=e.ts;
       }
       if(e.boardSpot){
         withBoardSpot++;
@@ -2744,14 +2752,19 @@ async function adminCheckTeamDestsRange(){
         if(ward==='大田区')otaFromSpot++;
       }
     });
+    perDriver.push({driverId,driverName:driverName||'(不明)',driverTripCount,driverMaxTs});
   });
+  perDriver.sort((a,b)=>(b.driverMaxTs||0)-(a.driverMaxTs||0));
   const fmt=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}):'−';
+  const fmtDT=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'記録なし';
+  const perDriverLines=perDriver.map(d=>`${d.driverName}: ${d.driverTripCount}件 / 最新 ${fmtDT(d.driverMaxTs)}`).join('\n');
   const msg=`team_dests確認結果\n\n`+
     `乗車記録（送迎）件数: ${tripCount}件\n`+
     `うち乗り場からの記録: ${withBoardSpot}件\n`+
     `うち降車地が大田区: ${otaFromSpot}件（${withBoardSpot?Math.round(otaFromSpot/withBoardSpot*100):0}%）\n`+
     `最も古い記録: ${fmt(minTs)}\n`+
-    `最も新しい記録: ${fmt(maxTs)}`;
+    `最も新しい記録: ${fmt(maxTs)}\n\n`+
+    `【ドライバーごとの最新記録】\n${perDriverLines||'(記録なし)'}`;
   alert(msg);
 }
 // 今月の売り上げランキング（team_sales・グループ全員分）をCSV文字列にする
