@@ -7112,7 +7112,7 @@ function buildDestEntryHtml(d,numMap){
       ${d.etc?`<div style="margin-top:3px;display:flex;align-items:center;gap:8px">
         <div style="flex:1;font-size:12px;font-weight:700;color:var(--cyan)">🛣️ ETC ¥${d.etc.toLocaleString()}</div>
         <button onclick="editTripEtc(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
-      </div>`:(d.fare?`<div style="margin-top:3px"><button onclick="editTripEtc(${d.ts})" style="background:none;border:none;font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;padding:0">＋ 高速代（ETC）を追加</button></div>`:'')}
+      </div>`:''}
     </div>`;
   } else if(d.type==='cp'){
     return `
