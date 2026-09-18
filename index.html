@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-94 -->
+<!-- v20260902-95 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1226,7 +1226,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-94';
+const APP_BUILD='20260902-95';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6161,24 +6161,30 @@ function onSettlementFieldEdit(){
 // 復旧できるようにする
 function resyncFareLogFromDestinations(shiftStartTs,shiftEndTs){
   const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  // 何が起きているかその場で確認できるよう、対象になったトリップ数・
+  // 実際に更新/新規作成した件数を集計して返す（呼び出し元で診断表示に使う）
   let changed=false;
+  let inRangeCount=0,updatedCount=0,createdCount=0;
   destinations.forEach(d=>{
     if(d.type!=='trip')return;
     if((d.ts||0)<shiftStartTs||(d.ts||0)>shiftEndTs)return;
+    inRangeCount++;
     if(!d.fare&&!d.etc)return; // 運賃も高速代も記録が無いトリップは対象外
     const idx=log.findIndex(e=>e.tripTs===d.ts);
     if(idx>=0){
-      if(d.fare&&log[idx].fare!==d.fare){log[idx].fare=d.fare;changed=true;}
-      if(d.etc&&log[idx].etc!==d.etc){log[idx].etc=d.etc;changed=true;}
-      if(d.paymentMethod&&log[idx].paymentMethod!==d.paymentMethod){log[idx].paymentMethod=d.paymentMethod;changed=true;}
+      let rowChanged=false;
+      if(d.fare&&log[idx].fare!==d.fare){log[idx].fare=d.fare;changed=true;rowChanged=true;}
+      if(d.etc&&log[idx].etc!==d.etc){log[idx].etc=d.etc;changed=true;rowChanged=true;}
+      if(d.paymentMethod&&log[idx].paymentMethod!==d.paymentMethod){log[idx].paymentMethod=d.paymentMethod;changed=true;rowChanged=true;}
+      if(rowChanged)updatedCount++;
     }else if(d.fare){
       const dateStr=new Date(d.ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
       log.push({dateStr,fare:d.fare,toll:0,ts:d.ts,tripTs:d.ts,paymentMethod:d.paymentMethod||null,discount:0,etc:d.etc||0});
-      changed=true;
+      changed=true;createdCount++;
     }
   });
   if(changed)localStorage.setItem('taxi_fare_log',JSON.stringify(log));
-  return changed;
+  return {changed,inRangeCount,updatedCount,createdCount};
 }
 // 保存済みの精算記録は退勤時点のtaxi_fare_logの内容を1回だけ集計して保存
 // したものなので、後から個々のトリップの運賃・高速代（ETC）を編集しても、
@@ -6188,12 +6194,13 @@ function resyncFareLogFromDestinations(shiftStartTs,shiftEndTs){
 // 作り直せるボタンをレポート画面に用意する（未収金の手入力はそのまま残す）
 function recomputeSettlementFromFareLog(){
   if(currentSettlementIndex<0||currentSettlementIndex>=settlementLog.length){
-    toast('⚠️ この記録は再集計できません');
+    alert('⚠️ この記録は再集計できません（settlementLog内に見つかりませんでした）');
     return;
   }
   const record=settlementLog[currentSettlementIndex];
   if(!confirm('現在の運賃記録から、この日の精算内容を作り直しますか？\n（未収金の入力はそのまま残ります）'))return;
-  resyncFareLogFromDestinations(record.shiftStartTs,record.shiftEndTs);
+  const before={credit:record.credit,etc:record.etc,highwayTotal:record.highwayTotal};
+  const syncResult=resyncFareLogFromDestinations(record.shiftStartTs,record.shiftEndTs);
   const fresh=buildSettlementRecord(
     record.shiftStartTs,record.shiftEndTs,record.meterStart,record.meterEnd,
     record.fuelEntries,record.highwayEntries,record.jibaraHighwayEntries
@@ -6203,7 +6210,23 @@ function recomputeSettlementFromFareLog(){
   localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
   currentSettlementRecord=record;
   showSettlementReport(record,currentSettlementOnClose);
-  toast('🔄 送り先タブの内容と同期し、最新の運賃記録から再集計しました');
+  // 押しても数字が変わらないという報告が続いたため、実際に何が行われたかを
+  // その場で確認できる診断結果を必ず表示するようにする（憶測で「直った」と
+  // 案内しないため）
+  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  const msg=`再集計の診断結果\n\n`+
+    `対象期間: ${fmt(record.shiftStartTs)} 〜 ${fmt(record.shiftEndTs)}\n`+
+    `期間内の送り先トリップ数: ${syncResult.inRangeCount}件\n`+
+    `taxi_fare_logを更新した件数: ${syncResult.updatedCount}件\n`+
+    `taxi_fare_logに新規作成した件数: ${syncResult.createdCount}件\n\n`+
+    `クレジット: ${fmtYen(before.credit)} → ${fmtYen(record.credit)}\n`+
+    `ETC(表示額): ${fmtYen((before.etc||0)-(before.highwayTotal||0))} → ${fmtYen((record.etc||0)-(record.highwayTotal||0))}\n\n`+
+    (syncResult.inRangeCount===0
+      ?'※期間内の送り先トリップが0件でした。送り先タブに、この日のトリップの記録自体が残っているかご確認ください。'
+      :(syncResult.updatedCount===0&&syncResult.createdCount===0
+        ?'※送り先タブとtaxi_fare_logの内容は、既に一致していました（更新対象がありませんでした）。'
+        :''));
+  alert(msg);
 }
 function closeSettlementReport(){
   document.getElementById('settlement-report-modal').style.display='none';
