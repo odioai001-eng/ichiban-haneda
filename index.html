@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-82 -->
+<!-- v20260902-83 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1223,7 +1223,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-82';
+const APP_BUILD='20260902-83';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4167,7 +4167,16 @@ function renderTeamDests(){
   let html='';
   const now=new Date();
   const prevMonthStart=new Date(now.getFullYear(),now.getMonth()-1,1).getTime();
+  // 1人分のデータ形式が壊れている（想定外の型が入っている等）場合、その人の
+  // 処理中に例外が発生すると、以前はforEach全体が中断され、他の全員分の
+  // 表示（htmlの組み立て）ごと失われてしまい、el.innerHTMLへの反映が一切
+  // 行われなくなっていた。これにより「仲間の送り先」が特定の時点から
+  // 誰の分も一切更新されなくなる（再起動しても直らない）不具合があったため、
+  // 1人ずつtry/catchで区切り、その人の分だけスキップして他の人の表示は
+  // 継続できるようにする
   allDriverIds.forEach(driverId=>{
+   try{
+    let driverHtml='';
     const entries=Object.entries(teamDests[driverId]||{}).map(([k,v])=>({...v,_fbKey:k})).filter(e=>{
       if((e.ts||0)<prevMonthStart)return false;
       if(e.type==='trip'||e.type==='cp')return true;
@@ -4195,7 +4204,7 @@ function renderTeamDests(){
       return (groups[b][0].ts||0)-(groups[a][0].ts||0);
     });
     const folderId=`team-fold-${driverId}`;
-    html+=`
+    driverHtml+=`
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden">
       <div onclick="(function(el){el.style.display=el.style.display==='none'?'block':'none'})(document.getElementById('${folderId}'))" style="padding:12px 14px;background:var(--surface2);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
         <div style="width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${esc(driverName.slice(0,1))}</div>
@@ -4213,14 +4222,14 @@ function renderTeamDests(){
     const teamNumMap=new Map();
     teamTrips.forEach((e,i)=>teamNumMap.set(e.ts,i+1));
     sortedDates.forEach(date=>{
-      html+=`<div style="font-size:16px;color:var(--text);font-weight:800;margin-bottom:8px">📅 ${date}</div>`;
+      driverHtml+=`<div style="font-size:16px;color:var(--text);font-weight:800;margin-bottom:8px">📅 ${date}</div>`;
       groups[date].forEach((e,idx,arr)=>{
         const isLast=idx===arr.length-1;
         if(e.type==='trip'){
           const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(e);
           const tno=teamNumMap.get(e.ts)||'';
           const adminDelBtn=(isAdmin&&!isMe)?`<button onclick="adminDeleteTeamDest('${driverId}','${e._fbKey}')" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--red);font-size:11px;cursor:pointer">🗑</button>`:'';
-          html+=`
+          driverHtml+=`
           <div style="position:relative;border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
             ${adminDelBtn}
             <div style="font-size:15px;font-weight:800;color:var(--accent);margin-bottom:4px">#${tno}</div>
@@ -4238,7 +4247,7 @@ function renderTeamDests(){
           </div>`;
         } else if(e.type==='cp'){
           const adminDelBtnCp=(isAdmin&&!isMe)?`<button onclick="adminDeleteTeamDest('${driverId}','${e._fbKey}')" style="position:absolute;top:8px;right:10px;background:none;border:none;color:var(--red);font-size:11px;cursor:pointer">🗑</button>`:'';
-          html+=`
+          driverHtml+=`
           <div style="position:relative;border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
             ${adminDelBtnCp}
             <div style="font-size:13px;color:var(--muted)">
@@ -4248,7 +4257,7 @@ function renderTeamDests(){
             </div>
           </div>`;
         } else {
-          html+=`
+          driverHtml+=`
           <div style="display:flex;gap:0;margin-bottom:${isLast?'8px':'0'}">
             <div style="display:flex;flex-direction:column;align-items:center;margin-right:10px;flex-shrink:0">
               <div style="width:9px;height:9px;border-radius:50%;background:var(--cyan);border:2px solid var(--surface2);margin-top:10px;flex-shrink:0"></div>
@@ -4263,7 +4272,11 @@ function renderTeamDests(){
         }
       });
     });
-    html+=`</div></div>`;
+    driverHtml+=`</div></div>`;
+    html+=driverHtml;
+   }catch(driverErr){
+    console.error('renderTeamDests: driver '+driverId+' failed',driverErr);
+   }
   });
   el.innerHTML=html||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
   // 開いていたフォルダを復元
