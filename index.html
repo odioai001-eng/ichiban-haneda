@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-90 -->
+<!-- v20260902-91 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1191,7 +1191,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="color:var(--muted)">QRコード</span><span id="settlement-qr" style="font-weight:700">¥0</span>
    </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
-    <span style="color:var(--muted)">ETC（高速代）</span><span id="settlement-etc" style="font-weight:700">¥0</span>
+    <span style="color:var(--muted)">ETC（高速代）
+      <button onclick="showSettlementEtcDetail()" style="background:none;border:none;color:var(--accent);font-size:10px;text-decoration:underline;cursor:pointer;padding:0;margin-left:4px">内訳</button>
+    </span><span id="settlement-etc" style="font-weight:700">¥0</span>
    </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);font-size:14px;background:rgba(251,191,36,.08)">
     <span style="font-weight:700">差引合計</span><span id="settlement-cash-total" style="font-weight:800;color:var(--gold)">¥0</span>
@@ -1223,7 +1225,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-90';
+const APP_BUILD='20260902-91';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6053,12 +6055,14 @@ function computeSettlementTotals(record){
 // ETC・未収金を編集した時に、この番号を使ってsettlementLogへ書き戻す
 let currentSettlementIndex=-1;
 let currentSettlementOnClose=null;
+let currentSettlementRecord=null;
 function fmtYen(n){return '¥'+Math.round(n||0).toLocaleString();}
 function showSettlementReport(record,onClose){
   // 保存済みのsettlementLog内での位置を探す（退勤直後はpushした直後の
   // 末尾、設定タブの履歴から開いた場合はその記録そのもの）
   currentSettlementIndex=settlementLog.indexOf(record);
   currentSettlementOnClose=onClose||null;
+  currentSettlementRecord=record;
   document.getElementById('settlement-date-label').textContent=record.dateStr||'';
   document.getElementById('settlement-fuel-rows').innerHTML=record.fuelEntries&&record.fuelEntries.length
     ?record.fuelEntries.map(e=>`<div>${new Date(e.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}　${e.amount.toFixed(2)}L</div>`).join('')
@@ -6081,6 +6085,27 @@ function showSettlementReport(record,onClose){
   document.getElementById('settlement-uncollected-input').value=record.uncollected||0;
   updateSettlementTotalsDisplay(record);
   document.getElementById('settlement-report-modal').style.display='flex';
+}
+// ETC欄の金額の内訳を、保存されている生の数値のまま表示する。表示側の
+// 計算式（record.etc − record.highwayTotal）が正しく1回だけ引かれているか、
+// それとも保存されている時点で既に無料高速が引かれてしまっている（二重に
+// 引かれて見える）のかを、本人がその場で確認できるようにするための診断機能
+function showSettlementEtcDetail(){
+  const record=currentSettlementRecord;
+  if(!record){toast('⚠️ レポートが開かれていません');return;}
+  const etcRaw=record.etc||0;
+  const highway=record.highwayTotal||0;
+  const jibara=record.jibaraHighwayTotal||0;
+  const shown=etcRaw-highway;
+  const msg=`ETC内訳\n\n`+
+    `保存されているETC合計（自腹高速込み）: ${fmtYen(etcRaw)}\n`+
+    `　うち自腹高速: ${fmtYen(jibara)}\n`+
+    `無料高速の合計: ${fmtYen(highway)}\n\n`+
+    `表示額の計算: ${fmtYen(etcRaw)} − ${fmtYen(highway)} = ${fmtYen(shown)}\n\n`+
+    `※「保存されているETC合計」が、既に無料高速を1回引いた後の金額に\n`+
+    `　なっている場合、ここでさらに無料高速が引かれてしまい、表示額が\n`+
+    `　本来より無料高速の分だけ少なく見えてしまいます。`;
+  alert(msg);
 }
 function updateSettlementTotalsDisplay(record){
   const {cashSettleTotal,paymentAmount}=computeSettlementTotals(record);
