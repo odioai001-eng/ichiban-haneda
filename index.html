@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-97 -->
+<!-- v20260902-98 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1140,6 +1140,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
    <button class="fare-pay-btn" data-method="emoney" onclick="selectFarePaymentMethod('emoney')">📱 電子マネー</button>
    <button class="fare-pay-btn" data-method="ticket" onclick="selectFarePaymentMethod('ticket')">🎫 チケット</button>
    <button class="fare-pay-btn" data-method="qr" onclick="selectFarePaymentMethod('qr')">🔲 QRコード</button>
+   <button class="fare-pay-btn" data-method="welfare" onclick="selectFarePaymentMethod('welfare')">🎫 福祉券</button>
   </div>
   <button onclick="confirmFareModal()" style="width:100%;padding:12px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">✅ 登録する</button>
   <button onclick="skipFareModal()" style="width:100%;padding:11px;border:2px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text);font-size:13px;font-weight:700;cursor:pointer">スキップ</button>
@@ -1185,7 +1186,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="color:var(--muted)">電子マネー</span><span id="settlement-emoney" style="font-weight:700">¥0</span>
    </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
-    <span id="settlement-ticket-label" style="color:var(--muted)">チケット（0枚）</span><span id="settlement-ticket" style="font-weight:700">¥0</span>
+    <span id="settlement-ticket-label" style="color:var(--muted)">チケット0枚　福祉券0枚</span><span id="settlement-ticket" style="font-weight:700">¥0</span>
    </div>
    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px">
     <span style="color:var(--muted)">QRコード</span><span id="settlement-qr" style="font-weight:700">¥0</span>
@@ -1226,7 +1227,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-97';
+const APP_BUILD='20260902-98';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5694,6 +5695,10 @@ let pendingFareTripTs=null;
 // して、別の「登録する」ボタンを押した時点で初めて記録する
 let selectedFarePaymentMethod=null;
 
+// 福祉券は、1回の乗車に複数枚（券種ごとに額面が決まっている）を組み合わせて
+// 使うことがあるため、他の支払い方法と違って枚数を別途記録する
+let pendingWelfareSheets=0;
+
 function showFareModal(tripTs){
  pendingFareTripTs=tripTs||null;
  document.getElementById('fare-input').value='';
@@ -5702,6 +5707,7 @@ function showFareModal(tripTs){
  document.getElementById('fare-discount-input').value='';
  toggleFareDiscountInput();
  selectedFarePaymentMethod=null;
+ pendingWelfareSheets=0;
  updateFarePaymentButtonsUI();
  document.getElementById('fare-modal').style.display='flex';
  setTimeout(()=>document.getElementById('fare-input').focus(),200);
@@ -5712,12 +5718,19 @@ function toggleFareDiscountInput(){
  document.getElementById('fare-discount-wrap').style.display=checked?'block':'none';
 }
 
-// 支払い方法（現金・クレジット・電子マネー・チケット・QRコード）ボタンから
-// 呼ばれる。押しても記録は確定せず、選択状態をハイライトするだけ（もう一度
-// 同じボタンを押すと選択解除できる）。実際の記録は「登録する」ボタンで行う
-function selectFarePaymentMethod(method){
- selectedFarePaymentMethod=(selectedFarePaymentMethod===method)?null:method;
+// 支払い方法（現金・クレジット・電子マネー・チケット・QRコード・福祉券）
+// ボタンから呼ばれる。押しても記録は確定せず、選択状態をハイライトするだけ
+// （もう一度同じボタンを押すと選択解除できる）。実際の記録は「登録する」
+// ボタンで行う。福祉券だけは、選択した時点で枚数を別途たずねる
+// （金額は他の方法と同じく共通の運賃欄に入力する）
+async function selectFarePaymentMethod(method){
+ const turningOn=selectedFarePaymentMethod!==method;
+ selectedFarePaymentMethod=turningOn?method:null;
  updateFarePaymentButtonsUI();
+ if(method==='welfare'&&turningOn){
+  const val=await promptNumber('福祉券の枚数',pendingWelfareSheets||1);
+  pendingWelfareSheets=val===null?0:(parseInt(val)||0);
+ }
 }
 function updateFarePaymentButtonsUI(){
  document.querySelectorAll('#fare-pay-btns .fare-pay-btn').forEach(btn=>{
@@ -5735,7 +5748,8 @@ function confirmFareModal(){
  const etc=parseInt(document.getElementById('fare-etc-input').value)||0;
  const discountChecked=document.getElementById('fare-discount-check').checked;
  const discount=discountChecked?(parseInt(document.getElementById('fare-discount-input').value)||0):0;
- saveFareEntry(fare,0,pendingFareTripTs,method,discount,etc);
+ const welfareSheets=method==='welfare'?pendingWelfareSheets:0;
+ saveFareEntry(fare,0,pendingFareTripTs,method,discount,etc,welfareSheets);
  attachFareToTrip(pendingFareTripTs,fare,0,method,etc);
  document.getElementById('fare-modal').style.display='none';
 }
@@ -6004,12 +6018,13 @@ function skipFareModal(){
 // 一切書き込まないことで、テストの記録が実データに混ざらないようにする。
 // 退勤時の精算レポート（buildSettlementRecord）だけは、テスト中はこちらを参照する
 let testFareLog=[];
-function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc){
+function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc,welfareSheets){
  const now=new Date();
  const entry={
   dateStr:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
   fare,toll,ts:now.getTime(),tripTs:tripTs||null,
-  paymentMethod:paymentMethod||null,discount:discount||0,etc:etc||0
+  paymentMethod:paymentMethod||null,discount:discount||0,etc:etc||0,
+  welfareSheets:welfareSheets||0
  };
  if(testMode){
   testFareLog.push(entry);
@@ -6045,8 +6060,13 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   const credit=Math.round(sumByMethod('credit')*0.96545);
   const emoney=sumByMethod('emoney');
   const ticketEntries=shiftFares.filter(e=>e.paymentMethod==='ticket');
-  const ticket=ticketEntries.reduce((a,e)=>a+(e.fare||0),0);
   const ticketCount=ticketEntries.length;
+  // 福祉券は、チケットと同じ「その場で現金を受け取らない」決済方法のため、
+  // 差引合計の計算上はチケットと合算した1つの金額として扱う。枚数だけは
+  // 別に集計し、レポートには「チケット○枚　福祉券○枚」と両方表示する
+  const welfareEntries=shiftFares.filter(e=>e.paymentMethod==='welfare');
+  const welfareCount=welfareEntries.reduce((a,e)=>a+(e.welfareSheets||0),0);
+  const ticket=ticketEntries.reduce((a,e)=>a+(e.fare||0),0)+welfareEntries.reduce((a,e)=>a+(e.fare||0),0);
   const qr=sumByMethod('qr');
   const fuel=Array.isArray(fuelEntriesArg)?fuelEntriesArg:[];
   const highway=Array.isArray(highwayEntriesArg)?highwayEntriesArg:[];
@@ -6066,7 +6086,7 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
     highwayTotal,highwayEntries:highway,
     jibaraHighwayTotal,jibaraHighwayEntries:jibaraHighway,
     revenueBeforeDiscount,discountTotal,revenueAfterDiscount,
-    credit,emoney,ticket,ticketCount,qr,
+    credit,emoney,ticket,ticketCount,welfareCount,qr,
     etc,uncollected:0 // 未収金は自動追跡していないため、レポート画面で手動入力する
   };
 }
@@ -6111,7 +6131,7 @@ function showSettlementReport(record,onClose){
   document.getElementById('settlement-revenue-after').textContent=fmtYen(record.revenueAfterDiscount);
   document.getElementById('settlement-credit').textContent=fmtYen(record.credit);
   document.getElementById('settlement-emoney').textContent=fmtYen(record.emoney);
-  document.getElementById('settlement-ticket-label').textContent=`チケット（${record.ticketCount||0}枚）`;
+  document.getElementById('settlement-ticket-label').textContent=`チケット${record.ticketCount||0}枚　福祉券${record.welfareCount||0}枚`;
   document.getElementById('settlement-ticket').textContent=fmtYen(record.ticket);
   document.getElementById('settlement-qr').textContent=fmtYen(record.qr);
   // 無料高速はそもそもETC（高速代）に含まれていない別枠の記録のため、
@@ -7247,7 +7267,7 @@ function computeTripNumbers(tripsAscByTs){
 }
 
 function paymentMethodLabel(method){
-  return {cash:'現金',credit:'クレジット',emoney:'電子マネー',ticket:'チケット',qr:'QRコード'}[method]||method;
+  return {cash:'現金',credit:'クレジット',emoney:'電子マネー',ticket:'チケット',qr:'QRコード',welfare:'福祉券'}[method]||method;
 }
 function buildDestEntryHtml(d,numMap){
   if(d.type==='trip'){
