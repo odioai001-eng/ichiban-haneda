@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>文字化け復元ツール</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d0d1a;--surface:#161628;--surface2:#1e1e35;--border:#2a2a4a;
+  --text:#e8e8f4;--muted:#7878a0;--accent:#4f8ef7;
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#a855f7;--cyan:#06b6d4;--gold:#fbbf24;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh;padding:20px 16px 60px;max-width:480px;margin:0 auto}
+h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6}
+.note{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;
+  font-size:12px;color:#c0c0d8;line-height:1.8;margin-bottom:18px}
+.note b{color:var(--text)}
+.note.warn{border-color:rgba(245,158,11,.35)}
+.note.warn b{color:var(--gold)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+.sec-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600}
+.field input,.field select,.field textarea{width:100%;background:var(--surface2);border:1px solid var(--border);
+  border-radius:8px;padding:9px 10px;color:var(--text);font-size:14px;font-family:inherit}
+.field textarea{resize:vertical;min-height:88px;font-family:monospace;line-height:1.6}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{padding:11px 16px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:700;transition:all .15s;width:100%}
+.btn:active{transform:scale(.97)}
+.btn-p{background:var(--accent);color:#fff}
+.btn-g{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-sm{width:auto;padding:6px 12px;font-size:12px}
+.link-btn{background:none;border:none;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;padding:0;text-decoration:underline}
+.item{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;position:relative}
+.item.best{border-color:rgba(34,197,94,.5)}
+.item-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.item-label{font-size:11px;font-weight:700;color:var(--muted)}
+.badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.4)}
+.badge.warn{background:rgba(245,158,11,.15);color:var(--gold);border-color:rgba(245,158,11,.4)}
+.item-text{font-size:15px;line-height:1.7;word-break:break-all;white-space:pre-wrap;margin-bottom:8px}
+.item-foot{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.loss{font-size:11px;color:var(--red)}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:24px 10px}
+.copy-msg{font-size:11px;color:var(--green);margin-top:6px;display:none;font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>🔤 文字化け復元ツール</h1>
+<div class="sub">文字化けしたマンガのセリフなどを、貼り付けるだけで元の日本語に戻します。</div>
+
+<div class="note">
+  <b>使い方</b><br>
+  1. 文字化けしたテキストを貼り付ける<br>
+  2. 「自動修復」を押すと、考えられる変換パターンをスコアの高い順に表示<br>
+  3. 一番上（推奨）が正しければそれをコピー。違う場合は他の候補や②の手動指定を試す
+</div>
+
+<div class="card">
+  <div class="sec-title">① 文字化けしたテキスト</div>
+  <div class="field">
+    <textarea id="input" placeholder="ここに文字化けしたセリフを貼り付け"></textarea>
+  </div>
+  <button class="btn btn-p" onclick="autoFix()">自動修復（候補を表示）</button>
+  <div style="text-align:center;margin-top:10px">
+    <button class="link-btn" onclick="loadSample()">見本の文字化けを試す</button>
+  </div>
+</div>
+
+<div class="card" id="results-card" style="display:none">
+  <div class="sec-title">修復候補（スコアの高い順）</div>
+  <div id="results"></div>
+</div>
+
+<div class="card">
+  <div class="sec-title">② 手動で変換パターンを指定</div>
+  <div class="row2">
+    <div class="field">
+      <label>誤って読まれたエンコーディング</label>
+      <select id="manual-from"></select>
+    </div>
+    <div class="field">
+      <label>本来の正しいエンコーディング</label>
+      <select id="manual-to"></select>
+    </div>
+  </div>
+  <button class="btn btn-g" onclick="manualFix()">この設定で変換する</button>
+  <div class="field" style="margin-top:10px">
+    <label>変換結果</label>
+    <textarea id="manual-output" readonly placeholder="変換結果がここに表示されます"></textarea>
+  </div>
+  <button class="btn btn-p" onclick="copyText('manual-output', 'manual-copy-msg')">結果をコピー</button>
+  <div class="copy-msg" id="manual-copy-msg">コピーしました</div>
+</div>
+
+<div class="note warn">
+  <b>復元できないケースについて</b><br>
+  文字化けが起きた時点で一部のバイトが失われている場合、その文字だけは元に戻せません（結果に「�」が残ります）。これはツールの不具合ではなく、文字化けという現象自体が持つ限界です。
+</div>
+
+<script>
+function buildDoubleByteTable(leadRanges, trailRanges, label){
+  const map = new Map();
+  const dec = new TextDecoder(label, {fatal:false});
+  for (let b=0; b<=0xFF; b++){
+    const out = dec.decode(new Uint8Array([b]));
+    if (out.length===1 && out.codePointAt(0)!==0xFFFD && !map.has(out)) map.set(out,[b]);
+  }
+  for (const [lo,hi] of leadRanges){
+    for (let lead=lo; lead<=hi; lead++){
+      for (const [tlo,thi] of trailRanges){
+        for (let trail=tlo; trail<=thi; trail++){
+          const out = dec.decode(new Uint8Array([lead,trail]));
+          if (out.length===1 && out.codePointAt(0)!==0xFFFD && !map.has(out)) map.set(out,[lead,trail]);
+        }
+      }
+    }
+  }
+  return map;
+}
+
+const sjisTable = buildDoubleByteTable([[0x81,0x9F],[0xE0,0xFC]], [[0x40,0x7E],[0x80,0xFC]], 'shift_jis');
+const eucjpTable = buildDoubleByteTable([[0x8E,0x8E],[0xA1,0xFE]], [[0xA1,0xDF],[0xA1,0xFE]], 'euc-jp');
+
+function charToBytesTable(table){
+  return ch => {
+    const cp = ch.codePointAt(0);
+    if (cp < 0x80) return [cp];
+    return table.get(ch) || null;
+  };
+}
+function charToBytesUtf8(ch){ return Array.from(new TextEncoder().encode(ch)); }
+function charToBytesLatin1(ch){ const cp = ch.codePointAt(0); return cp <= 0xFF ? [cp] : null; }
+
+function encodeSegmented(str, charToBytes){
+  const segments = []; let cur = []; let lossCount = 0;
+  for (const ch of str){
+    const b = charToBytes(ch);
+    if (b === null){
+      if (cur.length){ segments.push(cur); cur = []; }
+      segments.push(null);
+      lossCount++;
+      continue;
+    }
+    for (const x of b) cur.push(x);
+  }
+  if (cur.length) segments.push(cur);
+  return { segments, lossCount };
+}
+
+function decodeSegments(segments, targetLabel){
+  const dec = new TextDecoder(targetLabel, {fatal:false});
+  let out = '';
+  for (const seg of segments) out += seg === null ? '�' : dec.decode(new Uint8Array(seg));
+  return out;
+}
+
+const MISREAD_ENCODINGS = [
+  { id:'utf8',   label:'UTF-8',              charToBytes: charToBytesUtf8 },
+  { id:'sjis',   label:'Shift_JIS',          charToBytes: charToBytesTable(sjisTable) },
+  { id:'eucjp',  label:'EUC-JP',              charToBytes: charToBytesTable(eucjpTable) },
+  { id:'latin1', label:'Latin1 (ISO-8859-1)', charToBytes: charToBytesLatin1 },
+];
+const TARGET_ENCODINGS = [
+  { id:'utf8',      label:'UTF-8',        decoderLabel:'utf-8' },
+  { id:'sjis',      label:'Shift_JIS',    decoderLabel:'shift_jis' },
+  { id:'eucjp',     label:'EUC-JP',       decoderLabel:'euc-jp' },
+  { id:'iso2022jp', label:'ISO-2022-JP',  decoderLabel:'iso-2022-jp' },
+];
+
+function fixWith(str, misread, target){
+  const { segments, lossCount } = encodeSegmented(str, misread.charToBytes);
+  const text = decodeSegments(segments, target.decoderLabel);
+  return { text, lossCount };
+}
+
+function scoreText(s){
+  let hira = 0, kata = 0, kanji = 0, fffd = 0, pua = 0, ctrl = 0, punct = 0, total = 0;
+  for (const ch of s){
+    const cp = ch.codePointAt(0);
+    total++;
+    if (cp === 0xFFFD) { fffd++; continue; }
+    if (cp >= 0x3040 && cp <= 0x309F) { hira++; continue; }
+    if (cp >= 0x30A0 && cp <= 0x30FF) { kata++; continue; }
+    if (cp >= 0x4E00 && cp <= 0x9FFF) { kanji++; continue; }
+    if ('、。！？「」『』…ー～　.,!?'.includes(ch)) { punct++; continue; }
+    if (cp < 0x20 && ch !== '\n' && ch !== '\r' && ch !== '\t') { ctrl++; continue; }
+    if (cp >= 0xE000 && cp <= 0xF8FF) { pua++; continue; }
+  }
+  if (total === 0) return -999;
+  // Hiragana ratio is the strongest signal: real Japanese sentences are always
+  // mixed with kana (particles, verb endings). Kanji-only "kanji soup" is a
+  // classic false positive of naive Unicode-range scoring, so kanji alone is
+  // only lightly rewarded while hiragana/katakana/punctuation are weighted heavily.
+  let score = hira * 5 + kata * 2 + kanji * 1 + punct * 3;
+  score -= fffd * 10 + pua * 8 + ctrl * 6;
+  if (hira / total > 0.12) score += 30;
+  if (kanji > 0 && hira === 0 && kata === 0) score -= 40;
+  // A literal match of a common Japanese word is a much stronger signal than
+  // character-range statistics alone (garbled "kanji soup" rarely spells a
+  // real word by chance), so it gets checked and weighted heavily.
+  for (const word of COMMON_JP_WORDS){
+    let idx = 0, count = 0;
+    while ((idx = s.indexOf(word, idx)) !== -1){ count++; idx += word.length; }
+    score += count * 15;
+  }
+  return score;
+}
+const COMMON_JP_WORDS = ['です','ます','した','ない','から','まで','より','これ','それ','あれ','この',
+  'その','あの','という','ですね','ました','でしょう','ください','けれど','しかし','そして','だから',
+  'なので','ありがとう','すみません','おはよう','こんにちは','わたし','あなた','お前'];
+
+function generateCandidates(input){
+  const candidates = [];
+  candidates.push({ label:'変換なし（元のまま）', text: input, lossCount: 0, score: scoreText(input) });
+  for (const misread of MISREAD_ENCODINGS){
+    for (const target of TARGET_ENCODINGS){
+      if (misread.id === target.id) continue;
+      const { text, lossCount } = fixWith(input, misread, target);
+      candidates.push({
+        label: misread.label + ' として誤読 → ' + target.label + ' で復元',
+        text, lossCount,
+        score: scoreText(text),
+      });
+    }
+  }
+  candidates.sort((a,b) => b.score - a.score);
+  return candidates;
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function autoFix(){
+  const input = document.getElementById('input').value;
+  const card = document.getElementById('results-card');
+  const container = document.getElementById('results');
+  if (!input.trim()){
+    card.style.display = 'block';
+    container.innerHTML = '<div class="empty">テキストを入力してください</div>';
+    return;
+  }
+  const candidates = generateCandidates(input).slice(0, 6);
+  card.style.display = 'block';
+  container.innerHTML = candidates.map((c, i) => {
+    const isBest = i === 0;
+    const id = 'cand-' + i;
+    return '<div class="item' + (isBest ? ' best' : '') + '">' +
+      '<div class="item-head">' +
+        '<span class="item-label">' + escapeHtml(c.label) + '</span>' +
+        (isBest ? '<span class="badge">推奨</span>' : '') +
+      '</div>' +
+      '<div class="item-text" id="' + id + '">' + escapeHtml(c.text) + '</div>' +
+      '<div class="item-foot">' +
+        (c.lossCount > 0 ? '<span class="loss">復元できない文字: ' + c.lossCount + '</span>' : '<span></span>') +
+        '<button class="btn btn-g btn-sm" onclick="copyPlain(' + JSON.stringify(c.text) + ', this)">コピー</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function loadSample(){
+  const sample = 'これはテストです。マンガのセリフ。';
+  const bytes = new TextEncoder().encode(sample);
+  const garbled = new TextDecoder('shift_jis', {fatal:false}).decode(bytes);
+  document.getElementById('input').value = garbled;
+  autoFix();
+}
+
+function copyPlain(text, btn){
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta);
+  };
+  const done = () => {
+    const orig = btn.textContent;
+    btn.textContent = 'コピー済み';
+    setTimeout(() => { btn.textContent = orig; }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(() => { fallback(); done(); });
+  } else {
+    fallback(); done();
+  }
+}
+
+function copyText(elId, msgId){
+  const el = document.getElementById(elId);
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = el.value; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e){}
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(el.value).catch(fallback);
+  } else {
+    fallback();
+  }
+  const msg = document.getElementById(msgId);
+  msg.style.display = 'block';
+  setTimeout(() => { msg.style.display = 'none'; }, 1500);
+}
+
+function populateSelects(){
+  const fromSel = document.getElementById('manual-from');
+  const toSel = document.getElementById('manual-to');
+  fromSel.innerHTML = MISREAD_ENCODINGS.map(m => '<option value="' + m.id + '">' + m.label + '</option>').join('');
+  toSel.innerHTML = TARGET_ENCODINGS.map(t => '<option value="' + t.id + '">' + t.label + '</option>').join('');
+  fromSel.value = 'utf8';
+  toSel.value = 'sjis';
+}
+
+function manualFix(){
+  const input = document.getElementById('input').value;
+  const fromId = document.getElementById('manual-from').value;
+  const toId = document.getElementById('manual-to').value;
+  const misread = MISREAD_ENCODINGS.find(m => m.id === fromId);
+  const target = TARGET_ENCODINGS.find(t => t.id === toId);
+  const out = document.getElementById('manual-output');
+  if (!input.trim()){ out.value = ''; return; }
+  const { text, lossCount } = fixWith(input, misread, target);
+  out.value = text + (lossCount > 0 ? '\n\n[復元できない文字: ' + lossCount + ']' : '');
+}
+
+populateSelects();
+</script>
+</body>
+</html>
