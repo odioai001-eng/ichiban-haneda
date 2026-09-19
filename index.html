@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-100 -->
+<!-- v20260902-101 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -598,6 +598,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <label>車両番号</label><input type="text" id="s-car" placeholder="例: 品川 501 あ 1234">
     <label>ナンバープレート</label><input type="text" id="s-plate" inputmode="numeric" placeholder="例: 1234">
     <button class="btn btn-p" onclick="saveSettings()" style="width:100%">保存する</button>
+  </div>
+  <div class="sec">📤 仲間との送り先の再同期</div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">通信状況等により、この端末に記録した送り先が仲間の画面にまだ届いていない場合があります。心当たりがある場合は、以下から再送できます（既に届いている記録は重複して送信されません）。</div>
+    <button class="btn btn-g" onclick="resendUnsyncedDestsToFirebase()" style="width:100%">🔄 未送信の送り先を再送する</button>
   </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
@@ -1227,7 +1232,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-100';
+const APP_BUILD='20260902-101';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6807,6 +6812,42 @@ function pushDestToFirebase(entry,retryCount){
       if(v&&(v.ts||0)<cutoff)child.ref.remove();
     });
   }).catch(err=>{console.error('team_dests cleanup read failed',err);});
+}
+
+// 過去のFirebase送信不具合（isDuty依存・エラー未検知）により、この端末に
+// 記録済みなのにFirebase側に一度も届いていない可能性がある「送り先」を、
+// まとめて再送するための手動復旧ツール。syncedフラグ（team_destsの
+// リスナーで一度でも存在が確認できた記録に付く。PR #192参照）が付いて
+// いない記録だけを対象にし、送信直前にもう一度Firebase側を確認すること
+// で、既に届いている記録を重複して作らないようにする
+async function resendUnsyncedDestsToFirebase(){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  if(testMode){toast('🧪 テストモード中は使用できません');return;}
+  const targets=destinations.filter(d=>(d.type==='trip'||d.type==='cp')&&!d.synced);
+  if(!targets.length){alert('未送信と思われる記録は見つかりませんでした。');return;}
+  if(!confirm(`${targets.length}件の記録を、仲間と共有するデータベースへ再送します。よろしいですか？`))return;
+  toast(`🔄 ${targets.length}件を確認・再送しています...`);
+  const driverName=localStorage.getItem('taxi_name')||'自分';
+  let sentCount=0,skippedCount=0,failCount=0;
+  for(const d of targets){
+    try{
+      const snap=await db.ref('team_dests/'+myId).orderByChild('ts').equalTo(d.ts).once('value');
+      if(snap.exists()){
+        d.synced=true; // 既にFirebase側に存在していたので、対象から外す
+        skippedCount++;
+        continue;
+      }
+      const {synced,...payload}=d;
+      await db.ref('team_dests/'+myId).push({...payload,driverName,driverId:myId});
+      d.synced=true;
+      sentCount++;
+    }catch(e){
+      console.error('resendUnsyncedDestsToFirebase: failed for ts='+d.ts,e);
+      failCount++;
+    }
+  }
+  saveDests();
+  alert(`再送結果\n\n新たに送信: ${sentCount}件\n既に届いていた: ${skippedCount}件\n失敗: ${failCount}件`);
 }
 
 function renderCPs(){
