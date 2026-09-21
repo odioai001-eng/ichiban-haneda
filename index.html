@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-104 -->
+<!-- v20260902-105 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1241,7 +1241,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-104';
+const APP_BUILD='20260902-105';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2297,6 +2297,10 @@ function toggleLayerBar(){
 }
 
 let gpsLastUpdate=0,gpsStaleTimer=null,gpsRetryTimer=null,gpsWeakHeartbeat=null;
+// GPS監視を開始/再開した時刻。開始直後はGPSチップがまだ安定しておらず、実際の
+// 位置とずれた読み取りが続くことがあるため、乗り場からの退場確定（自動実車化・
+// 出発通知）をこの時刻から一定時間だけ抑制するのに使う（SPOT_DEPARTURE_MIN_GPS_AGE_MS参照）
+let gpsStartTs=0;
 let gpsPermissionDeniedNotified=false;
 // 他アプリ・他サイトから復帰した直後の1回だけ、初回GPSフィックスと同じ「見逃し出発」
 // 捕捉ロジック（checkGeofences内）を適用するためのフラグ
@@ -2368,6 +2372,7 @@ function startGPS(){
   // 「状態の同期のみ」モードを適用する
   pendingCatchUpCheck=true;
   gpsCatchUpUntil=Date.now()+GPS_SETTLE_GRACE_MS;
+  gpsStartTs=Date.now();
   document.getElementById('gps-dot').classList.add('on');
   document.getElementById('gps-txt').textContent='GPS取得中...';
   _attachGPSWatch();
@@ -4629,6 +4634,14 @@ function getDepartureConfirmMs(cp){
   if(cp&&spotLabelFromCheckpointName(cp.name))return 60000;
   return DEPARTURE_CONFIRM_MS;
 }
+// 乗り場（1〜4号・国際線）は、乗せてすぐ出発する動きに合わせて退場確定までの
+// 待ち時間を短く（30〜60秒）設定しているが、そのぶんGPS監視を開始した直後
+// （アプリを乗り場付近で開いた直後を含む）のまだ不安定な読み取りだけで、
+// 実際にはまだそこにいるのに「出発した」と誤って確定してしまいやすい
+// （自動実車化・出発の自動チャット通知が誤って発生する原因になっていた）。
+// GPS監視の開始からこの時間が経つまでは、乗り場からの退場確定を保留する
+// （実車ボタンを手動で押す操作自体には一切影響しない）
+const SPOT_DEPARTURE_MIN_GPS_AGE_MS=45000;
 let pendingDepartureTimer={};
 // チェックポイントに「実際に何時何分から」いるかを時刻(ms)で記録し、localStorageにも
 // 書き残しておく。国内線プール出発後にアプリを開き直すことが多く、その際は
@@ -4784,9 +4797,14 @@ function checkGeofences(lat,lng,isFirstFix,accuracy){
       saveCpArriveTs();
       onArrival(cp,Math.round(dist));
     } else {
-      // 退場は即確定せず、一定時間（通常90秒、1〜4号乗り場は10秒、国際線第3プールは60秒）後も
+      // 退場は即確定せず、一定時間（通常30秒、1〜4号乗り場は30秒、国際線プール系は60秒）後も
       // 実際に半径+余裕分の外側のままなら確定する
       // （一瞬だけ外れた「通過」や、境界線上でのGPSのブレによる誤作動を無視する）
+      // 乗り場は確定までの待ち時間が特に短いため、GPS監視を開始した直後（読み取りが
+      // まだ不安定になりやすい期間）は退場確定そのものを保留する。実際にはまだ
+      // そこにいる場合、その後の読み取りでcpInsideがtrueに戻れば上の「内側に戻った
+      // 場合」の分岐で確認待ちがキャンセルされるため、安全に見送れる
+      if(spotLabelFromCheckpointName(cp.name)&&(now-gpsStartTs)<SPOT_DEPARTURE_MIN_GPS_AGE_MS)return;
       if(pendingDepartureTimer[cp.id])return;
       pendingDepartureTimer[cp.id]=setTimeout(()=>{
         delete pendingDepartureTimer[cp.id];
