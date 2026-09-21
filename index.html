@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-103 -->
+<!-- v20260902-104 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1241,7 +1241,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-103';
+const APP_BUILD='20260902-104';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3108,6 +3108,11 @@ let boardInfo=null;          // 実車時の乗車情報
 // 待機時間を確定させず、実際にGPSで退場が確定した時点でboardInfo.waitMinsを
 // 正しい時間に補正するための、補正待ちの情報（対象チェックポイントID・待機開始時刻）
 let pendingWaitCorrection=null;
+// 実車ボタンを、まだ乗り場エリア内にいる状態で押した場合、チャットへの
+// 「出発しました」自動通知も、押した瞬間ではなく実際にGPSで退場が確定した
+// 時刻を使って送りたい。押した時点ではまだ送らず、このオブジェクトに
+// 通知内容だけ保持しておき、onDeparture側で確定時刻を使って送信する
+let pendingDepartureChatNotif=null;
 let manualWaitStartTime=null; // 待機開始ボタンを押した時刻
 let manualWaitAddr=null;      // 待機開始した場所の住所
 let spotChangeHistory=[];     // 今回の待機中に乗り場を変更した履歴 [{spot,ts}]
@@ -3417,17 +3422,25 @@ function setStatus(s){
     spotChangeHistory=[];
     // 曜日・時間帯別の待機時間統計に記録する（月末リセットの対象外で累計し続ける）
     recordSpotWaitStat(boardSpot,waitMins,Date.now());
-    // 羽田空港の乗り場から出発する場合、仲間に自動でチャット通知する
+    // 羽田空港の乗り場から出発する場合、仲間に自動でチャット通知する。
+    // 実車ボタンを、まだ乗り場エリア内にいる状態で押した場合（pendingWaitCorrection
+    // と同じ条件）は、押した瞬間はまだ実際の出発時刻ではないため、ここでは送らず、
+    // 実際にGPSで退場が確定した時刻（onDeparture）まで待ってから送る
     if(boardSpot&&db&&isDuty&&!testMode){
-      const name=localStorage.getItem('taxi_name')||'自分';
-      const wm=(waitMins&&waitMins>0)?waitMins:0;
-      const wh=Math.floor(wm/60),wmm=wm%60;
-      const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
-      const spotPhrase=boardSpot==='国際線'?'羽田空港国際線乗り場':`${boardSpot}乗り場`;
-      db.ref('chat').push({uid:myId,name,
-        text:`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,
-        time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true})
-        .catch(err=>console.error('chat auto push failed',err));
+      const stillInsideAtBoard=!!(departureWatchCp&&cpInside[departureWatchCp.id]);
+      if(stillInsideAtBoard){
+        pendingDepartureChatNotif={cpId:departureWatchCp.id,boardSpot};
+      }else{
+        const name=localStorage.getItem('taxi_name')||'自分';
+        const wm=(waitMins&&waitMins>0)?waitMins:0;
+        const wh=Math.floor(wm/60),wmm=wm%60;
+        const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
+        const spotPhrase=boardSpot==='国際線'?'羽田空港国際線乗り場':`${boardSpot}乗り場`;
+        db.ref('chat').push({uid:myId,name,
+          text:`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,
+          time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true})
+          .catch(err=>console.error('chat auto push failed',err));
+      }
     }
     // 国際線乗り場からの出発（実車ボタン・押し忘れ検知のいずれも）は、本人にも通知する
     if(boardSpot==='国際線'){
@@ -4826,6 +4839,26 @@ function onDeparture(cp){
       if(correctedMins>0)boardInfo.waitMins=correctedMins;
     }
     pendingWaitCorrection=null;
+  }
+  // 実車ボタンを押した時点ではまだ乗り場エリア内にいたため送信を保留していた
+  // チャットへの「出発しました」自動通知を、実際にGPSで退場が確定した今この
+  // 時刻（正確には確定までの待ち時間分だけ少し前）を使って送る
+  if(pendingDepartureChatNotif&&pendingDepartureChatNotif.cpId===cp.id){
+    const info=pendingDepartureChatNotif;
+    pendingDepartureChatNotif=null;
+    if(db&&isDuty&&!testMode){
+      const confirmMs=getDepartureConfirmMs(cp);
+      const trueDepartureTs=Date.now()-confirmMs;
+      const name=localStorage.getItem('taxi_name')||'自分';
+      const wm=(boardInfo&&boardInfo.waitMins>0)?boardInfo.waitMins:0;
+      const wh=Math.floor(wm/60),wmm=wm%60;
+      const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
+      const spotPhrase=info.boardSpot==='国際線'?'羽田空港国際線乗り場':`${info.boardSpot}乗り場`;
+      db.ref('chat').push({uid:myId,name,
+        text:`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,
+        time:new Date(trueDepartureTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:trueDepartureTs,isAuto:true})
+        .catch(err=>console.error('chat auto push failed',err));
+    }
   }
   // 待機タイマー・号選択・列移動履歴の停止は実車ボタンを押した時だけと決めているため、
   // チェックポイントのGPS上の退場（一時的にエリアを外れただけの場合も含む）では
