@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-106 -->
+<!-- v20260902-107 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1241,7 +1241,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-106';
+const APP_BUILD='20260902-107';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3767,6 +3767,12 @@ function pushMyPosition(gpsWeak=false){
   }).catch(err=>console.error('drivers position update failed',err));
 }
 setInterval(()=>{if(isDuty)pushMyPosition();},5000);
+// 自分のマーカーの「〇号 〇分」バッジ（poolLabel）は、GPSの位置更新（updateMyMarker）が
+// 呼ばれた時にしか再描画されない。プール内で長時間停止していると、その間GPSの
+// フィックス自体があまり来ないブラウザ・端末があり、経過分数の表示が古いまま
+// 固まって見える・号を選んだ直後もしばらく反映されないことがあったため、GPSの
+// 更新頻度に関係なく一定間隔で必ずマーカーを再描画し、常に最新の状態を保つ
+setInterval(()=>{if(isDuty&&myLat!==null)updateMyMarker(myLat,myLng);},20000);
 // 仲間フォロー中の地図追従を、特定のイベント（Firebaseのchild_changed・自分のGPS更新）の
 // タイミングだけに頼らず、一定間隔で必ず最新位置に合わせ直すことで確実に効かせる
 // （非番中で自分のGPSが動いていない時にフォローしても、この仕組みだけで追従できる）
@@ -5053,6 +5059,11 @@ function selectSpot(spotName){
   saveAppState();
   renderSpotRow();
   syncPoolPanel();
+  // 「羽田空港 国内線プール」への到着時点ではまだ号が未選択のため、マーカーの
+  // 「〇号 〇分」バッジ（poolLabel）は表示されない。ここで号を選んだ直後も、
+  // 次のGPS位置更新（updateMyMarker）が来るまでバッジが反映されないままに
+  // なっていたため、選択した瞬間に即座に反映する
+  if(myLat!==null)updateMyMarker(myLat,myLng);
   toast('📍 '+currentSpotSelection+' を選択 — タイマー計測中');
 }
 
@@ -5158,6 +5169,11 @@ function startWaitAt(cp,spotName,dist,timeStr){
     // 直後（最大15秒間）にアプリが再読み込みされると待機タイマーの開始情報が
     // 保存されておらずリセットされたように見えていたため、開始直後に必ず保存する
     saveAppState();
+    // マーカーの「〇号 〇分」バッジ（poolLabel）は、GPSの位置更新（updateMyMarker）の
+    // タイミングでしか再描画されない。プール内で停止していると次のGPSフィックスまで
+    // 時間が空くことがあり、待機を開始した直後もバッジがしばらく（次の位置更新まで）
+    // 表示されないままになっていたため、ここで即座に反映する
+    if(myLat!==null)updateMyMarker(myLat,myLng);
   }
 }
 
