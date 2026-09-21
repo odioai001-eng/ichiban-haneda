@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-105 -->
+<!-- v20260902-106 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1241,7 +1241,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-105';
+const APP_BUILD='20260902-106';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4810,6 +4810,12 @@ function checkGeofences(lat,lng,isFirstFix,accuracy){
         delete pendingDepartureTimer[cp.id];
         if(myLat===null||myLng===null)return;
         if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M)){delete cpExitDetectedTs[cp.id];return;} // 境界付近だった（誤検知）
+        // 乗り場は、最終確定の時点でもGPSの精度が十分でない場合は確定させない
+        // （精度自体は良さそうに見えても実際の位置とずれる時間帯があり、SPOT_DEPARTURE_MIN_GPS_AGE_MSの
+        // 猶予時間だけでは足りないケースがあったため、時間だけでなく精度そのものも見る）。
+        // ここでは何もリセットせず、cpInsideもtrueのままにしておくことで、次に精度の良い
+        // フィックスが得られた時、checkGeofences側から改めて退場確定のやり直しが自然に働く
+        if(spotLabelFromCheckpointName(cp.name)&&typeof myAccuracy==='number'&&myAccuracy>SPOT_CP_MAX_ACCURACY_M){delete cpExitDetectedTs[cp.id];return;}
         cpLastTransitionTs[cp.id]=Date.now();
         cpInside[cp.id]=false;
         // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
