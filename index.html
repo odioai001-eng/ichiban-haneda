@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-113 -->
+<!-- v20260902-114 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1129,6 +1129,19 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div style="margin-bottom:16px">
    <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">高速代（円・ETC）※発生した場合のみ入力</div>
    <input id="fare-etc-input" type="number" inputmode="numeric" placeholder="0" value="0">
+   <label style="display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);margin-top:8px">
+     <input type="checkbox" id="fare-etc-diff-method-check" onchange="toggleFareEtcMethodInput()" style="width:16px;height:16px;flex-shrink:0">
+     ETCは運賃と別の支払い方法だった
+   </label>
+   <div id="fare-etc-method-wrap" style="display:none;margin-top:8px">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:5px">ETCの支払い方法をタップして選択</div>
+    <div id="fare-etc-method-btns" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+     <button type="button" class="fare-pay-btn" data-method="cash" onclick="selectFareEtcMethod('cash')" style="padding:8px 2px;font-size:12px">💴現金</button>
+     <button type="button" class="fare-pay-btn" data-method="credit" onclick="selectFareEtcMethod('credit')" style="padding:8px 2px;font-size:12px">💳カード</button>
+     <button type="button" class="fare-pay-btn" data-method="emoney" onclick="selectFareEtcMethod('emoney')" style="padding:8px 2px;font-size:12px">📱電子M</button>
+     <button type="button" class="fare-pay-btn" data-method="qr" onclick="selectFareEtcMethod('qr')" style="padding:8px 2px;font-size:12px">🔲QR</button>
+    </div>
+   </div>
   </div>
   <div style="margin-bottom:18px">
    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)">
@@ -1243,7 +1256,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-113';
+const APP_BUILD='20260902-114';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5843,6 +5856,12 @@ let pendingWelfareSheets=0;
 let fareSplitMode=false;
 let fareSplitEntries=[];
 
+// ETCは通常、運賃と同じ支払い方法でまとめて決済されるため、その場合は
+// 何も指定しなくてよい（trip.paymentMethodをそのまま使う）。稀に運賃は
+// クレジットだがETCだけ現金で別払い、といったケースのために、ETC専用の
+// 支払い方法を別途指定できるようにする
+let pendingEtcPaymentMethod=null;
+
 function showFareModal(tripTs){
  pendingFareTripTs=tripTs||null;
  document.getElementById('fare-input').value='';
@@ -5858,8 +5877,29 @@ function showFareModal(tripTs){
  document.getElementById('fare-split-toggle-btn').textContent='🔀 分割払いにする（2つの決済方法を使う）';
  renderFareSplitList();
  updateFarePaymentButtonsUI();
+ pendingEtcPaymentMethod=null;
+ document.getElementById('fare-etc-diff-method-check').checked=false;
+ document.getElementById('fare-etc-method-wrap').style.display='none';
+ updateFareEtcMethodButtonsUI();
  document.getElementById('fare-modal').style.display='flex';
  setTimeout(()=>document.getElementById('fare-input').focus(),200);
+}
+// ETC専用の支払い方法欄の表示/非表示。チェックを外した場合は指定を消し
+// （＝運賃と同じ支払い方法に戻す）、選択もリセットする
+function toggleFareEtcMethodInput(){
+ const checked=document.getElementById('fare-etc-diff-method-check').checked;
+ document.getElementById('fare-etc-method-wrap').style.display=checked?'block':'none';
+ if(!checked)pendingEtcPaymentMethod=null;
+ updateFareEtcMethodButtonsUI();
+}
+function selectFareEtcMethod(method){
+ pendingEtcPaymentMethod=(pendingEtcPaymentMethod===method)?null:method;
+ updateFareEtcMethodButtonsUI();
+}
+function updateFareEtcMethodButtonsUI(){
+ document.querySelectorAll('#fare-etc-method-btns .fare-pay-btn').forEach(btn=>{
+  btn.classList.toggle('selected',btn.dataset.method===pendingEtcPaymentMethod);
+ });
 }
 
 // 分割払いのON/OFF切り替え。ONにすると、運賃入力欄の金額を内訳金額欄の
@@ -5949,6 +5989,9 @@ function confirmFareModal(){
  const etc=parseInt(document.getElementById('fare-etc-input').value)||0;
  const discountChecked=document.getElementById('fare-discount-check').checked;
  const discount=discountChecked?(parseInt(document.getElementById('fare-discount-input').value)||0):0;
+ // ETC専用の支払い方法が指定されていればそれを使う。未指定（チェックなし・
+ // 方法未選択）なら運賃と同じ支払い方法として扱う（従来通りの挙動）
+ const etcPaymentMethod=(etc>0&&document.getElementById('fare-etc-diff-method-check').checked&&pendingEtcPaymentMethod)?pendingEtcPaymentMethod:null;
  if(fareSplitMode){
   if(fareSplitEntries.length<2){toast('⚠️ 分割する支払い方法を2つとも割り当ててください');return;}
   const used=fareSplitEntries.reduce((a,e)=>a+e.amount,0);
@@ -5956,21 +5999,21 @@ function confirmFareModal(){
   // taxi_fare_logには同じtripTsで2件（内訳ごと）を記録する。割引・ETCは
   // 二重集計を避けるため1件目にだけ乗せる
   fareSplitEntries.forEach((e,i)=>{
-   saveFareEntry(e.amount,0,pendingFareTripTs,e.method,i===0?discount:0,i===0?etc:0,e.method==='welfare'?e.welfareSheets:0);
+   saveFareEntry(e.amount,0,pendingFareTripTs,e.method,i===0?discount:0,i===0?etc:0,e.method==='welfare'?e.welfareSheets:0,i===0?etcPaymentMethod:null);
   });
-  attachFareToTrip(pendingFareTripTs,fare,0,null,etc,fareSplitEntries);
+  attachFareToTrip(pendingFareTripTs,fare,0,null,etc,fareSplitEntries,etcPaymentMethod);
   document.getElementById('fare-modal').style.display='none';
   return;
  }
  if(!selectedFarePaymentMethod){toast('⚠️ 支払い方法を選択してください');return;}
  const method=selectedFarePaymentMethod;
  const welfareSheets=method==='welfare'?pendingWelfareSheets:0;
- saveFareEntry(fare,0,pendingFareTripTs,method,discount,etc,welfareSheets);
- attachFareToTrip(pendingFareTripTs,fare,0,method,etc);
+ saveFareEntry(fare,0,pendingFareTripTs,method,discount,etc,welfareSheets,etcPaymentMethod);
+ attachFareToTrip(pendingFareTripTs,fare,0,method,etc,null,etcPaymentMethod);
  document.getElementById('fare-modal').style.display='none';
 }
 
-function attachFareToTrip(tripTs,fare,retryCount,paymentMethod,etc,splitPayments){
+function attachFareToTrip(tripTs,fare,retryCount,paymentMethod,etc,splitPayments,etcPaymentMethod){
  if(!tripTs)return;
  retryCount=retryCount||0;
  const idx=destinations.findIndex(d=>d.ts===tripTs);
@@ -5985,15 +6028,20 @@ function attachFareToTrip(tripTs,fare,retryCount,paymentMethod,etc,splitPayments
   // 確認する手段が無かった（運賃欄に高速代を混ぜて入力してしまうミスに気づけ
   // なかった）ため、ここでも保持するようにする
   if(etc)destinations[idx].etc=etc;
+  // ETCが運賃と別の支払い方法だった場合だけ記録する。未指定なら運賃と同じ
+  // 方法として扱う（既存のdestinationsとの後方互換のため、この場合はキーを
+  // 残さない）
+  if(etcPaymentMethod)destinations[idx].etcPaymentMethod=etcPaymentMethod;
+  else delete destinations[idx].etcPaymentMethod;
   saveDests();renderDests();
   if(db&&isRankingOptedIn()){
    db.ref('team_dests/'+myId).orderByChild('ts').equalTo(tripTs).once('value',snap=>{
-    snap.forEach(child=>child.ref.update({fare,paymentMethod:paymentMethod||null,etc:etc||null,splitPayments:splitPayments||null}));
+    snap.forEach(child=>child.ref.update({fare,paymentMethod:paymentMethod||null,etc:etc||null,splitPayments:splitPayments||null,etcPaymentMethod:etcPaymentMethod||null}));
    });
   }
  }else if(retryCount<8){
   // 住所取得の非同期処理がまだ終わっていない場合は少し待って再試行
-  setTimeout(()=>attachFareToTrip(tripTs,fare,retryCount+1,paymentMethod,etc,splitPayments),500);
+  setTimeout(()=>attachFareToTrip(tripTs,fare,retryCount+1,paymentMethod,etc,splitPayments,etcPaymentMethod),500);
  }
 }
 
@@ -6033,13 +6081,35 @@ async function editTripEtc(ts){
  if(val===null)return;
  const etc=parseInt(val)||0;
  destinations[idx].etc=etc>0?etc:undefined;
+ // ETCが運賃と別の支払い方法だった場合の修正用。空欄のままEnterすれば
+ // 運賃と同じ支払い方法のまま（既存の指定があればそれを維持）
+ let etcPaymentMethod=destinations[idx].etcPaymentMethod||null;
+ if(etc>0){
+  const cur2=etcPaymentMethod?paymentMethodLabel(etcPaymentMethod):'';
+  const methodInput=prompt('ETCの支払い方法（運賃と同じなら空欄のままOK）\n現金 / クレジット / 電子マネー / QR',cur2);
+  if(methodInput!==null){
+   const trimmed=methodInput.trim();
+   etcPaymentMethod=trimmed?labelToPaymentMethod(trimmed):null;
+  }
+ }else{
+  etcPaymentMethod=null;
+ }
+ if(etcPaymentMethod)destinations[idx].etcPaymentMethod=etcPaymentMethod;
+ else delete destinations[idx].etcPaymentMethod;
  saveDests();renderDests();
- syncFareLogEtcByTripTs(destinations[idx],etc);
+ syncFareLogEtcByTripTs(destinations[idx],etc,etcPaymentMethod);
  if(db&&isRankingOptedIn()){
   db.ref('team_dests/'+myId).orderByChild('ts').equalTo(ts).once('value',snap=>{
-   snap.forEach(child=>child.ref.update({etc:etc||null}));
+   snap.forEach(child=>child.ref.update({etc:etc||null,etcPaymentMethod:etcPaymentMethod||null}));
   });
  }
+}
+// 支払い方法の日本語ラベルから内部の方法キーへ変換する（paymentMethodLabelの逆引き）。
+// 一致しない・空欄の場合はnull（＝運賃と同じ支払い方法として扱う）
+function labelToPaymentMethod(label){
+ const map={'現金':'cash','クレジット':'credit','カード':'credit','クレカ':'credit',
+   '電子マネー':'emoney','電子M':'emoney','QR':'qr','ＱＲ':'qr','QRコード':'qr','QRコード決済':'qr'};
+ return map[label]||null;
 }
 
 async function editTripWait(ts){
@@ -6234,15 +6304,16 @@ function syncFareLogByTripTs(trip,fareOrNull){
 // タブ上は正しい金額に見えているのに、精算レポートの集計にはいつまでも
 // 反映されないという不具合になっていた。見つからない場合は、運賃0円・
 // この高速代だけの記録を新規に作成し、必ず集計に含まれるようにする
-function syncFareLogEtcByTripTs(trip,etc){
+function syncFareLogEtcByTripTs(trip,etc,etcPaymentMethod){
  const tripTs=trip&&trip.ts?trip.ts:trip; // 呼び出し元の互換のため、tripオブジェクト・ts数値のどちらも受け付ける
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const idx=log.findIndex(e=>e.tripTs===tripTs);
  if(idx>=0){
   log[idx].etc=etc||0;
+  log[idx].etcPaymentMethod=etcPaymentMethod||null;
  }else{
   const dateStr=new Date(tripTs).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
-  log.push({dateStr,fare:0,toll:0,ts:tripTs,tripTs,paymentMethod:null,discount:0,etc:etc||0});
+  log.push({dateStr,fare:0,toll:0,ts:tripTs,tripTs,paymentMethod:null,discount:0,etc:etc||0,etcPaymentMethod:etcPaymentMethod||null});
  }
  localStorage.setItem('taxi_fare_log',JSON.stringify(log));
  toast('✅ 高速代を更新しました');
@@ -6267,13 +6338,13 @@ function skipFareModal(){
 // 一切書き込まないことで、テストの記録が実データに混ざらないようにする。
 // 退勤時の精算レポート（buildSettlementRecord）だけは、テスト中はこちらを参照する
 let testFareLog=[];
-function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc,welfareSheets){
+function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc,welfareSheets,etcPaymentMethod){
  const now=new Date();
  const entry={
   dateStr:now.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
   fare,toll,ts:now.getTime(),tripTs:tripTs||null,
   paymentMethod:paymentMethod||null,discount:discount||0,etc:etc||0,
-  welfareSheets:welfareSheets||0
+  welfareSheets:welfareSheets||0,etcPaymentMethod:etcPaymentMethod||null
  };
  if(testMode){
   testFareLog.push(entry);
@@ -6305,8 +6376,16 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   // ETCが運賃と同じ決済方法（クレジット・電子マネー・QR等）でまとめて決済された回は、
   // 紙の納金票ではその決済方法の欄に運賃＋ETCがそのまま（手数料を引かずに）計上されて
   // いることが実データ（9/21分、全トリップ内訳と紙の日報を1件ずつ突き合わせて確認）で
-  // 判明したため、各決済方法の集計にはETCも含める
-  const sumByMethod=m=>shiftFares.filter(e=>e.paymentMethod===m).reduce((a,e)=>a+(e.fare||0)+(e.etc||0),0);
+  // 判明したため、各決済方法の集計にはETCも含める。ETCが運賃と別の支払い方法だった
+  // 場合（etcPaymentMethod指定あり）は、運賃とは別にその方法の集計に含める
+  const sumByMethod=m=>{
+    let total=0;
+    shiftFares.forEach(e=>{
+      if(e.paymentMethod===m)total+=(e.fare||0);
+      if(e.etc&&(e.etcPaymentMethod||e.paymentMethod)===m)total+=e.etc;
+    });
+    return total;
+  };
   // クレジットカードのカード会社手数料（×0.96545）は、ETCが運賃と同じカードで
   // まとめて決済された回では紙の金額と合わなくなる（手数料を引かない生の金額が
   // 紙と一致する）ことが同じ確認で判明したため、適用をやめる
@@ -6319,7 +6398,7 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   // 別に集計し、レポートには「チケット○枚　福祉券○枚」と両方表示する
   const welfareEntries=shiftFares.filter(e=>e.paymentMethod==='welfare');
   const welfareCount=welfareEntries.reduce((a,e)=>a+(e.welfareSheets||0),0);
-  const ticket=ticketEntries.reduce((a,e)=>a+(e.fare||0)+(e.etc||0),0)+welfareEntries.reduce((a,e)=>a+(e.fare||0)+(e.etc||0),0);
+  const ticket=sumByMethod('ticket')+sumByMethod('welfare');
   const qr=sumByMethod('qr');
   const fuel=Array.isArray(fuelEntriesArg)?fuelEntriesArg:[];
   const highway=Array.isArray(highwayEntriesArg)?highwayEntriesArg:[];
@@ -6432,7 +6511,8 @@ function showSettlementTripDetail(){
   const lines=shiftFares.map((e,i)=>{
     const method=e.paymentMethod?paymentMethodLabel(e.paymentMethod):'未設定';
     const welfare=e.paymentMethod==='welfare'?`（${e.welfareSheets||0}枚）`:'';
-    const etcStr=e.etc?`　ETC¥${e.etc.toLocaleString()}`:'';
+    const etcMethodStr=(e.etc&&e.etcPaymentMethod)?`(${paymentMethodLabel(e.etcPaymentMethod)})`:'';
+    const etcStr=e.etc?`　ETC¥${e.etc.toLocaleString()}${etcMethodStr}`:'';
     const discStr=e.discount?`　割引¥${e.discount.toLocaleString()}`:'';
     return `${i+1}. ${fmtT(e.ts)}　¥${(e.fare||0).toLocaleString()}　${method}${welfare}${etcStr}${discStr}`;
   });
@@ -6482,10 +6562,11 @@ function resyncFareLogFromDestinations(shiftStartTs,shiftEndTs){
       if(d.fare&&log[idx].fare!==d.fare){log[idx].fare=d.fare;changed=true;rowChanged=true;}
       if(d.etc&&log[idx].etc!==d.etc){log[idx].etc=d.etc;changed=true;rowChanged=true;}
       if(d.paymentMethod&&log[idx].paymentMethod!==d.paymentMethod){log[idx].paymentMethod=d.paymentMethod;changed=true;rowChanged=true;}
+      if((d.etcPaymentMethod||null)!==(log[idx].etcPaymentMethod||null)){log[idx].etcPaymentMethod=d.etcPaymentMethod||null;changed=true;rowChanged=true;}
       if(rowChanged)updatedCount++;
     }else if(d.fare){
       const dateStr=new Date(d.ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
-      log.push({dateStr,fare:d.fare,toll:0,ts:d.ts,tripTs:d.ts,paymentMethod:d.paymentMethod||null,discount:0,etc:d.etc||0});
+      log.push({dateStr,fare:d.fare,toll:0,ts:d.ts,tripTs:d.ts,paymentMethod:d.paymentMethod||null,discount:0,etc:d.etc||0,etcPaymentMethod:d.etcPaymentMethod||null});
       changed=true;createdCount++;
     }
   });
@@ -7102,9 +7183,23 @@ function pushDestToFirebase(entry,retryCount){
 async function resendUnsyncedDestsToFirebase(){
   if(!db){toast('⚠️ Firebase未接続');return;}
   if(testMode){toast('🧪 テストモード中は使用できません');return;}
-  const targets=destinations.filter(d=>(d.type==='trip'||d.type==='cp')&&!d.synced);
-  if(!targets.length){alert('未送信と思われる記録は見つかりませんでした。');return;}
-  if(!confirm(`${targets.length}件の記録を、仲間と共有するデータベースへ再送します。よろしいですか？`))return;
+  const allTargets=destinations.filter(d=>(d.type==='trip'||d.type==='cp')&&!d.synced);
+  if(!allTargets.length){alert('未送信と思われる記録は見つかりませんでした。');return;}
+  // 「仲間の送り先」一覧（renderTeamDests）・通常送信時の自動掃除（pushDestToFirebase）
+  // のいずれも、前月1日より古い記録は対象外（表示されない・自動削除される）にしている。
+  // 古い記録をここで送信しても、一覧には表示されず、次に通常の送り先を記録した時に
+  // 掃除処理でまた削除されてしまい、「再送したのに反映されない」ように見えるだけの
+  // 無駄な通信になるため、対象から除外し、件数を分けて案内する
+  const _now=new Date();
+  const cutoff=new Date(_now.getFullYear(),_now.getMonth()-1,1).getTime();
+  const targets=allTargets.filter(d=>(d.ts||0)>=cutoff);
+  const tooOldCount=allTargets.length-targets.length;
+  if(!targets.length){
+    alert(`未送信の記録が${allTargets.length}件見つかりましたが、すべて先月より古いため送信を見送りました。\n（古い記録は仲間の送り先一覧に表示されない仕様のため、送信しても意味がありません）`);
+    return;
+  }
+  const oldNote=tooOldCount>0?`\n（うち${tooOldCount}件は先月より古いため対象外にしました）`:'';
+  if(!confirm(`${targets.length}件の記録を、仲間と共有するデータベースへ再送します。よろしいですか？${oldNote}`))return;
   toast(`🔄 ${targets.length}件を確認・再送しています...`);
   const driverName=localStorage.getItem('taxi_name')||'自分';
   let sentCount=0,skippedCount=0,failCount=0;
@@ -7126,7 +7221,8 @@ async function resendUnsyncedDestsToFirebase(){
     }
   }
   saveDests();
-  alert(`再送結果\n\n新たに送信: ${sentCount}件\n既に届いていた: ${skippedCount}件\n失敗: ${failCount}件`);
+  alert(`再送結果\n\n新たに送信: ${sentCount}件\n既に届いていた: ${skippedCount}件\n失敗: ${failCount}件`+
+    (tooOldCount>0?`\n対象外（先月より古い）: ${tooOldCount}件`:''));
 }
 
 // 「未送信の送り先を再送する」は、ローカルのsyncedフラグ（一度でもFirebase側に
@@ -7662,7 +7758,7 @@ function buildDestEntryHtml(d,numMap){
         <button onclick="deleteTripFare(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer">削除</button>
       </div>${d.splitPayments&&d.splitPayments.length?`<div style="margin-top:2px;margin-left:2px;font-size:11px;color:var(--muted)">　└ ${d.splitPayments.map(e=>`${paymentMethodLabel(e.method)}¥${e.amount.toLocaleString()}`).join('　+　')}</div>`:''}`:''}
       ${d.etc?`<div style="margin-top:3px;display:flex;align-items:center;gap:8px">
-        <div style="flex:1;font-size:12px;font-weight:700;color:var(--cyan)">🛣️ ETC ¥${d.etc.toLocaleString()}</div>
+        <div style="flex:1;font-size:12px;font-weight:700;color:var(--cyan)">🛣️ ETC ¥${d.etc.toLocaleString()}${d.etcPaymentMethod?` <span style="font-size:11px;font-weight:700;color:var(--muted)">（${paymentMethodLabel(d.etcPaymentMethod)}）</span>`:''}</div>
         <button onclick="editTripEtc(${d.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer">編集</button>
       </div>`:''}
     </div>`;
