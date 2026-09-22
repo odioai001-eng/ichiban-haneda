@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-116 -->
+<!-- v20260902-117 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -602,7 +602,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">通信状況等により、この端末に記録した送り先が仲間の画面にまだ届いていない場合があります。心当たりがある場合は、以下から再送できます（既に届いている記録は重複して送信されません）。</div>
     <button class="btn btn-g" onclick="resendUnsyncedDestsToFirebase()" style="width:100%;margin-bottom:8px">🔄 未送信の送り先を再送する</button>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">「未送信無し」と出るのに仲間の画面に表示されない場合は、こちらでこの端末の記録が実際にFirebase上にあるか直接確認できます。</div>
-    <button class="btn btn-g" onclick="checkMyTeamDestsSync()" style="width:100%">🔍 自分の送り先が届いているか確認する</button>
+    <button class="btn btn-g" onclick="checkMyTeamDestsSync()" style="width:100%;margin-bottom:8px">🔍 自分の送り先が届いているか確認する</button>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">運賃は記録されているのに、送り先タブに該当のトリップ自体が表示されない場合は、こちらで運賃記録から送り先カードを復元できます（乗車・降車地点は「不明」のまま作成され、後から編集できます）。</div>
+    <button class="btn btn-g" onclick="recoverOrphanedFareLogTrips()" style="width:100%">🩹 運賃記録から送り先カードを復元する</button>
   </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
@@ -1256,7 +1258,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-116';
+const APP_BUILD='20260902-117';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -7265,6 +7267,48 @@ async function checkMyTeamDestsSync(){
     `\n\n${lines.join('\n')}${missing.length>30?`\n…他${missing.length-30}件`:''}\n\n`+
     `Firebase上の合計: ${fbEntries.length}件\n\n`+
     (missingButMarkedSynced.length?'「送信済み」表示のものは「未送信の送り先を再送する」の対象外になるため、削除してから登録し直す等の対応が必要です。':'「未送信の送り先を再送する」で再送できます。'));
+}
+
+// 運賃記録（taxi_fare_log）は運賃入力の時点で必ず保存されるが、対応する
+// 送り先カード（destinations、乗車地・降車地の情報を持つ）は、何らかの理由
+// （記録時にGPSが一時的に取得できなかった、Firebase側で記録が消えたことに
+// 連動してローカルの同期処理が誤って削除した等）で失われることがある。この
+// 場合、精算の合計金額には運賃が反映されているのに、送り先タブには該当の
+// トリップが一切表示されない（カードごと存在しない）という状態になる。
+// tripTsを手がかりに、対応する送り先カードが見つからない運賃記録を探し、
+// 乗車・降車地点は「不明」のまま最小限のカードとして復元する（住所・時刻は
+// 既存の編集ボタンから後で埋められる）
+async function recoverOrphanedFareLogTrips(){
+  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  const orphans=log.filter(e=>e.tripTs&&!destinations.find(d=>d.ts===e.tripTs));
+  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  if(!orphans.length){
+    alert('運賃記録（taxi_fare_log）は、すべて対応する送り先カードが見つかりました。復元が必要な記録はありませんでした。');
+    return;
+  }
+  const lines=orphans.map(e=>`・${fmt(e.tripTs)}　¥${(e.fare||0).toLocaleString()}${e.paymentMethod?'（'+paymentMethodLabel(e.paymentMethod)+'）':''}`);
+  if(!confirm(`送り先カードが見つからない運賃記録が${orphans.length}件あります。\n\n${lines.join('\n')}\n\n乗車・降車地点は「不明」のまま送り先タブに復元しますか？（後から住所・時刻を編集できます）`))return;
+  orphans.forEach(e=>{
+    const ts=e.tripTs;
+    const timeStr=new Date(ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    const dateStr=e.dateStr||new Date(ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+    const entry={
+      type:'trip',
+      boardTime:'不明',boardAddr:'不明',boardSpot:null,
+      alightTime:timeStr,alightAddr:'不明',
+      waitMins:null,waitAddr:null,
+      dateStr,ts,
+      fare:e.fare||0,paymentMethod:e.paymentMethod||null,
+      recovered:true
+    };
+    if(e.etc)entry.etc=e.etc;
+    if(e.etcPaymentMethod)entry.etcPaymentMethod=e.etcPaymentMethod;
+    destinations.push(entry);
+    pushDestToFirebase(entry);
+  });
+  destinations.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  saveDests();renderDests();
+  toast(`✅ ${orphans.length}件の送り先カードを復元しました`);
 }
 
 function renderCPs(){
