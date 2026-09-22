@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-107 -->
+<!-- v20260902-108 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1241,7 +1241,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-107';
+const APP_BUILD='20260902-108';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6262,11 +6262,15 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   const revenueAfterDiscount=shiftFares.reduce((a,e)=>a+(e.fare||0),0);
   const discountTotal=shiftFares.reduce((a,e)=>a+(e.discount||0),0);
   const revenueBeforeDiscount=revenueAfterDiscount+discountTotal;
-  const sumByMethod=m=>shiftFares.filter(e=>e.paymentMethod===m).reduce((a,e)=>a+(e.fare||0),0);
-  // クレジットカード決済は、カード会社の手数料が差し引かれた金額しか
-  // 実際には入金されないため、運賃の合計額に0.96545を掛けた金額を
-  // クレジット欄として扱う（差引合計・納金額の計算にもこの金額を使う）
-  const credit=Math.round(sumByMethod('credit')*0.96545);
+  // ETCが運賃と同じ決済方法（クレジット・電子マネー・QR等）でまとめて決済された回は、
+  // 紙の納金票ではその決済方法の欄に運賃＋ETCがそのまま（手数料を引かずに）計上されて
+  // いることが実データ（9/21分、全トリップ内訳と紙の日報を1件ずつ突き合わせて確認）で
+  // 判明したため、各決済方法の集計にはETCも含める
+  const sumByMethod=m=>shiftFares.filter(e=>e.paymentMethod===m).reduce((a,e)=>a+(e.fare||0)+(e.etc||0),0);
+  // クレジットカードのカード会社手数料（×0.96545）は、ETCが運賃と同じカードで
+  // まとめて決済された回では紙の金額と合わなくなる（手数料を引かない生の金額が
+  // 紙と一致する）ことが同じ確認で判明したため、適用をやめる
+  const credit=sumByMethod('credit');
   const emoney=sumByMethod('emoney');
   const ticketEntries=shiftFares.filter(e=>e.paymentMethod==='ticket');
   const ticketCount=ticketEntries.length;
@@ -6275,7 +6279,7 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   // 別に集計し、レポートには「チケット○枚　福祉券○枚」と両方表示する
   const welfareEntries=shiftFares.filter(e=>e.paymentMethod==='welfare');
   const welfareCount=welfareEntries.reduce((a,e)=>a+(e.welfareSheets||0),0);
-  const ticket=ticketEntries.reduce((a,e)=>a+(e.fare||0),0)+welfareEntries.reduce((a,e)=>a+(e.fare||0),0);
+  const ticket=ticketEntries.reduce((a,e)=>a+(e.fare||0)+(e.etc||0),0)+welfareEntries.reduce((a,e)=>a+(e.fare||0)+(e.etc||0),0);
   const qr=sumByMethod('qr');
   const fuel=Array.isArray(fuelEntriesArg)?fuelEntriesArg:[];
   const highway=Array.isArray(highwayEntriesArg)?highwayEntriesArg:[];
@@ -6283,9 +6287,13 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   const fuelTotal=fuel.reduce((a,e)=>a+(e.amount||0),0);
   const highwayTotal=highway.reduce((a,e)=>a+(e.amount||0),0);
   const jibaraHighwayTotal=jibaraHighway.reduce((a,e)=>a+(e.amount||0),0);
-  // ETC（高速代）＝運賃記録時に入力した高速代の合計 ＋ 自腹高速（戻ってこない高速代）の合計。
-  // 自腹高速は無料高速と違って差引合計から引くのではなく、ETCに加算する扱いにする
-  const etc=shiftFares.reduce((a,e)=>a+(e.etc||0),0)+jibaraHighwayTotal;
+  // ETC（高速代）欄＝運賃記録時に入力した高速代の合計（上の各決済方法の欄にも
+  // 既に含まれている金額と同じもの。紙の納金票もこの金額を差引合計の計算に
+  // 加算しているため、それに合わせる）。自腹高速（空車中に自分で立て替えた
+  // 高速代）は、紙の納金票のETC欄には含まれておらず、加算すると紙より差引合計が
+  // 多くなってしまうことが実データで確認できたため、加算しない
+  // （自腹高速の金額自体は引き続き別枠で記録・表示する）
+  const etc=shiftFares.reduce((a,e)=>a+(e.etc||0),0);
   return {
     dateStr:new Date(shiftStartTs).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
     shiftStartTs,shiftEndTs,
@@ -6351,8 +6359,8 @@ function showSettlementReport(record,onClose){
   document.getElementById('settlement-report-modal').style.display='flex';
 }
 // ETC欄の金額の内訳を、保存されている生の数値のまま表示する診断機能。
-// 無料高速はETC（高速代）に含まれていない別枠の記録のため、ETC欄の計算
-// には一切関与しない（差し引かない）。参考情報として金額だけ表示する
+// 無料高速・自腹高速はいずれもETC（高速代）欄の計算には一切関与しない
+// （差し引かない・加算しない）。参考情報として金額だけ表示する
 function showSettlementEtcDetail(){
   const record=currentSettlementRecord;
   if(!record){toast('⚠️ レポートが開かれていません');return;}
@@ -6360,11 +6368,12 @@ function showSettlementEtcDetail(){
   const highway=record.highwayTotal||0;
   const jibara=record.jibaraHighwayTotal||0;
   const msg=`ETC内訳\n\n`+
-    `ETC欄の表示額（各トリップのETC入力の合計＋自腹高速）: ${fmtYen(etcRaw)}\n`+
-    `　うち自腹高速: ${fmtYen(jibara)}\n\n`+
+    `ETC欄の表示額（各トリップのETC入力の合計。決済方法欄にも同じ金額が\n`+
+    `含まれています）: ${fmtYen(etcRaw)}\n\n`+
     `（参考）無料高速の合計: ${fmtYen(highway)}\n`+
-    `※無料高速はETC（高速代）に含まれていないため、ETC欄の金額には\n`+
-    `　反映されません。`;
+    `（参考）自腹高速の合計: ${fmtYen(jibara)}\n`+
+    `※無料高速・自腹高速はいずれもETC（高速代）欄には含まれていないため、\n`+
+    `　ETC欄の金額には反映されません。`;
   alert(msg);
 }
 // クレジット・QR等の欄の金額が紙の納金票と合わない場合、電卓での手計算では
