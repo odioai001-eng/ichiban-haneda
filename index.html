@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-120 -->
+<!-- v20260902-122 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1263,7 +1263,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-120';
+const APP_BUILD='20260902-122';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2340,12 +2340,16 @@ let pendingCatchUpCheck=false;
 // 「状態を静かに同期するだけで出発・到着イベントは発火しない」扱いを継続する
 const GPS_SETTLE_GRACE_MS=15000;
 let gpsCatchUpUntil=0;
-// バックグラウンド復帰・弱電波再接続の「捕捉モード」が最後に始まった時刻。
-// 捕捉モードの読み取りは通常の出発判定ロジックに乗せるようにしたが（見逃し
-// 出発の取りこぼし対策）、GPS再接続直後は依然として不安定な値が返ることが
-// あるため、SPOT_DEPARTURE_MIN_GPS_AGE_MSと同じ猶予時間を、捕捉モード開始
-// からも独立して適用し、再接続直後の誤った1回の読み取りによる見せかけの
-// 出発確定を防ぐ
+// バックグラウンド復帰（visibilitychangeで検知）の「捕捉モード」が最後に
+// 始まった時刻。捕捉モードの読み取りは通常の出発判定ロジックに乗せるように
+// したが（見逃し出発の取りこぼし対策）、GPS再接続直後は依然として不安定な
+// 値が返ることがあるため、SPOT_DEPARTURE_MIN_GPS_AGE_MSと同じ猶予時間を、
+// 捕捉モード開始からも独立して適用し、再接続直後の誤った1回の読み取りに
+// よる見せかけの出発確定を防ぐ。
+// 【注意】10秒おきに繰り返しチェックされる「弱電波再接続」（gpsStaleTimer）
+// では、この値を更新しない。乗り場で待機中にGPSの更新がしばらく途切れがちな
+// 状況が続くと、この値が更新され続けて45秒の猶予がいつまでも終わらなくなり、
+// 実車ボタンの押し忘れ検知が実質的に働かなくなってしまうため
 let gpsCatchUpStartTs=0;
 // 画面が非表示になった時刻。短時間の切り替えでは復帰時のGPS再取得・出発捕捉を
 // 行わないようにするための基準にする
@@ -2423,10 +2427,17 @@ function startGPS(){
         gpsWeakHeartbeat=setInterval(()=>{if(isDuty&&myLat!==null)pushMyPosition(true);},5000);
       }
       // 20秒も更新が止まっていた間に、乗り場を出ていたのを見逃している可能性があるため、
-      // 再接続後の最初の1回はリロード直後と同じ捕捉ロジックを適用する
+      // 再接続後の最初の1回はリロード直後と同じ捕捉ロジックを適用する。
+      // ただしgpsCatchUpStartTs（退場確定を保留する45秒の起点）はここでは更新しない。
+      // この弱電波チェックは10秒おきに繰り返し走るため、乗り場で待機中にGPSの
+      // 更新がしばらく途切れがちな状況（電波の弱い場所での待機等、珍しくない）が
+      // 続くと、更新が来ないたびにgpsCatchUpStartTsが延長され続け、45秒の猶予が
+      // いつまで経っても終わらず、実車ボタンの押し忘れ検知が実質的に働かなく
+      // なってしまっていた。バックグラウンド復帰（visibilitychange）は明確に
+      // 一度きりの出来事のため引き続きgpsCatchUpStartTsを更新するが、この
+      // 繰り返し発生しうる弱電波チェックでは更新しない
       pendingCatchUpCheck=true;
       gpsCatchUpUntil=Date.now()+GPS_SETTLE_GRACE_MS;
-      gpsCatchUpStartTs=Date.now();
       _restartGPS();
     }
   },10000);
