@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-109 -->
+<!-- v20260902-111 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1243,7 +1243,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-109';
+const APP_BUILD='20260902-111';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3670,6 +3670,58 @@ function connectFirebase(config){
     // 'value'リスナー（team_dests/{driverId}）へ分割し、1人分の記録が更新
     // されても、その人の分だけを受信・再パースすれば済むようにする
     const teamDestDriverRefs={};
+    // 自分のローカルデータ（destinations）とFirebase（teamDests[myId]）の
+    // 同期処理を切り出したもの。万が一端末側に壊れた形式のデータが紛れ込んで
+    // いた場合でも例外を投げないようtry/catchで囲む。ここで例外が発生して
+    // 呼び出し元のrenderTeamDests()まで実行されなくなると、自分のローカル
+    // 同期の問題のせいで「仲間の送り先」の表示まで（再起動しても直らない
+    // まま）巻き添えで止まってしまうため
+    function syncOwnDestinationsFromFirebase(){
+      try{
+        const ownEntries=Object.values(teamDests[myId]||{});
+        const fbTsSet=new Set(ownEntries.map(e=>e.ts).filter(Boolean));
+        let changed=false;
+        ownEntries.forEach(e=>{
+          if(e.ts&&!destinations.find(d=>d.ts===e.ts)){
+            destinations.push(e);
+            changed=true;
+          }
+        });
+        // Firebase側で削除された記録（管理者による削除・月末リセット等）を、
+        // ローカルからも除去する。以前は「作成から15秒以上経過していて、かつ
+        // Firebase側に見当たらない」ことだけを条件にしていたが、電波状況や
+        // isDutyのタイミングのずれでFirebaseへのpush（送信）自体がまだ完了・
+        // 反映されていないだけの記録まで「削除された」と誤判定し、待機/送り先
+        // リストから記録ごと消えてしまう不具合があった。Firebase側に一度でも
+        // 存在が確認できた（synced済みの）記録が、その後Firebase側から
+        // 無くなった場合だけを「本当に削除された」とみなして除去するようにし、
+        // まだ送信・反映が済んでいないだけの記録は年数が経っていても消さない
+        destinations.forEach(d=>{
+          if((d.type==='trip'||d.type==='cp')&&fbTsSet.has(d.ts))d.synced=true;
+        });
+        const before=destinations.length;
+        destinations=destinations.filter(d=>{
+          if(d.type!=='trip'&&d.type!=='cp')return true;
+          if(!d.synced)return true;
+          return fbTsSet.has(d.ts);
+        });
+        if(destinations.length!==before)changed=true;
+        if(changed){
+          destinations.sort((a,b)=>(b.ts||0)-(a.ts||0));
+          saveDests();
+        }
+      }catch(syncErr){
+        console.error('team_dests local sync error',syncErr);
+      }
+    }
+    // team_dests全体をルートで1本の'value'リスナーとして購読すると、
+    // 誰か1人が1件記録するたびに「その時点の仲間全員分の全期間の記録」を
+    // まるごと再送・再パースすることになる。仲間の人数・記録件数が増えるほど
+    // この1回分のデータが大きくなり、特定の端末・回線状況によっては受信が
+    // 不安定になり、以後ずっと（再起動しても）その端末のteam_destsだけ更新が
+    // 止まったように見える不具合の原因になり得た。ドライバーごとに個別の
+    // 'value'リスナー（team_dests/{driverId}）へ分割し、1人分の記録が更新
+    // されても、その人の分だけを受信・再パースすれば済むようにする
     function attachTeamDestDriverListener(driverId){
       if(teamDestDriverRefs[driverId])return;
       const ref=db.ref('team_dests/'+driverId);
@@ -3677,50 +3729,7 @@ function connectFirebase(config){
       ref.on('value',driverSnap=>{
         teamDests[driverId]=driverSnap.val()||{};
         teamDestsLoaded=true;
-        if(driverId===myId){
-          // 自分のローカルデータ（destinations）とFirebaseの同期処理は、万が一
-          // 端末側に壊れた形式のデータが紛れ込んでいた場合でも例外を投げないよう
-          // try/catchで囲む。ここで例外が発生して後段のrenderTeamDests()まで
-          // 実行されなくなると、自分のローカル同期の問題のせいで「仲間の送り先」
-          // の表示まで（再起動しても直らないまま）巻き添えで止まってしまうため
-          try{
-            // 自分の送先もFirebaseから同期（追加）
-            const ownEntries=Object.values(teamDests[myId]||{});
-            const fbTsSet=new Set(ownEntries.map(e=>e.ts).filter(Boolean));
-            let changed=false;
-            ownEntries.forEach(e=>{
-              if(e.ts&&!destinations.find(d=>d.ts===e.ts)){
-                destinations.push(e);
-                changed=true;
-              }
-            });
-            // Firebase側で削除された記録（管理者による削除・月末リセット等）を、
-            // ローカルからも除去する。以前は「作成から15秒以上経過していて、かつ
-            // Firebase側に見当たらない」ことだけを条件にしていたが、電波状況や
-            // isDutyのタイミングのずれでFirebaseへのpush（送信）自体がまだ完了・
-            // 反映されていないだけの記録まで「削除された」と誤判定し、待機/送り先
-            // リストから記録ごと消えてしまう不具合があった。Firebase側に一度でも
-            // 存在が確認できた（synced済みの）記録が、その後Firebase側から
-            // 無くなった場合だけを「本当に削除された」とみなして除去するようにし、
-            // まだ送信・反映が済んでいないだけの記録は年数が経っていても消さない
-            destinations.forEach(d=>{
-              if((d.type==='trip'||d.type==='cp')&&fbTsSet.has(d.ts))d.synced=true;
-            });
-            const before=destinations.length;
-            destinations=destinations.filter(d=>{
-              if(d.type!=='trip'&&d.type!=='cp')return true;
-              if(!d.synced)return true;
-              return fbTsSet.has(d.ts);
-            });
-            if(destinations.length!==before)changed=true;
-            if(changed){
-              destinations.sort((a,b)=>(b.ts||0)-(a.ts||0));
-              saveDests();
-            }
-          }catch(syncErr){
-            console.error('team_dests local sync error',syncErr);
-          }
-        }
+        if(driverId===myId)syncOwnDestinationsFromFirebase();
         try{renderDests();}catch(e){console.error('renderDests error',e);}
         try{renderTeamDests();}catch(e){console.error('renderTeamDests error',e);}
       });
@@ -3742,6 +3751,35 @@ function connectFirebase(config){
       teamDestsLoaded=true;
       try{renderTeamDests();}catch(e){console.error('renderTeamDests error',e);}
     });
+    // 上のドライバーごとのリアルタイムリスナーは、通常であれば誰かが記録を
+    // 追加・再送した瞬間に即座に反映されるはずだが、特定の端末・回線状況では
+    // リスナーが（原因を特定できないまま）反応しなくなることがあり、「送信は
+    // できているはずなのに仲間の画面にいつまでも反映されない」という報告が
+    // 繰り返しあった。リアルタイムのリスナーだけに頼らず、一定間隔で必ず
+    // team_dests全体を読み直して状態を作り直す安全網を設けることで、個々の
+    // リスナーが万が一止まっていても、遅くともこの間隔内には必ず最新の状態に
+    // 復旧するようにする
+    setInterval(()=>{
+      if(!db)return;
+      db.ref('team_dests').once('value').then(snap=>{
+        const all=snap.val()||{};
+        Object.keys(teamDestDriverRefs).forEach(driverId=>{
+          if(!(driverId in all)){
+            teamDestDriverRefs[driverId].off('value');
+            delete teamDestDriverRefs[driverId];
+            delete teamDests[driverId];
+          }
+        });
+        Object.keys(all).forEach(driverId=>{
+          teamDests[driverId]=all[driverId]||{};
+          attachTeamDestDriverListener(driverId); // 既に張られていれば何もしない
+        });
+        teamDestsLoaded=true;
+        if(myId in all)syncOwnDestinationsFromFirebase();
+        try{renderDests();}catch(e){console.error('renderDests error',e);}
+        try{renderTeamDests();}catch(e){console.error('renderTeamDests error',e);}
+      }).catch(err=>console.error('team_dests full resync failed',err));
+    },30000);
   }catch(e){toast('⚠️ Firebase: '+e.message);console.error(e);}
 }
 
