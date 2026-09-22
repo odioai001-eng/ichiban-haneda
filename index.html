@@ -2153,9 +2153,12 @@ function gpsAgeDot(ageSec){
 // 1〜4号乗り場自体はプール全体の円より外側まで広がっていることがあり、
 // 実車になる前に円の外に出ただけでラベルが消えてしまっていた。実車に
 // なるまで表示し続けたいので、位置による判定はやめ、号選択・待機タイマーの
-// 状態だけで判定する
+// 状態だけで判定する。
+// 以前は「1〜4号」しか判定しておらず、国際線乗り場で待機中は常にこの表示が
+// 出ない状態が長く続いていた（restoreAppStateのcurrentSpotSelection復元と
+// 同じ「[1-4]号|国際線」のパターンに合わせて修正）
 function domesticPoolLabel(waitSpotText,waitSinceTs){
-  const m=(waitSpotText||'').match(/([1-4]号)/);
+  const m=(waitSpotText||'').match(/([1-4]号|国際線)/);
   if(!m||!waitSinceTs)return null;
   const mins=Math.max(0,Math.floor((Date.now()-waitSinceTs)/60000));
   return {spot:m[1],mins};
@@ -9032,7 +9035,7 @@ function debugPoolBadge(){
     `waitInterval: ${waitInterval?'動作中':'null（待機タイマー停止中）'}`,
     `waitStart: ${fmt(waitStart)}`,
     `wait-spot-lbl の表示テキスト: "${waitSpotText}"`,
-    `　→「1〜4号」を含むか: ${/[1-4]号/.test(waitSpotText)?'はい':'いいえ'}`,
+    `　→「1〜4号・国際線」を含むか: ${/[1-4]号|国際線/.test(waitSpotText)?'はい':'いいえ'}`,
     ``,
     `【参考: 羽田プール(haneda)の状態】`,
     `cpInside['haneda']: ${cpInside['haneda']}`,
