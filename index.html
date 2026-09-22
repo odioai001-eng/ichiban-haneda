@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-117 -->
+<!-- v20260902-118 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1258,7 +1258,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-117';
+const APP_BUILD='20260902-118';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2425,7 +2425,12 @@ function _attachGPSWatch(){
     // 次の（まともな）フィックスを待つ。isFirstFix・pendingCatchUpCheck等の
     // 状態はここでは変更せず、実際に採用されたフィックスが来た時のために残しておく
     if(!shouldAcceptGpsFix(fixLat,fixLng,pos.coords.accuracy,gpsLastUpdate))return;
-    const isFirstFix=(myLat===null)||pendingCatchUpCheck||Date.now()<gpsCatchUpUntil;
+    // 本当にアプリを起動してから一度もフィックスを得ていない「真の初回」と、
+    // バックグラウンド復帰・弱電波再接続後の「捕捉モード」は、checkGeofences内での
+    // 扱いを分ける（isColdStart参照）。プール到着ポップアップの表示判定など、
+    // 捕捉モードでも「初回相当」として扱いたい箇所のためisFirstFixも残す
+    const isColdStart=(myLat===null);
+    const isFirstFix=isColdStart||pendingCatchUpCheck||Date.now()<gpsCatchUpUntil;
     pendingCatchUpCheck=false;
     myLat=fixLat; myLng=fixLng;
     myAccuracy=typeof pos.coords.accuracy==='number'?pos.coords.accuracy:null;
@@ -2444,7 +2449,14 @@ function _attachGPSWatch(){
       if(pd&&pd.lat&&pd.lng)panMapTo(()=>leafletMap.setView([Number(pd.lat),Number(pd.lng)],leafletMap.getZoom()));
     }
     pushMyPosition(false);
-    checkGeofences(myLat,myLng,isFirstFix,myAccuracy);
+    // ここは「真の初回（isColdStart）」だけを渡す。バックグラウンド復帰・弱電波
+    // 再接続後の捕捉モードの読み取りも同じように出発・到着イベントを抑制して
+    // しまうと、運転中に画面をロックしたまま乗り場を出発した場合等、復帰した
+    // 瞬間の読み取りで在圏状態だけが黙って書き換わり、出発イベント自体が
+    // 二度と発火しなくなる（実車ボタンの押し忘れ検知が永久に働かなくなる）
+    // 不具合があった。捕捉モードの読み取りは、既存の精度フィルター・デバウンス・
+    // 退場確定の待ち時間で十分に誤検知を防げるため、通常の判定ロジックに乗せる
+    checkGeofences(myLat,myLng,isColdStart,myAccuracy);
     // GPS初回フィックス時：プール内なら列選択モーダルを表示（表示可否はshowPoolLaneModal内で判定）
     if(isFirstFix){
       const cp=checkpoints.find(c=>c.id==='haneda');
@@ -4792,7 +4804,7 @@ function findIntlPoolCp(poolNum){
 // しまうことがあり、乗り場と同様に「的確に通知されない」不具合の原因になっていた
 // ため、半径に応じた緩めの基準（maxAcceptableAccuracyM）で同様にフィルタする
 const SPOT_CP_MAX_ACCURACY_M=50;
-function checkGeofences(lat,lng,isFirstFix,accuracy){
+function checkGeofences(lat,lng,isColdStart,accuracy){
   const now=Date.now();
   checkpoints.forEach(cp=>{
     if(!cp.enabled||cp.lat===null)return;
@@ -4809,18 +4821,19 @@ function checkGeofences(lat,lng,isFirstFix,accuracy){
     // ことで、内部状態が壊れていても必ずポップアップが出るようにする
     // （showPoolLaneModal自体が二重表示を防ぐため、繰り返し呼んでも安全）
     if(cp.id==='haneda'&&nowInside&&!cp.poolModalHandled)showPoolLaneModal();
-    // 再読み込み後のGPS初回フィックスでは、cpInsideがまだ空のため、実際にはずっと
-    // 滞在し続けていても「今初めて到着した」と誤検知してしまう。初回だけは
-    // 到着・出発イベントを発火させず、現在地から見た本当の在圏状況をそのまま記憶する
-    if(isFirstFix){
-      // アプリの再読み込み・他アプリからの復帰直後は、GPSの精度が一時的に
-      // 悪いことが多く、実際にはまだ乗り場にいるのに「圏外に出た」という
-      // 誤った読み取りが起きやすい。以前はこの1回の読み取りをもとに
-      // 「出発した」とみなして自動実車化していたが、復帰のたびに誤って
-      // 実車になってしまう不具合が繰り返し起きたため、この初回フィックスでは
-      // 出発判定を一切行わず、現在地から見た在圏状況をそのまま記憶するだけに留める。
-      // 本当に乗り場を出発していた場合は、この直後の通常のGPS監視
-      // （60秒間圏外が続いた時点で確定する既存のロジック）で確実に検知される
+    // アプリを起動してから一度もフィックスを得ていない「真の初回」では、cpInsideが
+    // まだ空のため、実際にはずっと滞在し続けていても「今初めて到着した」と誤検知
+    // してしまう。この場合だけは到着・出発イベントを発火させず、現在地から見た
+    // 本当の在圏状況をそのまま記憶する。
+    // 【重要】バックグラウンド復帰・弱電波再接続直後の「捕捉モード」の読み取りは、
+    // ここには含めない（isColdStartはtrueにならない）。以前はそれらも同じ扱い
+    // だったが、運転中に画面をロックしたまま乗り場を出発した場合等、復帰した
+    // 瞬間の読み取りでcpInsideだけが黙って書き換わってしまい、その後の通常の
+    // GPS監視では「既に圏外＝変化なし」と判定されて出発イベントが二度と発火せず、
+    // 実車ボタンの押し忘れ検知が永久に働かなくなる不具合があった。捕捉モードの
+    // 読み取りは、精度フィルター・デバウンス・退場確定の待ち時間という別の
+    // 誤検知対策が既にあるため、下の通常の判定ロジックに乗せて構わない
+    if(isColdStart){
       const wasInsideBeforeReload=cpInside[cp.id]||false;
       cpInside[cp.id]=nowInside;
       // 圏外から始まった場合、前回セッションで消し忘れた到着時刻が残っていれば掃除する。
