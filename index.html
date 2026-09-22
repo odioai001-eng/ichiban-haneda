@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-108 -->
+<!-- v20260902-109 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -602,7 +602,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="sec">📤 仲間との送り先の再同期</div>
   <div class="card">
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">通信状況等により、この端末に記録した送り先が仲間の画面にまだ届いていない場合があります。心当たりがある場合は、以下から再送できます（既に届いている記録は重複して送信されません）。</div>
-    <button class="btn btn-g" onclick="resendUnsyncedDestsToFirebase()" style="width:100%">🔄 未送信の送り先を再送する</button>
+    <button class="btn btn-g" onclick="resendUnsyncedDestsToFirebase()" style="width:100%;margin-bottom:8px">🔄 未送信の送り先を再送する</button>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">「未送信無し」と出るのに仲間の画面に表示されない場合は、こちらでこの端末の記録が実際にFirebase上にあるか直接確認できます。</div>
+    <button class="btn btn-g" onclick="checkMyTeamDestsSync()" style="width:100%">🔍 自分の送り先が届いているか確認する</button>
   </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
@@ -1241,7 +1243,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-108';
+const APP_BUILD='20260902-109';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -7087,6 +7089,43 @@ async function resendUnsyncedDestsToFirebase(){
   }
   saveDests();
   alert(`再送結果\n\n新たに送信: ${sentCount}件\n既に届いていた: ${skippedCount}件\n失敗: ${failCount}件`);
+}
+
+// 「未送信の送り先を再送する」は、ローカルのsyncedフラグ（一度でもFirebase側に
+// 存在を確認できた記録につく）を頼りに対象を絞り込んでいるため、そのフラグが
+// 一度trueになった後にFirebase側から記録が消えてしまった場合（何らかの理由での
+// 削除等）や、仲間側の受信・表示だけの問題である場合には気づけない。管理者専用の
+// team_dests確認ツール（adminCheckTeamDestsRange）とは別に、誰でも「今この瞬間、
+// 自分の送り先記録がFirebase上に実在するか」を直接確認できるようにし、送信側の
+// 問題なのか、それ以外（仲間側の受信・表示）の問題なのかを切り分けられるようにする
+async function checkMyTeamDestsSync(){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  if(testMode){toast('🧪 テストモード中は使用できません');return;}
+  toast('🔍 確認中...');
+  const localTargets=destinations.filter(d=>d.type==='trip'||d.type==='cp');
+  if(!localTargets.length){alert('この端末に送り先の記録がありません。');return;}
+  let snap;
+  try{
+    snap=await db.ref('team_dests/'+myId).once('value');
+  }catch(e){
+    alert('⚠️ 確認中にエラーが発生しました: '+e.message);
+    return;
+  }
+  const fbEntries=Object.values(snap.val()||{});
+  const fbTsSet=new Set(fbEntries.map(e=>e.ts).filter(Boolean));
+  const missing=localTargets.filter(d=>!fbTsSet.has(d.ts));
+  const missingButMarkedSynced=missing.filter(d=>d.synced);
+  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  if(!missing.length){
+    alert(`✅ この端末の送り先記録${localTargets.length}件は、すべてFirebase上に存在することを確認できました（Firebase上の合計: ${fbEntries.length}件）。\n\n送信側の問題ではないため、仲間の画面に表示されない場合は、仲間側の受信・表示の問題の可能性が高いです。`);
+    return;
+  }
+  const lines=missing.slice(0,30).map(d=>`・${fmt(d.ts)}${d.synced?'　※この端末では「送信済み」表示':''}`);
+  alert(`⚠️ Firebase上に見つからない記録が${missing.length}件あります`+
+    (missingButMarkedSynced.length?`（うち${missingButMarkedSynced.length}件は、この端末では既に「送信済み」の表示になっているのに実際には存在しません）`:'')+
+    `\n\n${lines.join('\n')}${missing.length>30?`\n…他${missing.length-30}件`:''}\n\n`+
+    `Firebase上の合計: ${fbEntries.length}件\n\n`+
+    (missingButMarkedSynced.length?'「送信済み」表示のものは「未送信の送り先を再送する」の対象外になるため、削除してから登録し直す等の対応が必要です。':'「未送信の送り先を再送する」で再送できます。'));
 }
 
 function renderCPs(){
