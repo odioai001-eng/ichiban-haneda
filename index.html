@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-115 -->
+<!-- v20260902-116 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1256,7 +1256,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-115';
+const APP_BUILD='20260902-116';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4687,7 +4687,7 @@ const DEPARTURE_CONFIRM_MS=30000; // 誤作動対策のため60秒→90秒に延
 // 乗り場は、エリアを出てから短時間で出発（実車化）を確定させる（お客様を乗せて
 // 出発する動きが早いため、出庫・納金事務所等の他のチェックポイントより短く設定）。
 // 以前は1〜4号乗り場30秒・国際線60秒だったが、GPS安定待ち（SPOT_DEPARTURE_MIN_GPS_AGE_MS）・
-// 退場確定時の精度チェック（maxDepartureConfirmAccuracyM）という誤作動対策を別途
+// 退場確定時の精度チェック（maxAcceptableAccuracyM）という誤作動対策を別途
 // 追加した上で、押し忘れ検知をより早く働かせたいという要望により全乗り場15秒に
 // 短縮した。以前10秒を試して誤作動が多かった経緯があるため、それより短くはしない
 function getDepartureConfirmMs(cp){
@@ -4702,12 +4702,13 @@ function getDepartureConfirmMs(cp){
 // GPS監視の開始からこの時間が経つまでは、乗り場からの退場確定を保留する
 // （実車ボタンを手動で押す操作自体には一切影響しない）
 const SPOT_DEPARTURE_MIN_GPS_AGE_MS=45000;
-// 退場を最終確定する時点で要求するGPS精度の上限（メートル）。半径が狭い乗り場
-// （1〜4号・国際線）は、SPOT_CP_MAX_ACCURACY_Mと同じ厳しめの基準を使う。半径が
-// 広いチェックポイント（羽田プール本体・出庫/納金事務所等）は、元々どの精度の
-// フィックスでも在圏判定に使ってきた経緯があり、同じ厳しさを要求すると精度が
-// 安定しにくい場所でいつまでも退場確定できなくなる恐れがあるため、緩めの基準にする
-function maxDepartureConfirmAccuracyM(cp){
+// このチェックポイントの在圏判定（読み取りの採用可否・退場の最終確定）に要求する
+// GPS精度の上限（メートル）。半径が狭い乗り場（1〜4号・国際線）は、SPOT_CP_MAX_ACCURACY_M
+// と同じ厳しめの基準を使う。半径が広いチェックポイント（羽田プール本体・
+// 出庫/納金事務所等）は、境界付近での誤判定リスクが元々低いぶん、同じ厳しさを
+// 要求すると精度が安定しにくい場所でいつまでも到着・退場を確定できなくなる
+// 恐れがあるため、緩めの基準にする
+function maxAcceptableAccuracyM(cp){
   return (cp&&spotLabelFromCheckpointName(cp.name))?SPOT_CP_MAX_ACCURACY_M:120;
 }
 let pendingDepartureTimer={};
@@ -4781,16 +4782,19 @@ function findIntlPoolCp(poolNum){
 }
 // 「1号乗り場」〜「4号乗り場」・国際線第3プールは、隣接する乗り場同士が近接した
 // 小さいジオフェンスのため、GPSの精度が悪いと実際にはエリアの外にいるのに中に
-// いる（またはその逆）と誤判定されやすい。このタイプのチェックポイントだけは、
-// 十分な精度（半径50m以内）のフィックスが得られている時だけ在圏判定に使う
-// （精度が悪いフィックスはこのチェックポイントの状態を一切更新せず、次のより
-// 良いフィックスを待つ）
+// いる（またはその逆）と誤判定されやすい。十分な精度（半径50m以内）のフィックスが
+// 得られている時だけ在圏判定に使う（精度が悪いフィックスはこのチェックポイントの
+// 状態を一切更新せず、次のより良いフィックスを待つ）。出庫事務所・納金事務所・
+// 羽田プール本体等の半径が広いチェックポイントも、精度を一切問わずに在圏判定へ
+// 使ってしまうと、極端に精度の悪いフィックス1回だけで到着・出発が誤って確定して
+// しまうことがあり、乗り場と同様に「的確に通知されない」不具合の原因になっていた
+// ため、半径に応じた緩めの基準（maxAcceptableAccuracyM）で同様にフィルタする
 const SPOT_CP_MAX_ACCURACY_M=50;
 function checkGeofences(lat,lng,isFirstFix,accuracy){
   const now=Date.now();
   checkpoints.forEach(cp=>{
     if(!cp.enabled||cp.lat===null)return;
-    if(spotLabelFromCheckpointName(cp.name)&&typeof accuracy==='number'&&accuracy>SPOT_CP_MAX_ACCURACY_M)return;
+    if(typeof accuracy==='number'&&accuracy>maxAcceptableAccuracyM(cp))return;
     const dist=haversine(lat,lng,cp.lat,cp.lng);
     const nowInside=isInsideCP(lat,lng,cp);
     // 号選択のポップアップは、通常はcpInsideの「圏外→圏内」の遷移を検知した瞬間
@@ -4886,7 +4890,7 @@ function checkGeofences(lat,lng,isFirstFix,accuracy){
         // 上のガードと同じ理由で、乗り場に限らず全チェックポイントに適用する）。
         // ここでは何もリセットせず、cpInsideもtrueのままにしておくことで、次に精度の良い
         // フィックスが得られた時、checkGeofences側から改めて退場確定のやり直しが自然に働く
-        if(typeof myAccuracy==='number'&&myAccuracy>maxDepartureConfirmAccuracyM(cp)){delete cpExitDetectedTs[cp.id];return;}
+        if(typeof myAccuracy==='number'&&myAccuracy>maxAcceptableAccuracyM(cp)){delete cpExitDetectedTs[cp.id];return;}
         cpLastTransitionTs[cp.id]=Date.now();
         cpInside[cp.id]=false;
         // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
