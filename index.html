@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-114 -->
+<!-- v20260902-115 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1256,7 +1256,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-114';
+const APP_BUILD='20260902-115';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4686,15 +4686,16 @@ const DEPARTURE_CONFIRM_BUFFER_M=25;
 const DEPARTURE_CONFIRM_MS=30000; // 誤作動対策のため60秒→90秒に延長していたが、実車を押してから退場確定までの待ち時間を短くするため30秒に変更
 // 乗り場は、エリアを出てから短時間で出発（実車化）を確定させる（お客様を乗せて
 // 出発する動きが早いため、出庫・納金事務所等の他のチェックポイントより短く設定）。
-// 1〜4号乗り場は特にノンストップで列が進みながら乗せることが多いため、
-// 国際線第3プールより短くしつつも、10秒だと誤作動が多かったため30秒とする
+// 以前は1〜4号乗り場30秒・国際線60秒だったが、GPS安定待ち（SPOT_DEPARTURE_MIN_GPS_AGE_MS）・
+// 退場確定時の精度チェック（maxDepartureConfirmAccuracyM）という誤作動対策を別途
+// 追加した上で、押し忘れ検知をより早く働かせたいという要望により全乗り場15秒に
+// 短縮した。以前10秒を試して誤作動が多かった経緯があるため、それより短くはしない
 function getDepartureConfirmMs(cp){
-  if(cp&&/^[1-4]号乗り場$/.test(cp.name||''))return 30000;
-  if(cp&&spotLabelFromCheckpointName(cp.name))return 60000;
+  if(cp&&spotLabelFromCheckpointName(cp.name))return 15000;
   return DEPARTURE_CONFIRM_MS;
 }
 // 乗り場（1〜4号・国際線）は、乗せてすぐ出発する動きに合わせて退場確定までの
-// 待ち時間を短く（30〜60秒）設定しているが、そのぶんGPS監視を開始した直後
+// 待ち時間を短く（15秒）設定しているが、そのぶんGPS監視を開始した直後
 // （アプリを乗り場付近で開いた直後を含む）のまだ不安定な読み取りだけで、
 // 実際にはまだそこにいるのに「出発した」と誤って確定してしまいやすい
 // （自動実車化・出発の自動チャット通知が誤って発生する原因になっていた）。
@@ -4864,10 +4865,10 @@ function checkGeofences(lat,lng,isFirstFix,accuracy){
       saveCpArriveTs();
       onArrival(cp,Math.round(dist));
     } else {
-      // 退場は即確定せず、一定時間（通常30秒、1〜4号乗り場は30秒、国際線プール系は60秒）後も
+      // 退場は即確定せず、一定時間（通常30秒、乗り場は15秒）後も
       // 実際に半径+余裕分の外側のままなら確定する
       // （一瞬だけ外れた「通過」や、境界線上でのGPSのブレによる誤作動を無視する）
-      // どのチェックポイントも確定までの待ち時間は30〜60秒と短いため、GPS監視を
+      // どのチェックポイントも確定までの待ち時間は15〜30秒と短いため、GPS監視を
       // 開始した直後（読み取りがまだ不安定になりやすい期間）は退場確定そのものを
       // 保留する。乗り場（1〜4号・国際線）に限らず、羽田プール本体（200m）等
       // 他のチェックポイントでも同じ理由で誤確定が起きうるため対象を絞らない。
