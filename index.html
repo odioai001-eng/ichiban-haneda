@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-128 -->
+<!-- v20260902-129 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1263,7 +1263,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-128';
+const APP_BUILD='20260902-129';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6508,18 +6508,21 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
     etc,uncollected:0 // 未収金は自動追跡していないため、レポート画面で手動入力する
   };
 }
-// レポートに表示する差引合計・納金額を、その場で（手入力のETC・未収金も
-// 反映して）算出する。保存済みのrecordはetc/uncollectedを直接書き換えて
+// ETC（高速代）欄に表示する金額（ご指定の計算式）:
+//   ETC欄表示額 = 全支払い方法の合計（各トリップのETC入力の合計。record.etc）
+//                 ＋ 自腹高速（jibaraHighwayTotal）− 無料高速（highwayTotal）
+function settlementEtcDisplay(record){
+  return (record.etc||0)+(record.jibaraHighwayTotal||0)-(record.highwayTotal||0);
+}
+// レポートに表示する差引合計・納金額を、その場で（手入力の未収金も
+// 反映して）算出する。保存済みのrecordはuncollectedを直接書き換えて
 // 呼び直すことで、後から見返した時も編集内容を保持できるようにする。
 // 計算式（ご指定の通り）:
-//   差引合計 = 税込営収(割引前) − (クレジット＋電子マネー＋チケット＋QRコード) ＋ ETC(高速代)
+//   差引合計 = 税込営収(割引前) − (クレジット＋電子マネー＋チケット＋QRコード) ＋ ETC欄表示額
 //   納金額   = 差引合計 − 未収金
-// 無料高速は、そもそもETC（高速代）に含まれていない別枠の記録のため、
-// 以前はここでETCから無料高速の金額を差し引いていたが、含まれていない
-// ものを引くのは誤りだったため差し引きをやめた
 function computeSettlementTotals(record){
   const electronicTotal=record.credit+record.emoney+record.ticket+record.qr;
-  const cashSettleTotal=record.revenueBeforeDiscount-electronicTotal+(record.etc||0);
+  const cashSettleTotal=record.revenueBeforeDiscount-electronicTotal+settlementEtcDisplay(record);
   const paymentAmount=cashSettleTotal-(record.uncollected||0);
   return {cashSettleTotal,paymentAmount};
 }
@@ -6552,16 +6555,14 @@ function showSettlementReport(record,onClose){
   document.getElementById('settlement-ticket-label').textContent=`チケット${record.ticketCount||0}枚　福祉券${record.welfareCount||0}枚`;
   document.getElementById('settlement-ticket').textContent=fmtYen(record.ticket);
   document.getElementById('settlement-qr').textContent=fmtYen(record.qr);
-  // 無料高速はそもそもETC（高速代）に含まれていない別枠の記録のため、
-  // ETC欄からは差し引かない（各トリップのETC入力の合計＋自腹高速のみ）
-  document.getElementById('settlement-etc').textContent=fmtYen(record.etc||0);
+  // ETC欄表示額 = 各トリップのETC入力の合計 ＋ 自腹高速 − 無料高速
+  document.getElementById('settlement-etc').textContent=fmtYen(settlementEtcDisplay(record));
   document.getElementById('settlement-uncollected-input').value=record.uncollected||0;
   updateSettlementTotalsDisplay(record);
   document.getElementById('settlement-report-modal').style.display='flex';
 }
 // ETC欄の金額の内訳を、保存されている生の数値のまま表示する診断機能。
-// 無料高速・自腹高速はいずれもETC（高速代）欄の計算には一切関与しない
-// （差し引かない・加算しない）。参考情報として金額だけ表示する
+// ETC欄表示額 = 各トリップのETC入力の合計 ＋ 自腹高速 − 無料高速
 function showSettlementEtcDetail(){
   const record=currentSettlementRecord;
   if(!record){toast('⚠️ レポートが開かれていません');return;}
@@ -6569,12 +6570,11 @@ function showSettlementEtcDetail(){
   const highway=record.highwayTotal||0;
   const jibara=record.jibaraHighwayTotal||0;
   const msg=`ETC内訳\n\n`+
-    `ETC欄の表示額（各トリップのETC入力の合計。決済方法欄にも同じ金額が\n`+
-    `含まれています）: ${fmtYen(etcRaw)}\n\n`+
-    `（参考）無料高速の合計: ${fmtYen(highway)}\n`+
-    `（参考）自腹高速の合計: ${fmtYen(jibara)}\n`+
-    `※無料高速・自腹高速はいずれもETC（高速代）欄には含まれていないため、\n`+
-    `　ETC欄の金額には反映されません。`;
+    `各トリップのETC入力の合計（決済方法欄にも同じ金額が含まれています）: ${fmtYen(etcRaw)}\n`+
+    `＋ 自腹高速の合計: ${fmtYen(jibara)}\n`+
+    `－ 無料高速の合計: ${fmtYen(highway)}\n`+
+    `－－－－－－－－－－\n`+
+    `ETC欄の表示額: ${fmtYen(settlementEtcDisplay(record))}`;
   alert(msg);
 }
 // クレジット・QR等の欄の金額が紙の納金票と合わない場合、電卓での手計算では
@@ -6668,7 +6668,7 @@ function recomputeSettlementFromFareLog(){
   }
   const record=settlementLog[currentSettlementIndex];
   if(!confirm('現在の運賃記録から、この日の精算内容を作り直しますか？\n（未収金の入力はそのまま残ります）'))return;
-  const before={credit:record.credit,etc:record.etc,highwayTotal:record.highwayTotal};
+  const before={credit:record.credit,etcDisplay:settlementEtcDisplay(record),highwayTotal:record.highwayTotal};
   const syncResult=resyncFareLogFromDestinations(record.shiftStartTs,record.shiftEndTs);
   const fresh=buildSettlementRecord(
     record.shiftStartTs,record.shiftEndTs,record.meterStart,record.meterEnd,
@@ -6693,7 +6693,7 @@ function recomputeSettlementFromFareLog(){
     `taxi_fare_logを更新した件数: ${syncResult.updatedCount}件\n`+
     `taxi_fare_logに新規作成した件数: ${syncResult.createdCount}件\n\n`+
     `クレジット: ${fmtYen(before.credit)} → ${fmtYen(record.credit)}\n`+
-    `ETC(表示額): ${fmtYen(before.etc||0)} → ${fmtYen(record.etc||0)}\n\n`+
+    `ETC(表示額): ${fmtYen(before.etcDisplay||0)} → ${fmtYen(settlementEtcDisplay(record))}\n\n`+
     (syncResult.inRangeCount===0
       ?'※期間内の送り先トリップが0件でした。送り先タブに、この日のトリップの記録自体が残っているかご確認ください。'
       :(syncResult.updatedCount===0&&syncResult.createdCount===0
