@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-127 -->
+<!-- v20260902-128 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1263,7 +1263,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-127';
+const APP_BUILD='20260902-128';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1289,6 +1289,19 @@ let currentTileKey='osm',tileLayer=null;
 const PEER_ALIVE_MS=60*1000;
 let peerMarkers={},waitInterval=null,waitStart=null,waitSec=0,arrivalAutoTimer=null;
 let dutyStart=null,dutyInterval=null,myLat=null,myLng=null,myAccuracy=null;
+// 地図表示・仲間への位置共有だけに使う「平滑化した位置」。乗り場の出発・到着
+// 判定（checkGeofences）はこれとは別に、これまでどおり生のmyLat/myLngを
+// そのまま使う（タイミングに一切影響を与えないため）。GPSチップ自体の細かい
+// ブレで地図上のアイコンが小刻みに飛ぶ／震える見た目を抑えるためだけのもの
+let myDisplayLat=null,myDisplayLng=null;
+const GPS_DISPLAY_SMOOTH_ALPHA=0.4; // 1に近いほど最新フィックスに追従、小さいほど滑らか（遅れとのバランスを見てこの値にした）
+function updateDisplayPosition(lat,lng){
+  if(myDisplayLat===null){myDisplayLat=lat;myDisplayLng=lng;}
+  else{
+    myDisplayLat+=(lat-myDisplayLat)*GPS_DISPLAY_SMOOTH_ALPHA;
+    myDisplayLng+=(lng-myDisplayLng)*GPS_DISPLAY_SMOOTH_ALPHA;
+  }
+}
 let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={},teamDestsLoaded=false;
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
@@ -2472,12 +2485,16 @@ function _attachGPSWatch(){
     myLat=fixLat; myLng=fixLng;
     myAccuracy=typeof pos.coords.accuracy==='number'?pos.coords.accuracy:null;
     lastAcceptedFix={lat:myLat,lng:myLng,ts:gpsLastUpdate};
-    updateMyMarker(myLat,myLng);
+    // checkGeofences（出発・到着判定）は上のmyLat/myLng（生の値）をそのまま使う。
+    // 地図の表示・自分のカメラ追従・仲間への位置共有には、平滑化した
+    // myDisplayLat/myDisplayLngを使い、細かいブレを見た目上だけ抑える
+    updateDisplayPosition(myLat,myLng);
+    updateMyMarker(myDisplayLat,myDisplayLng);
     hideGpsPermissionBanner();
     document.getElementById('gps-dot').style.background='';
     document.getElementById('gps-dot').classList.add('on');
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
-    if(autoFollow&&!followPeerId&&leafletMap)panMapTo(()=>leafletMap.setView([myLat,myLng]));
+    if(autoFollow&&!followPeerId&&leafletMap)panMapTo(()=>leafletMap.setView([myDisplayLat,myDisplayLng]));
     // 仲間フォロー中は、自分のGPS更新と同じタイミングで、仲間の最新位置に合わせて
     // 画面を追従させる（相手側のFirebase更新頻度だけに頼らず、自分のフォローと
     // 同じ「動き」になるようにするため）
@@ -2541,6 +2558,7 @@ function stopGPS(){
   if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
   if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
   lastAcceptedFix=null;pendingJumpFix=null;
+  myDisplayLat=null;myDisplayLng=null;
   if(myMarker){leafletMap.removeLayer(myMarker);myMarker=null;}
   document.getElementById('gps-dot').classList.remove('on');
   document.getElementById('gps-txt').textContent='GPS停止中';
@@ -3421,7 +3439,7 @@ function setStatus(s){
   ['kuusha','jitsusha','kaisou'].forEach(k=>{
     document.getElementById('sch-'+k).classList.toggle('sel',k===s);
   });
-  if(myMarker&&myLat)updateMyMarker(myLat,myLng);
+  if(myMarker&&myLat)updateMyMarker(myDisplayLat??myLat,myDisplayLng??myLng);
   pushMyPosition();
   saveAppState();
   toast('ステータス: '+statusCfg[s].label);
@@ -3877,7 +3895,7 @@ function pushMyPosition(gpsWeak=false){
   // 別経路からの書き込みでtsだけが更新され続けた場合でも、dutyActiveが
   // 伴わなければ「乗務中」とはみなさないようにするための印
   db.ref('drivers/'+myId).update({
-    name,lat:myLat,lng:myLng,status:currentStatus,
+    name,lat:myDisplayLat??myLat,lng:myDisplayLng??myLng,status:currentStatus,
     car:localStorage.getItem('taxi_car')||'',
     plate:localStorage.getItem('taxi_number')||'',
     ts:Date.now(),gpsWeak:gpsWeak||null,
@@ -3890,7 +3908,7 @@ setInterval(()=>{if(isDuty)pushMyPosition();},5000);
 // フィックス自体があまり来ないブラウザ・端末があり、経過分数の表示が古いまま
 // 固まって見える・号を選んだ直後もしばらく反映されないことがあったため、GPSの
 // 更新頻度に関係なく一定間隔で必ずマーカーを再描画し、常に最新の状態を保つ
-setInterval(()=>{if(isDuty&&myLat!==null)updateMyMarker(myLat,myLng);},20000);
+setInterval(()=>{if(isDuty&&myLat!==null)updateMyMarker(myDisplayLat??myLat,myDisplayLng??myLng);},20000);
 // 仲間フォロー中の地図追従を、特定のイベント（Firebaseのchild_changed・自分のGPS更新）の
 // タイミングだけに頼らず、一定間隔で必ず最新位置に合わせ直すことで確実に効かせる
 // （非番中で自分のGPSが動いていない時にフォローしても、この仕組みだけで追従できる）
@@ -5180,7 +5198,7 @@ function selectSpot(spotName){
   // 「〇号 〇分」バッジ（poolLabel）は表示されない。ここで号を選んだ直後も、
   // 次のGPS位置更新（updateMyMarker）が来るまでバッジが反映されないままに
   // なっていたため、選択した瞬間に即座に反映する
-  if(myLat!==null)updateMyMarker(myLat,myLng);
+  if(myLat!==null)updateMyMarker(myDisplayLat??myLat,myDisplayLng??myLng);
   toast('📍 '+currentSpotSelection+' を選択 — タイマー計測中');
 }
 
@@ -5290,7 +5308,7 @@ function startWaitAt(cp,spotName,dist,timeStr){
     // タイミングでしか再描画されない。プール内で停止していると次のGPSフィックスまで
     // 時間が空くことがあり、待機を開始した直後もバッジがしばらく（次の位置更新まで）
     // 表示されないままになっていたため、ここで即座に反映する
-    if(myLat!==null)updateMyMarker(myLat,myLng);
+    if(myLat!==null)updateMyMarker(myDisplayLat??myLat,myDisplayLng??myLng);
   }
 }
 
