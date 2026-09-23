@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-126 -->
+<!-- v20260902-127 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1263,7 +1263,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-126';
+const APP_BUILD='20260902-127';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2207,9 +2207,17 @@ function updateMyMarker(lat,lng){
   const plate=localStorage.getItem('taxi_number')||'';
   const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
   const isWeak=ageSec!==null&&ageSec>20;
-  const waitSpotLblEl=document.getElementById('wait-spot-lbl');
-  const poolLabel=(waitInterval&&waitStart)
-    ?domesticPoolLabel(waitSpotLblEl?waitSpotLblEl.textContent:'',waitStart)
+  // 号選択・待機時間バッジ（〇号 〇分）は、以前はwaitInterval（画面の1秒ごとの
+  // タイマー表示用setIntervalが生きているか）とwait-spot-lblのDOMテキストを
+  // 正規表現で読み取って判定していたが、この2つは本来のバッジ表示条件
+  // （号を選んでから実車ボタンを押すまで）とは別の目的の値であり、間接的で
+  // 壊れやすかった（何らかの理由でどちらかがズレると、実車を押していないのに
+  // バッジだけ消えてしまう）。実際にバッジを出す条件は「号を選択済みか
+  // (currentSpotSelection)」「実車ボタンをまだ押していないか(currentStatus)」
+  // 「待機開始時刻(waitStart)があるか」の3つだけなので、それらを直接見るように
+  // し、実車ボタンを押すまでは絶対にバッジが消えないようにする
+  const poolLabel=(currentStatus!=='jitsusha'&&currentSpotSelection&&waitStart)
+    ?{spot:currentSpotSelection,mins:Math.max(0,Math.floor((Date.now()-waitStart)/60000))}
     :null;
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak,poolLabel);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
@@ -3176,6 +3184,23 @@ let pendingWaitCorrection=null;
 // 時刻を使って送りたい。押した時点ではまだ送らず、このオブジェクトに
 // 通知内容だけ保持しておき、onDeparture側で確定時刻を使って送信する
 let pendingDepartureChatNotif=null;
+// 乗り場からの自動出発通知をチャットへ送る前に、Firebase上の自分の
+// dutyActive（出退勤の共有された正式な状態）を必ず取り直して確認してから
+// 送信する。複数タブ・古いバックグラウンドインスタンス等でローカルのisDuty
+// 変数が実際の退勤状態とずれてしまっていても、既に退勤済みの人からの
+// 出発通知がチャットに出てしまうことを確実に防ぐための最終防衛ライン
+// （呼び出し元では従来どおりローカルのisDutyも先にチェックしているが、
+// それとは別にここでも必ず再確認する）
+function sendAutoDepartureChat(text,ts){
+  if(!db)return;
+  db.ref('drivers/'+myId+'/dutyActive').once('value').then(snap=>{
+    if(snap.val()!==true)return;
+    const name=localStorage.getItem('taxi_name')||'自分';
+    db.ref('chat').push({uid:myId,name,text,
+      time:new Date(ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts,isAuto:true})
+      .catch(err=>console.error('chat auto push failed',err));
+  }).catch(err=>console.error('dutyActive確認に失敗しました',err));
+}
 let manualWaitStartTime=null; // 待機開始ボタンを押した時刻
 let manualWaitAddr=null;      // 待機開始した場所の住所
 let spotChangeHistory=[];     // 今回の待機中に乗り場を変更した履歴 [{spot,ts}]
@@ -3499,10 +3524,7 @@ function setStatus(s){
         const wh=Math.floor(wm/60),wmm=wm%60;
         const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
         const spotPhrase=boardSpot==='国際線'?'羽田空港国際線乗り場':`${boardSpot}乗り場`;
-        db.ref('chat').push({uid:myId,name,
-          text:`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,
-          time:new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true})
-          .catch(err=>console.error('chat auto push failed',err));
+        sendAutoDepartureChat(`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,Date.now());
       }
     }
     // 国際線乗り場からの出発（実車ボタン・押し忘れ検知のいずれも）は、本人にも通知する
@@ -5029,10 +5051,7 @@ function onDeparture(cp){
       const wh=Math.floor(wm/60),wmm=wm%60;
       const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
       const spotPhrase=info.boardSpot==='国際線'?'羽田空港国際線乗り場':`${info.boardSpot}乗り場`;
-      db.ref('chat').push({uid:myId,name,
-        text:`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,
-        time:new Date(trueDepartureTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:trueDepartureTs,isAuto:true})
-        .catch(err=>console.error('chat auto push failed',err));
+      sendAutoDepartureChat(`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,trueDepartureTs);
     }
   }
   // 待機タイマー・号選択・列移動履歴の停止は実車ボタンを押した時だけと決めているため、
