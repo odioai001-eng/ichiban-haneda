@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-124 -->
+<!-- v20260902-125 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1263,7 +1263,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-124';
+const APP_BUILD='20260902-125';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4523,7 +4523,7 @@ function renderRankTodayPersonal(){
 function renderRankTodayGroup(){
   const el=document.getElementById('rank-today-group');
   if(!el)return;
-  if(!isRankingOptedIn()){el.innerHTML=rankingLockHtml();return;}
+  if(!isTodayRankingOptedIn()){el.innerHTML=rankingLockHtml('today');return;}
   const bizStart=getBusinessDayStart();
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.todayBizStart===bizStart).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
   // 出庫（出勤）・帰庫予定（上がり予定）時刻は、各自がdrivers/{uid}に共有している
@@ -4557,17 +4557,21 @@ function renderRankTodayGroup(){
       return rankRowHtml(i,esc(d.name||'不明'),sub,d.todayFare,btns);
     }).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>';
+  el.innerHTML+='<div style="display:flex;gap:6px;margin-top:8px">'
+    +'<button class="btn btn-g" onclick="syncMySalesNow()" style="flex:1;font-size:11px">🔄 自分の記録を今すぐ同期</button>'
+    +'<button class="btn btn-g" onclick="leaveGroupRanking(\'today\')" style="flex:1;font-size:11px">🔒 退出する</button>'
+    +'</div>';
 }
 // ③ 今月の売り上げランキング（グループ・送先売上の合計）
-// グループランキングへの入室・退出ボタンは②③で共通のため、こちら側にのみ表示する
+// ①月間・②本日は独立した参加選択のため、入室・退出ボタンもそれぞれの
+// ランキングに個別に表示する
 function renderRankMonthGroup(){
   const el=document.getElementById('rank-month-group');
   if(!el)return;
-  if(!isRankingOptedIn()){
-    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px">上の「本日の売り上げランキング（グループ）」から入室してください</div>';
-    return;
-  }
-  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
+  if(!isMonthRankingOptedIn()){el.innerHTML=rankingLockHtml('month');return;}
+  // 「本日のみ参加」の人はmonthFare等のフィールドが送信されていないため、
+  // 月間ランキングには表示しない（送信されていない=月間には未参加、と判定する）
+  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.monthDaysRaw!=null).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
   el.innerHTML=(list.length
     ?list.map((d,i)=>{
       // 手動修正(monthAdjust)は「その時点の自動集計値との差分」として保存されるため、
@@ -4587,7 +4591,7 @@ function renderRankMonthGroup(){
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>')
     +'<div style="display:flex;gap:6px;margin-top:8px">'
     +'<button class="btn btn-g" onclick="syncMySalesNow()" style="flex:1;font-size:11px">🔄 自分の記録を今すぐ同期</button>'
-    +'<button class="btn btn-g" onclick="leaveGroupRanking()" style="flex:1;font-size:11px">🔒 退出する</button>'
+    +'<button class="btn btn-g" onclick="leaveGroupRanking(\'month\')" style="flex:1;font-size:11px">🔒 退出する</button>'
     +'</div>';
 }
 // 退勤直後などに古い出勤日数・売上が残っている場合、手動でその場に反映させる
@@ -6798,34 +6802,59 @@ function renderSpotWaitStats(){
   el.innerHTML=html;
 }
 
-function isRankingOptedIn(){
+// グループランキングは「①月間ランキング」「②本日の売り上げランキング」を
+// それぞれ独立して選択して参加できるようにする（片方だけ参加、両方参加、
+// 両方不参加のいずれも可能）。①は元々あったキー（taxi_ranking_optin）を
+// そのまま使い、既に参加済みの人は変更なしで従来どおり継続する
+function isMonthRankingOptedIn(){
  return localStorage.getItem('taxi_ranking_optin')==='1';
 }
+function isTodayRankingOptedIn(){
+ return localStorage.getItem('taxi_ranking_optin_today')==='1';
+}
+// いずれか一方にでも参加していれば真。歴代送り先ランキング等、売上ランキング
+// 自体とは別の「グループに売上を公開しているか」の判定に使う
+function isRankingOptedIn(){
+ return isMonthRankingOptedIn()||isTodayRankingOptedIn();
+}
+function rankingKindLabel(kind){
+ return kind==='today'?'本日の売り上げランキング':'月間ランキング';
+}
 
-function rankingLockHtml(){
+function rankingLockHtml(kind){
  return `<div style="text-align:center;padding:18px 10px">
-  <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">売上を公開すると、グループランキングに参加・閲覧できます</div>
-  <button class="btn btn-p" onclick="enterGroupRanking()" style="width:100%">🔓 入室する</button>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">売上を公開すると、${rankingKindLabel(kind)}に参加・閲覧できます</div>
+  <button class="btn btn-p" onclick="enterGroupRanking('${kind}')" style="width:100%">🔓 入室する</button>
  </div>`;
 }
 
-function enterGroupRanking(){
+function enterGroupRanking(kind){
  const pw=prompt('グループランキングのパスワードを入力してください');
  if(pw===null)return;
  const correctPw=localStorage.getItem('taxi_ranking_pin')||'1862';
  if(pw!==correctPw){toast('⚠️ パスワードが違います');return;}
- if(!confirm('グループランキングに売上を公開してもよろしいですか？'))return;
- localStorage.setItem('taxi_ranking_optin','1');
- toast('✅ グループランキングに参加しました');
+ const label=rankingKindLabel(kind);
+ if(!confirm(`${label}に売上を公開してもよろしいですか？`))return;
+ localStorage.setItem(kind==='today'?'taxi_ranking_optin_today':'taxi_ranking_optin','1');
+ toast(`✅ ${label}に参加しました`);
  pushTeamSales();
  renderRankingPage();
 }
 
-function leaveGroupRanking(){
- if(!confirm('グループランキングから退出しますか？（自分の売上が非公開になります）'))return;
- localStorage.removeItem('taxi_ranking_optin');
- if(db)db.ref('team_sales/'+myId).remove();
- toast('🔒 グループランキングから退出しました');
+function leaveGroupRanking(kind){
+ const label=rankingKindLabel(kind);
+ if(!confirm(`${label}から退出しますか？（該当の売上が非公開になります）`))return;
+ localStorage.removeItem(kind==='today'?'taxi_ranking_optin_today':'taxi_ranking_optin');
+ if(db){
+   if(kind==='today'){
+     db.ref('team_sales/'+myId).update({todayFare:null,todayBizStart:null}).catch(err=>console.error('team_sales today clear failed',err));
+   }else{
+     db.ref('team_sales/'+myId).update({monthFare:null,monthFareForAvg:null,monthDays:null,monthFareRaw:null,monthDaysRaw:null,monthAdjust:null}).catch(err=>console.error('team_sales month clear failed',err));
+   }
+   // 両方とも不参加になった場合は、記録自体を丸ごと削除する（従来の挙動を維持）
+   if(!isMonthRankingOptedIn()&&!isTodayRankingOptedIn())db.ref('team_sales/'+myId).remove();
+ }
+ toast(`🔒 ${label}から退出しました`);
  renderRankingPage();
 }
 
@@ -6901,8 +6930,15 @@ function pushTeamSales(){
  // monthFareは税抜きなので、差し引くongoingFareも同じ税抜き基準で計算する
  const ongoingFare=(isDuty&&dutyStart)?log.filter(e=>(e.ts||0)>=dutyStart.getTime()).reduce((a,e)=>a+exTax(e.fare||0),0):0;
  const monthFareForAvg=Math.max(0,monthFare-ongoingFare);
+ // ①月間・②本日は独立して参加を選択できるため、参加している方のフィールドのみ
+ // 送信する（参加していない方は.update()で触れないため、既存の値があればそのまま
+ // 残ってしまう点に注意。退出時はleaveGroupRanking側で該当フィールドを明示的に
+ // nullにして非公開にしている）
+ const payload={name,ts:Date.now()};
+ if(isTodayRankingOptedIn())Object.assign(payload,{todayFare,todayBizStart});
+ if(isMonthRankingOptedIn())Object.assign(payload,{monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw});
  // .set()だと手動修正(monthAdjust)が毎回消えてしまうため、.update()で他フィールドを保ったまま更新する
- db.ref('team_sales/'+myId).update({name,todayFare,todayBizStart,monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw,ts:Date.now()})
+ db.ref('team_sales/'+myId).update(payload)
    .catch(err=>console.error('team_sales update failed',err));
 }
 
@@ -7663,6 +7699,7 @@ function deleteMyAccount(){
     db.ref('team_sales/'+myId).remove();
   }
   localStorage.removeItem('taxi_ranking_optin');
+  localStorage.removeItem('taxi_ranking_optin_today');
   localStorage.removeItem('taxi_name');
   localStorage.removeItem('taxi_car');
   localStorage.removeItem('taxi_my_id');
