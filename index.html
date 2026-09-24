@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-132 -->
+<!-- v20260902-133 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1263,7 +1263,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-132';
+const APP_BUILD='20260902-133';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6509,15 +6509,13 @@ function buildSettlementRecord(shiftStartTs,shiftEndTs,meterStart,meterEnd,fuelE
   };
 }
 // ETC（高速代）欄に表示する金額。
-// 一時期、自腹高速の加算・無料高速の減算を試したが、紙の納金票との
-// 突き合わせ（9/24分、ETC以外の全項目が一致する中でETC欄だけが自腹高速・
-// 無料高速の差し引き分ちょうどズレていたことを確認）により、紙のETC欄には
-// 自腹高速・無料高速のいずれも一切含まれていないことが実データで確定した。
-// そのため、各トリップのETC入力の合計のみ（record.etc）をそのまま使う、
-// 元の式に戻す（自腹高速・無料高速の金額自体は、引き続き別枠で記録・
-// 表示する。ETC欄の計算には一切関与しない）
+// 9/24分、全6トリップの個別ETC入力を1件ずつ突き合わせた結果、各トリップの
+// ETC入力の合計（record.etc）は840+730+640+1470+650=¥4,330で正しく、
+// 紙のETC欄（¥7,140）との差額¥2,810は自腹高速の合計とちょうど一致した
+// （無料高速¥1,020は無関係）。よって紙のETC欄には自腹高速のみが含まれ、
+// 無料高速は含まれないことが実データで確定した
 function settlementEtcDisplay(record){
-  return record.etc||0;
+  return (record.etc||0)+(record.jibaraHighwayTotal||0);
 }
 // レポートに表示する差引合計・納金額を、その場で（手入力の未収金も
 // 反映して）算出する。保存済みのrecordはuncollectedを直接書き換えて
@@ -6560,16 +6558,17 @@ function showSettlementReport(record,onClose){
   document.getElementById('settlement-ticket-label').textContent=`チケット${record.ticketCount||0}枚　福祉券${record.welfareCount||0}枚`;
   document.getElementById('settlement-ticket').textContent=fmtYen(record.ticket);
   document.getElementById('settlement-qr').textContent=fmtYen(record.qr);
-  // ETC欄表示額 = 各トリップのETC入力の合計のみ（自腹高速・無料高速は含まない）
+  // ETC欄表示額 = 各トリップのETC入力の合計 ＋ 自腹高速（無料高速は含まない）
   document.getElementById('settlement-etc').textContent=fmtYen(settlementEtcDisplay(record));
   document.getElementById('settlement-uncollected-input').value=record.uncollected||0;
   updateSettlementTotalsDisplay(record);
   document.getElementById('settlement-report-modal').style.display='flex';
 }
 // ETC欄の金額の内訳を、保存されている生の数値のまま表示する診断機能。
-// ETC欄表示額 = 各トリップのETC入力の合計のみ。自腹高速・無料高速は
-// 参考情報として表示するだけで、ETC欄の金額には一切反映されない
-// （紙の納金票のETC欄にも、いずれも含まれていないことを実データで確認済み）
+// ETC欄表示額 = 各トリップのETC入力の合計 ＋ 自腹高速。無料高速は
+// 参考情報として表示するだけで、ETC欄の金額には反映されない
+// （紙の納金票のETC欄には自腹高速のみ含まれ、無料高速は含まれないことを
+// 実データ・トリップ単位の突き合わせで確認済み）
 function showSettlementEtcDetail(){
   const record=currentSettlementRecord;
   if(!record){toast('⚠️ レポートが開かれていません');return;}
@@ -6577,11 +6576,11 @@ function showSettlementEtcDetail(){
   const highway=record.highwayTotal||0;
   const jibara=record.jibaraHighwayTotal||0;
   const msg=`ETC内訳\n\n`+
-    `ETC欄の表示額（各トリップのETC入力の合計。決済方法欄にも同じ金額が\n`+
-    `含まれています）: ${fmtYen(settlementEtcDisplay(record))}\n\n`+
-    `（参考）自腹高速の合計: ${fmtYen(jibara)}\n`+
-    `（参考）無料高速の合計: ${fmtYen(highway)}\n`+
-    `※自腹高速・無料高速はいずれもETC欄の金額には反映されません。`;
+    `各トリップのETC入力の合計（決済方法欄にも同じ金額が含まれています）: ${fmtYen(etcRaw)}\n`+
+    `＋ 自腹高速の合計: ${fmtYen(jibara)}\n`+
+    `－－－－－－－－－－\n`+
+    `ETC欄の表示額: ${fmtYen(settlementEtcDisplay(record))}\n\n`+
+    `（参考）無料高速の合計: ${fmtYen(highway)}　※ETC欄には反映されません。`;
   alert(msg);
 }
 // クレジット・QR等の欄の金額が紙の納金票と合わない場合、電卓での手計算では
