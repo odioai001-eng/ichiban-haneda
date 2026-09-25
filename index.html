@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-136 -->
+<!-- v20260902-137 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -604,7 +604,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">「未送信無し」と出るのに仲間の画面に表示されない場合は、こちらでこの端末の記録が実際にFirebase上にあるか直接確認できます。</div>
     <button class="btn btn-g" onclick="checkMyTeamDestsSync()" style="width:100%;margin-bottom:8px">🔍 自分の送り先が届いているか確認する</button>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">運賃は記録されているのに、送り先タブに該当のトリップ自体が表示されない場合は、こちらで運賃記録から送り先カードを復元できます（乗車・降車地点は「不明」のまま作成され、後から編集できます）。</div>
-    <button class="btn btn-g" onclick="recoverOrphanedFareLogTrips()" style="width:100%">🩹 運賃記録から送り先カードを復元する</button>
+    <button class="btn btn-g" onclick="recoverOrphanedFareLogTrips()" style="width:100%;margin-bottom:8px">🩹 運賃記録から送り先カードを復元する</button>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">アプリの再インストール等で自分のIDが変わってしまい、過去に送信済みだった記録が見えなくなった場合、氏名を手がかりにクラウド上に残っている過去の記録を探して、今のアカウントに取り込めます。</div>
+    <button class="btn btn-g" onclick="recoverDataByName()" style="width:100%">🔎 氏名から過去のデータを復元する</button>
   </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
@@ -1263,7 +1265,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-136';
+const APP_BUILD='20260902-137';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -7468,6 +7470,58 @@ async function recoverOrphanedFareLogTrips(){
   destinations.sort((a,b)=>(b.ts||0)-(a.ts||0));
   saveDests();renderDests();
   toast(`✅ ${orphans.length}件の送り先カードを復元しました`);
+}
+
+// アプリの再インストール等で自分のID（taxi_my_id、端末内にしか保存されていない）が
+// 変わってしまうと、それより前にFirebaseへ送信済みだった記録（team_dests）は、
+// 新しいIDからは見えず「孤立」したまま残る（データ自体は消えていない）。
+// 氏名を手がかりに、自分の現在のID以外に紐づく過去の記録をteam_dests全体から
+// 探し出し、今のアカウントに取り込む
+async function recoverDataByName(){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  const myName=localStorage.getItem('taxi_name')||'';
+  const name=prompt('復元したい人の氏名を入力してください（team_destsに記録されている表記と完全に一致する必要があります）',myName);
+  if(!name)return;
+  toast('🔍 過去のデータを検索中...');
+  const snap=await db.ref('team_dests').once('value');
+  const all=snap.val()||{};
+  const candidates=[]; // {driverId,entries:[[key,val],...]}
+  Object.entries(all).forEach(([driverId,driverEntries])=>{
+    if(driverId===myId)return; // 現在の自分のIDは対象外
+    const entries=Object.entries(driverEntries||{}).filter(([,e])=>e&&e.driverName===name);
+    if(entries.length)candidates.push({driverId,entries});
+  });
+  if(!candidates.length){alert(`「${name}」という氏名の、現在のID以外に紐づく記録は見つかりませんでした。\n\n氏名の表記（全角/半角・スペースの有無等）が過去の記録と完全に一致しているかご確認ください。`);return;}
+  const totalCount=candidates.reduce((a,c)=>a+c.entries.length,0);
+  const idList=candidates.map(c=>`・古いID ${c.driverId}：${c.entries.length}件`).join('\n');
+  if(!confirm(`「${name}」名義の過去データが見つかりました。\n\n${idList}\n\n合計${totalCount}件を、現在のアカウントに取り込みますか？\n（既に取り込み済みの記録は重複して取り込まれません）`))return;
+
+  let importedCount=0,skippedCount=0,minTs=null,maxTs=null;
+  candidates.forEach(c=>{
+    c.entries.forEach(([,e])=>{
+      // 既に同じ時刻・種別の記録が自分のdestinationsに存在すれば、重複取り込みとみなしスキップする
+      if(destinations.some(d=>d.ts===e.ts&&d.type===e.type)){skippedCount++;return;}
+      const restored={...e};
+      delete restored.driverName;delete restored.driverId;delete restored.synced;
+      restored.recovered=true;
+      destinations.push(restored);
+      pushDestToFirebase(restored);
+      importedCount++;
+      if(e.ts){
+        if(minTs===null||e.ts<minTs)minTs=e.ts;
+        if(maxTs===null||e.ts>maxTs)maxTs=e.ts;
+      }
+    });
+  });
+  destinations.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  saveDests();renderDests();
+  // 送り先タブへの復元だけでなく、運賃記録（taxi_fare_log、精算に使う）にも
+  // 反映させる。復元した記録の日時範囲だけを対象にする
+  let fareLogResult={changed:false,createdCount:0,updatedCount:0};
+  if(importedCount>0&&minTs!==null)fareLogResult=resyncFareLogFromDestinations(minTs,maxTs);
+  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  alert(`復元結果\n\n取り込んだ件数: ${importedCount}件\nスキップ（重複）: ${skippedCount}件\n対象期間: ${fmt(minTs)} 〜 ${fmt(maxTs)}\n\n運賃記録（taxi_fare_log）にも反映しました（新規${fareLogResult.createdCount}件・更新${fareLogResult.updatedCount}件）。\n\n※運賃記録が元々どの端末にも一切残っていなかった場合（アンインストールで完全に失われた場合）、金額の内訳までは復元できていません。送り先タブの各記録に運賃・支払い方法が表示されていればFirebase上に残っていたものです。`);
+  toast(`✅ ${importedCount}件のデータを復元しました`);
 }
 
 function renderCPs(){
