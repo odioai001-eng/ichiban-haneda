@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-137 -->
+<!-- v20260902-138 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1265,7 +1265,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-137';
+const APP_BUILD='20260902-138';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2691,6 +2691,13 @@ function endDutyImmediate(){
 }
 
 function confirmEndDuty(){
+  // 仲間の地図から自分のアイコンを消す処理（endDutyImmediate）は、このモーダルを
+  // 開く前（退勤ボタンを押した瞬間）に既に完了しているため、ここでの入力チェックは
+  // それを取り消さない。ただし、営業終了メーターを入力しないままこのモーダルを
+  // 閉じてしまうと、精算記録（差引合計・走行距離）にメーターの値が一切残らなく
+  // なってしまうため、確定（このモーダルを閉じて記録を確定させる）にはメーター
+  // 入力を必須にする
+  if(!document.getElementById('duty-meter-end').value.trim()){toast('⚠️ 営業終了メーターを入力してください');return;}
   const timeVal=document.getElementById('duty-end-time').value;
   document.getElementById('duty-end-confirm-modal').style.display='none';
 
@@ -3110,6 +3117,7 @@ function confirmDutyCarModal(){
   if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
   if(!dutyPlanChoice){toast('⚠️ 本日の勤務時間プランを選んでください');return;}
   if(dutyPlanChoice==='custom'&&!document.getElementById('duty-plan-custom-time').value){toast('⚠️ 上がり予定時刻を入力してください');return;}
+  if(!document.getElementById('duty-meter-start').value.trim()){toast('⚠️ 営業開始メーターを入力してください');return;}
   const carNum=document.getElementById('duty-car-num').value.trim();
   const plate=document.getElementById('duty-car-plate').value.trim();
   if(carNum)localStorage.setItem('taxi_car',carNum);
@@ -3123,6 +3131,7 @@ function skipDutyCarModal(){
   if(!paymentConfirmed){toast('⚠️ 決済端末の持参を確認してください');return;}
   if(!dutyPlanChoice){toast('⚠️ 本日の勤務時間プランを選んでください');return;}
   if(dutyPlanChoice==='custom'&&!document.getElementById('duty-plan-custom-time').value){toast('⚠️ 上がり予定時刻を入力してください');return;}
+  if(!document.getElementById('duty-meter-start').value.trim()){toast('⚠️ 営業開始メーターを入力してください');return;}
   document.getElementById('duty-car-modal').style.display='none';
   _startDuty();
   applyDutyPlanChoice();
