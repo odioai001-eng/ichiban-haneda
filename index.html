@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-133 -->
+<!-- v20260902-134 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1263,7 +1263,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-133';
+const APP_BUILD='20260902-134';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3479,7 +3479,21 @@ function setStatus(s){
     // 実車ボタンを押した時点で、まだ待機の起点となったエリア内にいる場合、その
     // チェックポイントを退場確定監視の対象にする（下のpendingWaitCorrection参照）
     let departureWatchCp=null;
-    if(boardSpot&&poolArriveTs){
+    if(boardSpot&&poolArriveTs&&spotArriveTs){
+      // プール本体（羽田プール、半径200m）はGPSのブレで一瞬「退場→再入場」と
+      // 誤判定され、cpArriveTsが実際より新しい時刻にリセットされてしまうことが
+      // あった（例: 3号→4号へ列が進んだだけなのに、プール全体としては一瞬圏外に
+      // 出たと誤検知される等）。号自体（1〜4号、精度基準がより厳しい）の到着時刻の
+      // 方が古ければ、実際にはそちらからずっと待っていたということなので、
+      // より古い方（＝実際の待機開始）を使う
+      if(spotArriveTs<poolArriveTs){
+        waitStartTsUsed=spotArriveTs;
+        departureWatchCp=spotCp;
+      }else{
+        waitStartTsUsed=poolArriveTs;
+        departureWatchCp=poolCp;
+      }
+    } else if(boardSpot&&poolArriveTs){
       waitStartTsUsed=poolArriveTs;
       departureWatchCp=poolCp;
     } else if(boardSpot==='国際線'){
