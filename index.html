@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-135 -->
+<!-- v20260902-136 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1263,7 +1263,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-135';
+const APP_BUILD='20260902-136';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1699,8 +1699,23 @@ function syncMapButtonStackLayout(){
     }
   });
 }
+// 画面回転（向きの変更）をすると、Leafletの地図はコンテナのサイズ変化を自動では
+// 検知せず、内部のピクセル座標計算が古いサイズのままになってしまう。これにより、
+// 回転前の状態に戻しても地図のタイル位置・マーカー位置がずれる（レイアウトが乱れる）
+// 不具合があったため、リサイズ・画面回転のたびに必ずinvalidateSize()で再計算させる。
+// WebView・一部ブラウザでは、リサイズイベント発生時点ではまだビューポートの実際の
+// サイズが確定しきっていないことがあるため、複数回（即時・300ms後・900ms後）呼んで
+// 確実に反映させる
+function invalidateMapSizeOnRotate(){
+  if(!leafletMap)return;
+  leafletMap.invalidateSize();
+  setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},300);
+  setTimeout(()=>{if(leafletMap)leafletMap.invalidateSize();},900);
+}
 window.addEventListener('resize',syncMapButtonStackLayout);
+window.addEventListener('resize',invalidateMapSizeOnRotate);
 window.addEventListener('orientationchange',()=>setTimeout(syncMapButtonStackLayout,300));
+window.addEventListener('orientationchange',invalidateMapSizeOnRotate);
 // ステータスバーの内容（列移動情報の表示/非表示など）はJS側で動的に変わるため、
 // リサイズ以外のタイミングでも定期的に再計算して追従させる
 setInterval(syncMapButtonStackLayout,1500);
