@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-138 -->
+<!-- v20260902-139 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1265,7 +1265,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-138';
+const APP_BUILD='20260902-139';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1605,6 +1605,29 @@ function showGpsPermissionBanner(){
 }
 function hideGpsPermissionBanner(){
   const b=document.getElementById('gps-permission-banner');
+  if(b)b.remove();
+}
+// アプリの位置情報の許可自体は下りているのに、端末側でどうしても位置情報を
+// 取得できない（GeolocationPositionError.POSITION_UNAVAILABLE）場合がある。
+// 原因の多くは、アプリの許可設定とは別に「端末全体の位置情報サービス」自体が
+// オフになっていることや、一部端末（MIUI等の独自UI）のバッテリー最適化機能が
+// バックグラウンドでの位置情報取得を制限してしまっていることで、放置しても
+// 自然には解決しない。「GPS弱・再試行中」という表示だけでは「そのうち繋がる」
+// と誤解され、原因に気づかれないまま出勤し続けてしまっていたため、許可バナーと
+// 同様に、解消するまで（または退勤するまで）消えない目立つバナーで知らせる
+function showGpsUnavailableBanner(){
+  if(document.getElementById('gps-unavailable-banner'))return;
+  const b=document.createElement('div');
+  b.id='gps-unavailable-banner';
+  b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99998;background:var(--red);color:#fff;'
+    +'text-align:center;font-size:13px;font-weight:700;cursor:pointer;'
+    +'padding:10px 14px calc(10px + env(safe-area-inset-top,0px));';
+  b.textContent='📍 端末が位置情報を取得できません。アプリの許可ではなく、端末本体の「設定＞位置情報」がオンか確認してください';
+  b.onclick=()=>openLocationSettings();
+  document.body.appendChild(b);
+}
+function hideGpsUnavailableBanner(){
+  const b=document.getElementById('gps-unavailable-banner');
   if(b)b.remove();
 }
 
@@ -2366,6 +2389,7 @@ let gpsLastUpdate=0,gpsStaleTimer=null,gpsRetryTimer=null,gpsWeakHeartbeat=null;
 // 出発通知）をこの時刻から一定時間だけ抑制するのに使う（SPOT_DEPARTURE_MIN_GPS_AGE_MS参照）
 let gpsStartTs=0;
 let gpsPermissionDeniedNotified=false;
+let gpsPositionUnavailableNotified=false;
 // 他アプリ・他サイトから復帰した直後の1回だけ、初回GPSフィックスと同じ「見逃し出発」
 // 捕捉ロジック（checkGeofences内）を適用するためのフラグ
 let pendingCatchUpCheck=false;
@@ -2437,6 +2461,7 @@ function shouldAcceptGpsFix(lat,lng,accuracy,now){
 function startGPS(){
   if(!navigator.geolocation){toast('⚠️ GPS非対応');return;}
   gpsPermissionDeniedNotified=false;
+  gpsPositionUnavailableNotified=false;
   // GPS開始直後（アプリ起動・出勤直後を含む）は、GPSチップがまだ安定しておらず、
   // 実際の位置と大きくずれた値が何回か続けて返ってくることがある。以前は
   // 「最初の1回だけ」を見なかったことにするisFirstFixのみで対応していたが、
@@ -2508,6 +2533,7 @@ function _attachGPSWatch(){
     updateDisplayPosition(myLat,myLng);
     updateMyMarker(myDisplayLat,myDisplayLng);
     hideGpsPermissionBanner();
+    hideGpsUnavailableBanner();
     document.getElementById('gps-dot').style.background='';
     document.getElementById('gps-dot').classList.add('on');
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
@@ -2552,8 +2578,22 @@ function _attachGPSWatch(){
       }
       showGpsPermissionBanner();
     }
+    // POSITION_UNAVAILABLE：アプリの位置情報の許可自体は下りているのに、
+    // 端末側でどうしても位置情報を取得できないケース。原因の多くは、アプリの
+    // 許可設定とは別の「端末全体の位置情報サービス」自体がオフになっていることや、
+    // 一部端末（MIUI等の独自UI）のバッテリー最適化機能がバックグラウンドでの
+    // 位置情報取得を制限してしまっていること。「GPS弱・再試行中」という表示
+    // だけだと「そのうち繋がる」と誤解され、原因に気づかれないまま出勤し続けて
+    // しまうケースがあったため、許可拒否の場合と同様に一度だけ明確に知らせる
+    if(err.code===err.POSITION_UNAVAILABLE){
+      if(!gpsPositionUnavailableNotified){
+        gpsPositionUnavailableNotified=true;
+        toast('⚠️ 端末が位置情報を取得できません。アプリの許可設定ではなく、端末本体の「設定＞位置情報」がオンになっているか確認してください');
+      }
+      showGpsUnavailableBanner();
+    }
     document.getElementById('gps-dot').style.background='var(--purple)';
-    document.getElementById('gps-txt').textContent='GPS弱 — 再試行中';
+    document.getElementById('gps-txt').textContent=err.code===err.POSITION_UNAVAILABLE?'GPS取得不可':'GPS弱 — 再試行中';
     if(gpsRetryTimer)clearTimeout(gpsRetryTimer);
     gpsRetryTimer=setTimeout(()=>{if(isDuty)_restartGPS();},3000);
     // 前回位置をgpsWeak=trueで送り続ける
@@ -2580,6 +2620,7 @@ function stopGPS(){
   document.getElementById('gps-dot').classList.remove('on');
   document.getElementById('gps-txt').textContent='GPS停止中';
   hideGpsPermissionBanner();
+  hideGpsUnavailableBanner();
 }
 
 function toggleDuty(){
