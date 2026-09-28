@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-147 -->
+<!-- v20260902-148 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1292,7 +1292,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-147';
+const APP_BUILD='20260902-148';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3741,6 +3741,8 @@ function setStatus(s){
     const fallbackBoardTs=jitsushaStart; // 実車開始時刻を、乗車時刻の保険として保持
     jitsushaStart=null;
     longJitsushaNotified=false;
+    // お客様を乗せ終えたことを記録する（CP_REJOIN_NO_TRIP_GRACE_MS参照）
+    tripCompletedSeq++;
     const tripTs=Date.now();
     // 実車ボタンの押し忘れ検知（GPS自動判定）で実車になり、かつ短時間で空車に
     // 戻された場合は、GPS誤作動で誤って実車になり、すぐ気づいて戻したものとみなし、
@@ -4983,6 +4985,22 @@ let cpArriveTs=loadCpArriveTs();
 // 戻ってきた場合はGPSのブレとみなして元の状態を引き継ぐ
 let cpLastDepartureSnapshot={};
 const CP_REJOIN_GRACE_MS=5*60*1000; // この時間内の再入場は同じ滞在の続きとみなす
+// CP_REJOIN_GRACE_MS（5分）は高架下等での一瞬のGPSブレを想定した猶予だが、
+// 電波の弱い場所での長時間のGPS途絶・スマホをポケットに入れたまま少し離れた
+// 場所に移動した場合等、5分を超えて位置が取得できないことも珍しくない。
+// その場合、5分を過ぎた直後に本当に停止したままGPSが復帰しても「新規到着」
+// 扱いになり、到着時刻（＝待機開始時刻）がリセットされ、実際には長時間
+// 待っていたのに実車ボタンを押した際の自動通知に「待機時間1分」のような
+// 明らかに誤った短い時間が出てしまう不具合があった。5分の間にお客様を
+// 乗せて実車になっていなければ（＝tripCompletedSeqが変化していなければ）、
+// 待っていた場所を離れて他のことをしていた可能性は低く、GPSが復帰できな
+// かっただけとみなせるため、より長い猶予（CP_REJOIN_NO_TRIP_GRACE_MS）まで
+// 同じ滞在の続きとして扱う
+const CP_REJOIN_NO_TRIP_GRACE_MS=60*60*1000;
+// 実車→空車/回送の完了（＝お客様を乗せ終えた）のたびに1ずつ増える通し番号。
+// 退場確定の直前にこの値を控えておき、再入場時に値が変わっていなければ
+// 「その間にお客様を乗せていない」と判定できる
+let tripCompletedSeq=0;
 // GPSが実際に「圏外に出た」と最初に示した時刻（デバウンスや退場確定待ちより前の、
 // 生のGPS観測時刻）。checkGeofences側で圏内→圏外の変化を検知した瞬間に記録する。
 // 以前はこれを持たず、Date.now()から退場確定までの待ち時間（getDepartureConfirmMs）を
@@ -5105,9 +5123,15 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
       // 直前に「退場確定」したばかり（CP_REJOIN_GRACE_MS以内）の再入場は、高架下等での
       // 一時的なGPSのブレによる誤検知の可能性が高いため、新規到着として扱わず、
       // 退場前の到着時刻・号選択の状態をそのまま引き継ぐ（待機時間の起点や
-      // 号選択がリセットされて短時間しか記録されなくなる不具合を防ぐ）
+      // 号選択がリセットされて短時間しか記録されなくなる不具合を防ぐ）。
+      // 5分を超えていても、その間にお客様を乗せていなければ（tripCompletedSeqが
+      // 同じままなら）、より長い猶予（CP_REJOIN_NO_TRIP_GRACE_MS）まで同様に扱う
       const recentDep=cpLastDepartureSnapshot[cp.id];
-      if(recentDep&&(now-recentDep.ts)<CP_REJOIN_GRACE_MS){
+      const isRecentRejoin=recentDep&&(now-recentDep.ts)<CP_REJOIN_GRACE_MS;
+      const isNoTripLongRejoin=recentDep&&!isRecentRejoin
+        &&(now-recentDep.ts)<CP_REJOIN_NO_TRIP_GRACE_MS
+        &&tripCompletedSeq===recentDep.tripSeqAtDeparture;
+      if(isRecentRejoin||isNoTripLongRejoin){
         cpArriveTs[cp.id]=recentDep.arriveTs;
         cp.poolModalHandled=recentDep.poolModalHandled;
         delete cpLastDepartureSnapshot[cp.id];
@@ -5170,7 +5194,7 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
         cpLastTransitionTs[cp.id]=Date.now();
         cpInside[cp.id]=false;
         // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
-        cpLastDepartureSnapshot[cp.id]={arriveTs:cpArriveTs[cp.id],poolModalHandled:!!cp.poolModalHandled,ts:Date.now()};
+        cpLastDepartureSnapshot[cp.id]={arriveTs:cpArriveTs[cp.id],poolModalHandled:!!cp.poolModalHandled,ts:Date.now(),tripSeqAtDeparture:tripCompletedSeq};
         // onDeparture内で「1分以上滞在したか」の判定にcpArriveTsを使うため、
         // 消去はonDepartureの呼び出しが終わった後に行う
         onDeparture(cp);
