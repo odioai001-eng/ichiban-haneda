@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-146 -->
+<!-- v20260902-147 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1292,7 +1292,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-146';
+const APP_BUILD='20260902-147';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2286,24 +2286,38 @@ function makeDriverIcon(status,name,isMe,car,ageSec,plate,gpsWeak,poolLabel){
   });
 }
 
+// 自分の「待機中かどうか」を判定する条件は、以前はマーカーのバッジ表示・
+// リロードをまたぐ状態保存（saveAppState）・仲間の状況一覧の自分の行・
+// デバッグツール（debugPoolBadge）の4箇所にそれぞれ別々に（微妙に異なる
+// 条件式で）実装されていた。号を選んでから実車ボタンを押すまでの間、
+// 同じプールに留まったまま連続でお客様を乗せる場合など、待機時間の
+// 表示更新用タイマー（waitInterval）だけが一時的に止まる区間があり、
+// その条件をそのまま「待機中か」の判定に使っていた箇所だけが、その区間で
+// 誤って「待機していない」ことになってしまっていた。1箇所だけ直しても
+// 他の箇所は直らず同種の不具合が何度も別の場所で再発していたため、
+// 「待機中かどうか」の判定はこの2つの関数だけに集約し、他は必ずこれらを
+// 経由して参照する
+//
+// プール内で号を選択して待機中か（＝地図バッジを出す条件）。実車ボタンを
+// 押すまでは絶対に消えないよう、号選択(currentSpotSelection)・待機開始
+// 時刻(waitStart)・実車中でないか(currentStatus)の3つだけで判定する
+function currentPoolWait(){
+  if(currentStatus==='jitsusha'||!currentSpotSelection||!waitStart)return null;
+  return {spot:currentSpotSelection,waitStart,mins:Math.max(0,Math.floor((Date.now()-waitStart)/60000))};
+}
+// 自分が何らかの形で待機中か（プール内での号選択待機に加え、号を選ばない
+// 「⏱ 待機開始」ボタンでの手動計測中も含む）。手動計測中はwaitInterval
+// （タイマーが実際に動いているか）が唯一かつ正確な判定材料になる
+function myActiveWaitInfo(){
+  return currentPoolWait()||((waitInterval&&waitStart)?{spot:null,waitStart,mins:Math.max(0,Math.floor((Date.now()-waitStart)/60000))}:null);
+}
 function updateMyMarker(lat,lng){
   const name=localStorage.getItem('taxi_name')||'自分';
   const car=localStorage.getItem('taxi_car')||'';
   const plate=localStorage.getItem('taxi_number')||'';
   const ageSec=gpsLastUpdate>0?Math.floor((Date.now()-gpsLastUpdate)/1000):null;
   const isWeak=ageSec!==null&&ageSec>20;
-  // 号選択・待機時間バッジ（〇号 〇分）は、以前はwaitInterval（画面の1秒ごとの
-  // タイマー表示用setIntervalが生きているか）とwait-spot-lblのDOMテキストを
-  // 正規表現で読み取って判定していたが、この2つは本来のバッジ表示条件
-  // （号を選んでから実車ボタンを押すまで）とは別の目的の値であり、間接的で
-  // 壊れやすかった（何らかの理由でどちらかがズレると、実車を押していないのに
-  // バッジだけ消えてしまう）。実際にバッジを出す条件は「号を選択済みか
-  // (currentSpotSelection)」「実車ボタンをまだ押していないか(currentStatus)」
-  // 「待機開始時刻(waitStart)があるか」の3つだけなので、それらを直接見るように
-  // し、実車ボタンを押すまでは絶対にバッジが消えないようにする
-  const poolLabel=(currentStatus!=='jitsusha'&&currentSpotSelection&&waitStart)
-    ?{spot:currentSpotSelection,mins:Math.max(0,Math.floor((Date.now()-waitStart)/60000))}
-    :null;
+  const poolLabel=currentPoolWait();
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak,poolLabel);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
   else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
@@ -3412,16 +3426,10 @@ function saveAppState(){
     testMode,
     currentStatus,
     dutyStartTs:dutyStart?dutyStart.getTime():null,
-    // 以前はwaitInterval（1秒ごとの画面表示更新タイマーが動いているか）だけで
-    // 保存の可否を判定していたが、実車ボタンを押した後も同じプール（乗り場）に
-    // 留まって連続してお客様を乗せる場合（staysInPool）、号選択(currentSpotSelection)
-    // は維持したままwaitIntervalだけ一旦止まる区間がある。その区間でバックグラウンド
-    // 復帰等によりアプリが再読み込みされると、waitStartTsがnullで保存され、
-    // 号選択は復元されるのにwaitStartだけ復元されず、マーカーの「〇号 〇分」
-    // バッジが実車ボタンを押すまでずっと表示されなくなる不具合があった。
-    // バッジの表示条件（updateMyMarker参照）と同じく、currentSpotSelectionが
-    // ある間も待機中とみなして保存する
-    waitStartTs:(waitInterval||currentSpotSelection)?waitStart:null,
+    // 「待機中かどうか」の判定はmyActiveWaitInfo()に集約している（詳しくは
+    // その定義部のコメント参照）。ここもそれに合わせることで、リロードを
+    // またいでも実際の待機状態と保存内容が必ず一致するようにする
+    waitStartTs:myActiveWaitInfo()?waitStart:null,
     jitsushaStart,
     currentSpotSelection,
     boardInfo,
@@ -4074,9 +4082,14 @@ function makeDriverRow(id, d, isMe){
   const initial=(d.name||'?').slice(0,1);
   const clsMap={kuusha:'kuusha',jitsusha:'jitsusha',kaisou:'kaisou',offline:'offline'};
   const timeStr=isMe?'自分':(alive?`${Math.floor(age/60000)}分前に更新`:'5分以上前');
-  const waitSince=isMe?waitStart:d.waitSince;
+  // isMeの「待機中かどうか」はmyActiveWaitInfo()に集約している（詳しくはその
+  // 定義部のコメント参照）。以前はここだけwaitInterval!==nullで別途判定して
+  // おり、同じプールに留まって連続でお客様を乗せる間だけ待機タイマーが
+  // 一旦止まる区間で、この行だけ「待機していない」表示になってしまっていた
+  const myWait=isMe?myActiveWaitInfo():null;
+  const waitSince=isMe?(myWait?myWait.waitStart:null):d.waitSince;
   const waitSpot=isMe?(document.getElementById('wait-spot-lbl').textContent.replace('待機場所: ','').replace('（終了）','').replace('未設定','').trim()||null):d.waitSpot;
-  const isWaiting=waitSince&&alive&&(isMe?waitInterval!==null:true);
+  const isWaiting=isMe?(!!myWait&&alive):(waitSince&&alive);
   const waitMins=isWaiting?Math.floor((Date.now()-waitSince)/60000):null;
   const spotIcon=waitSpot?(waitSpot.includes('羽田空港')?'✈️':waitSpot.startsWith('出庫事務所')?'🏢':waitSpot.startsWith('納金事務所')?'💴':'📍'):'';
   const rowClick=isMe?'':`onclick="focusDriverFromList('${id}')" style="cursor:pointer"`;
@@ -8993,8 +9006,12 @@ function refreshPoolHistory(focusSpot){
   const body=document.getElementById('pool-history-body');
   if(!body)return;
   const now=Date.now();
-  // 現在自分が待機中なら、その待機時間に合わせて表示範囲を変える（待機中でなければ90分固定）
-  const currentWaitMin=waitInterval?Math.max(Math.ceil(waitSec/60),1):90;
+  // 現在自分が待機中なら、その待機時間に合わせて表示範囲を変える（待機中でなければ90分固定）。
+  // 以前はwaitInterval・waitSec（1秒ごとの画面表示更新タイマー）だけを見ていたため、
+  // 同じプールに留まって連続でお客様を乗せる間だけタイマーが一旦止まる区間で、
+  // 実際には待機中なのに90分固定表示に戻ってしまっていた
+  const myWaitForHistory=myActiveWaitInfo();
+  const currentWaitMin=myWaitForHistory?Math.max(myWaitForHistory.mins,1):90;
   const LIMIT=currentWaitMin*60*1000;
   const titleEl=document.getElementById('pool-history-title');
   if(titleEl)titleEl.textContent=`📋 直近${currentWaitMin}分の履歴`;
@@ -9305,35 +9322,39 @@ async function debugGeocode(){
 }
 
 // プール内で待機中のはずなのに、マーカーの「〇号 〇分」表示（poolLabel）が
-// 消えている場合の原因切り分け用。この症状は過去に何度か報告・修正して
-// きたが（PR #220等）まだ再発することがあり、その場で内部状態をそのまま
-// 確認できる手段が無いと、毎回スクリーンショット等でのやり取りが必要になり
-// 原因特定に時間がかかる。updateMyMarker内で実際に参照している値を
-// そのまま並べて表示することで、次に発生した際にその場で判断できるようにする
+// 消えている場合の原因切り分け用。この症状は過去に何度も報告・修正してきたが
+// （PR #220, #234, #242, #252等）、「待機中かどうか」の判定が複数箇所に
+// バラバラに実装されていて、1箇所直しても他が直らず何度も再発していた。
+// 現在はcurrentPoolWait()/myActiveWaitInfo()に判定を集約しているため、この
+// デバッグ表示もそれらを直接呼び出す（独自に再計算しない）ことで、今後も
+// 実際の表示・保存ロジックと必ず一致した値を表示できるようにする
 function debugPoolBadge(){
   const out=document.getElementById('debug-poolbadge-out');
   out.style.display='block';
   const waitSpotLblEl=document.getElementById('wait-spot-lbl');
   const waitSpotText=waitSpotLblEl?waitSpotLblEl.textContent:'(要素が見つかりません)';
-  const poolLabel=(waitInterval&&waitStart)?domesticPoolLabel(waitSpotText,waitStart):null;
+  const poolLabel=currentPoolWait();
+  const activeWait=myActiveWaitInfo();
   const hCp=checkpoints.find(c=>c.id==='haneda');
   const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'−';
   out.textContent=[
-    `【バッジ計算結果】`,
-    poolLabel?`✅ 表示されるはず: ${poolLabel.spot} ${poolLabel.mins}分`:'❌ 表示されない（poolLabelがnull）',
+    `【バッジ計算結果（currentPoolWait）】`,
+    poolLabel?`✅ 表示されるはず: ${poolLabel.spot} ${poolLabel.mins}分`:'❌ 表示されない（currentPoolWaitがnull）',
     ``,
-    `【updateMyMarkerが参照する値】`,
+    `【リロード時に保存される値（saveAppState/myActiveWaitInfo）】`,
+    activeWait?`✅ 保存される: waitStart=${fmt(activeWait.waitStart)}（${activeWait.spot||'号選択なし・手動計測'}）`:'❌ 保存されない（myActiveWaitInfoがnull）',
+    ``,
+    `【currentPoolWait/myActiveWaitInfoが参照する値】`,
     `isDuty: ${isDuty}`,
     `currentStatus: ${currentStatus}`,
-    `waitInterval: ${waitInterval?'動作中':'null（待機タイマー停止中）'}`,
+    `waitInterval: ${waitInterval?'動作中':'null（表示更新タイマー停止中。ただし待機中とは限らない）'}`,
     `waitStart: ${fmt(waitStart)}`,
+    `currentSpotSelection: ${currentSpotSelection||'(未選択)'}`,
     `wait-spot-lbl の表示テキスト: "${waitSpotText}"`,
-    `　→「1〜4号・国際線」を含むか: ${/[1-4]号|国際線/.test(waitSpotText)?'はい':'いいえ'}`,
     ``,
     `【参考: 羽田プール(haneda)の状態】`,
     `cpInside['haneda']: ${cpInside['haneda']}`,
     `poolModalHandled: ${hCp?!!hCp.poolModalHandled:'(チェックポイント未設定)'}`,
-    `currentSpotSelection: ${currentSpotSelection||'(未選択)'}`,
     `cpArriveTs['haneda']: ${fmt(cpArriveTs['haneda'])}`,
     ``,
     `【GPS】`,
