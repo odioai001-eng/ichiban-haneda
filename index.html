@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-142 -->
+<!-- v20260902-143 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1265,7 +1265,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-142';
+const APP_BUILD='20260902-143';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1842,10 +1842,15 @@ function isVenueEndingSoon(endTs){
   return now>=(endTs-15*60000)&&now<=(endTs+60*60000);
 }
 let eventVenueLayer=null,eventVenuesShown=false,eventVenuesData=[],eventVenueRefreshTimer=null;
+// 終演からこの時間が経過した会場は、地図上から自動的に消す
+const EVENT_VENUE_HIDE_AFTER_END_MS=90*60000;
 function renderEventVenueLayer(){
   if(!eventVenueLayer)return;
   eventVenueLayer.clearLayers();
+  const now=Date.now();
   eventVenuesData.forEach(v=>{
+    // 終演時刻が分かっていて、かつ終演から90分以上経過している会場は表示しない
+    if(v.endTs&&(now-v.endTs)>EVENT_VENUE_HIDE_AFTER_END_MS)return;
     const coords=VENUE_COORDS[v.name];
     if(!coords)return;
     const ending=isVenueEndingSoon(v.endTs);
@@ -1868,20 +1873,28 @@ function renderEventVenueLayer(){
     L.marker(coords,{icon}).bindPopup(`<b>${v.icon} ${esc(v.name)}</b>${v.eventTitle?`<br>${esc(v.eventTitle)}`:''}${v.endTimeText?`<br>終演目安: ${esc(v.endTimeText)}`:''}${ending?'<br><b style="color:#ef4444">まもなく／ちょうど終演</b>':''}`).addTo(eventVenueLayer);
   });
 }
-async function toggleEventVenues(){
+// 表示ON/OFFの選択を端末に保存し、次回起動時も引き継ぐ。何も選択したことが
+// なければ初期値はON（毎回ボタンを押さなくても、最初から地図に表示されている
+// ようにする）
+function isEventVenuesPreferredOn(){
+  const v=localStorage.getItem('taxi_event_venues_on');
+  return v===null?true:v==='1';
+}
+async function toggleEventVenues(silent){
   const btn=document.getElementById('event-venue-btn');
   if(eventVenuesShown){
     if(eventVenueLayer)leafletMap.removeLayer(eventVenueLayer);
     if(eventVenueRefreshTimer){clearInterval(eventVenueRefreshTimer);eventVenueRefreshTimer=null;}
     eventVenuesShown=false;
     if(btn)btn.classList.remove('on');
+    localStorage.setItem('taxi_event_venues_on','0');
     return;
   }
   if(btn)btn.classList.add('on');
-  toast('🎪 本日開催中の会場を読み込み中…');
+  if(!silent)toast('🎪 本日開催中の会場を読み込み中…');
   const venues=await fetchTodayEventVenues();
   if(!venues.length){
-    toast('⚠️ 本日開催の会場情報が取得できませんでした');
+    if(!silent)toast('⚠️ 本日開催の会場情報が取得できませんでした');
     if(btn)btn.classList.remove('on');
     return;
   }
@@ -1890,9 +1903,11 @@ async function toggleEventVenues(){
   renderEventVenueLayer();
   eventVenueLayer.addTo(leafletMap);
   eventVenuesShown=true;
+  localStorage.setItem('taxi_event_venues_on','1');
   const plotted=eventVenuesData.filter(v=>VENUE_COORDS[v.name]).length;
-  toast(`🎪 本日開催中の会場 ${plotted}件を地図に表示しました`);
-  // 終演前後で色分け表示が切り替わるよう、1分ごとに再描画する
+  if(!silent)toast(`🎪 本日開催中の会場 ${plotted}件を地図に表示しました`);
+  // 終演前後で色分け表示が切り替わるよう、また終演から90分経過した会場を
+  // 自動的に消すため、1分ごとに再描画する
   if(eventVenueRefreshTimer)clearInterval(eventVenueRefreshTimer);
   eventVenueRefreshTimer=setInterval(renderEventVenueLayer,60000);
 }
@@ -2188,6 +2203,9 @@ function initMap(){
   // オートフォロー・仲間フォローのON/OFFは、ボタン操作などの明示的な操作でのみ
   // 切り替える。地図を手動でドラッグしても自動でOFFにはしない
   // （ONにしたらONのまま、OFFにしたらOFFのままであるべき、という単純な仕様のため）
+  // イベント会場の表示は、明示的にOFFにされない限り（初期値はON）、ボタンを
+  // 押さなくても最初から地図に表示されているようにする
+  if(isEventVenuesPreferredOn())toggleEventVenues(true);
 }
 
 function gpsAgeDot(ageSec){
