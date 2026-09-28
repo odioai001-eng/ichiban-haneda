@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-141 -->
+<!-- v20260902-142 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -443,6 +443,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
         backdrop-filter:blur(6px)">😔 あぶれ</button>
+    <button class="map-ctrl-btn" id="more-tools-btn" onclick="toggleMoreToolsPanel()" title="その他のツール">🧰</button>
     <!-- position:relativeのラッパー自体はイベント会場ボタン1個ぶんの幅のままにし、
          GPS状態はその外側（右）にposition:absoluteで重ねる。アイコン自体は
          他のボタンと同じ幅としてセンタリングされるため、縦一列がまっすぐ揃う -->
@@ -456,7 +457,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         <span id="online-count" style="color:var(--cyan)">0人</span>
       </div>
     </div>
-    <button class="map-ctrl-btn" id="more-tools-btn" onclick="toggleMoreToolsPanel()" title="その他のツール">🧰</button>
     <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録" style="font-size:calc(12px*var(--btn-scale,1));font-weight:800">GAS</button>
     <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="無料高速（実質無料の高速料金）を記録" style="font-size:calc(10px*var(--btn-scale,1));font-weight:800;line-height:1.15">無料<br>高速</button>
     <button class="map-ctrl-btn" onclick="promptJibaraHighwayEntry()" title="自腹高速（自分で払って戻ってこない高速料金）を記録" style="font-size:calc(10px*var(--btn-scale,1));font-weight:800;line-height:1.15">自腹<br>高速</button>
@@ -1265,7 +1265,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-141';
+const APP_BUILD='20260902-142';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
