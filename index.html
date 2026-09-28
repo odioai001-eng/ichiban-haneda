@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-149 -->
+<!-- v20260902-150 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -771,6 +771,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="btn btn-p" onclick="debugPoolBadge()" style="width:100%">🏷️ マーカー表示（〇号〇分）の状態を確認</button>
     <div id="debug-poolbadge-out" style="margin-top:10px;font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;display:none"></div>
   </div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">「本日の目標まであと」やランキングの「本日の売り上げ」が実際と合っていない時、ここで内訳を確認できます。</div>
+    <button class="btn btn-p" onclick="debugTodaySales()" style="width:100%">💰 本日の売上集計の状態を確認</button>
+    <div id="debug-todaysales-out" style="margin-top:10px;font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;display:none"></div>
+  </div>
   <div class="sec">🕐 出勤・退勤時間の手動記録・修正</div>
   <div class="card">
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">押し忘れ・押し間違いがあった場合、日付ごとの出勤・退勤時間を直接入力して記録できます。「勤務時間管理」の集計にすぐ反映されます。</div>
@@ -1292,7 +1297,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-149';
+const APP_BUILD='20260902-150';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -9394,6 +9399,56 @@ function debugPoolBadge(){
     `myLat/myLng: ${myLat!==null?myLat.toFixed(6)+', '+myLng.toFixed(6):'未取得'}`,
     `myMarker: ${myMarker?'作成済み':'未作成'}`,
     `最終GPS更新: ${gpsLastUpdate?Math.floor((Date.now()-gpsLastUpdate)/1000)+'秒前':'−'}`,
+  ].join('\n');
+}
+
+// 「本日の目標まであと」やグループランキングの「本日の売り上げ」が実際の記録と
+// 合っていない場合の原因切り分け用。taxi_fare_log自体には記録が残っているのに
+// 表示が0円になる不具合が何度か発生しており（出勤し直した際に前のシフト分が
+// 集計から漏れる等）、集計に実際に使われている値をそのまま並べて表示することで、
+// 同期ボタンを押しても変わらない場合でもその場で原因を判断できるようにする
+async function debugTodaySales(){
+  const out=document.getElementById('debug-todaysales-out');
+  out.style.display='block';
+  out.textContent='読み込み中…';
+  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'−';
+  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  const bizStart=getBusinessDayStart();
+  const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+  const todayShiftLogEntries=shiftLog.filter(s=>s.endTs&&s.startTs>=bizStart);
+  const logToday=log.filter(e=>(e.ts||0)>=bizStart);
+  const todayEntries=getTodayShiftFareEntries();
+  const bizEntries=getBusinessDayFareEntries();
+  const sumFare=arr=>arr.reduce((a,e)=>a+exTax(e.fare||0),0);
+  let fbLine='(db未接続のため確認できません)';
+  if(db){
+    try{
+      const snap=await db.ref('team_sales/'+myId).once('value');
+      const d=snap.val();
+      fbLine=d?`todayFare=${d.todayFare!=null?'¥'+d.todayFare.toLocaleString():'(未送信)'} / todayBizStart=${fmt(d.todayBizStart)}`:'(team_salesにレコードなし)';
+    }catch(e){fbLine='取得エラー: '+e.message;}
+  }
+  out.textContent=[
+    `【集計結果】`,
+    `個人の「本日」表示（getTodayShiftFareEntries）: ${todayEntries.length}件 / ¥${sumFare(todayEntries).toLocaleString()}`,
+    `ランキング用（getBusinessDayFareEntries）: ${bizEntries.length}件 / ¥${sumFare(bizEntries).toLocaleString()}`,
+    `Firebase（team_sales）に実際に送信されている値: ${fbLine}`,
+    ``,
+    `【元データ】`,
+    `isDuty: ${isDuty} / dutyStart: ${dutyStart?fmt(dutyStart.getTime()):'−'}`,
+    `testMode: ${testMode}`,
+    `本日の営業日開始(9:00基準): ${fmt(bizStart)}`,
+    `taxi_fare_log 全件数: ${log.length} / うち本日(9:00以降)分: ${logToday.length}件・¥${sumFare(logToday).toLocaleString()}`,
+    `本日に完了しているシフト記録(taxi_shift_log): ${todayShiftLogEntries.length}件`,
+    ...todayShiftLogEntries.map(s=>`　・${fmt(s.startTs)} 〜 ${fmt(s.endTs)}`),
+    ``,
+    `【ランキング参加設定】`,
+    `月間ランキング参加中: ${isMonthRankingOptedIn()}`,
+    `本日ランキング参加中: ${isTodayRankingOptedIn()}`,
+    `db接続: ${db?'あり':'なし（オフライン等）'}`,
+    ``,
+    `【本日(9:00以降)のtaxi_fare_log明細（新しい順）】`,
+    ...logToday.slice().sort((a,b)=>b.ts-a.ts).map(e=>`　・${fmt(e.ts)}　¥${(e.fare||0).toLocaleString()}${e.tripTs?'':'（単発記録）'}`),
   ].join('\n');
 }
 
