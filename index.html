@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-150 -->
+<!-- v20260902-151 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -775,6 +775,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">「本日の目標まであと」やランキングの「本日の売り上げ」が実際と合っていない時、ここで内訳を確認できます。</div>
     <button class="btn btn-p" onclick="debugTodaySales()" style="width:100%">💰 本日の売上集計の状態を確認</button>
     <div id="debug-todaysales-out" style="margin-top:10px;font-size:11px;background:var(--surface2);border-radius:8px;padding:10px;white-space:pre-wrap;word-break:break-all;display:none"></div>
+    <div style="font-size:12px;color:var(--muted);margin:10px 0 8px">上の確認結果で「送り先」タブの内容より運賃記録の件数・金額が少ない場合、以下のボタンで送り先タブの内容をもとに本日分の運賃記録を修復できます（送り先タブ側の記録は変更しません）。</div>
+    <button class="btn btn-p" onclick="repairTodayFareLog()" style="width:100%">🛠 本日分の運賃記録を送り先タブから修復</button>
   </div>
   <div class="sec">🕐 出勤・退勤時間の手動記録・修正</div>
   <div class="card">
@@ -1297,7 +1299,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-150';
+const APP_BUILD='20260902-151';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -9450,6 +9452,22 @@ async function debugTodaySales(){
     `【本日(9:00以降)のtaxi_fare_log明細（新しい順）】`,
     ...logToday.slice().sort((a,b)=>b.ts-a.ts).map(e=>`　・${fmt(e.ts)}　¥${(e.fare||0).toLocaleString()}${e.tripTs?'':'（単発記録）'}`),
   ].join('\n');
+}
+
+// resyncFareLogFromDestinations自体は、退勤済みシフトの精算レポート（recomputeSettlementFromFareLog）
+// からしか呼べず、出勤中の「今日」分を直す手段が無かった。送り先タブには正しい運賃・高速代が
+// 表示されているのにtaxi_fare_log側に反映されておらず、本日の売上・ランキングが実際より
+// 少なく表示される不具合（editTripFare/editTripEtcの同期漏れ等が原因。PR #205・#206参照）は
+// 出勤中でも起こり得るため、営業日（9:00〜翌9:00）の範囲でその場から修復できるようにする
+async function repairTodayFareLog(){
+  if(!confirm('送り先タブの内容をもとに、本日分（9:00〜翌9:00）の運賃記録を修復しますか？\n（送り先タブ側の記録は変更されません）'))return;
+  const bizStart=getBusinessDayStart();
+  const result=resyncFareLogFromDestinations(bizStart,Date.now());
+  pushTeamSales();
+  renderSalesStats();
+  updateDailyBar();
+  toast(`🛠 修復しました（対象${result.inRangeCount}件・新規作成${result.createdCount}件・更新${result.updatedCount}件）`);
+  debugTodaySales();
 }
 
 function loadSettings(){
