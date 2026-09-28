@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-139 -->
+<!-- v20260902-140 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -130,6 +130,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .map-ctrl-btn:active{transform:scale(.92)}
 .map-layer-bar{position:absolute;bottom:116px;left:8px;z-index:500;
   display:flex;flex-direction:column;gap:5px}
+/* 左右のボタンをまとめた「その他」パネル。開く位置はボタンの実際の座標を
+   JS側（toggleMoreToolsPanel）でその都度計算してleft/bottomに設定するため、
+   position:fixedにしてgetBoundingClientRect()の座標系（ビューポート基準）と揃える */
+.map-more-tools-panel{position:fixed;z-index:500;display:none;
+  grid-template-columns:repeat(2,1fr);gap:8px;
+  background:rgba(13,13,26,.92);backdrop-filter:blur(6px);
+  border:1px solid var(--border);border-radius:14px;padding:10px}
 .map-layer-chip{background:rgba(13,13,26,.85);backdrop-filter:blur(6px);
   border:1px solid var(--border);border-radius:20px;padding:5px 12px;
   font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap}
@@ -421,9 +428,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
        【工事規制情報】【料金検索】【地図切り替え】）にするには、HTMLの記述順は
        その逆（下から並べたい順）にする必要がある -->
   <div class="map-btn-stack right">
-    <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替">🗺</button>
-    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索">💴</button>
-    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報">🚦</button>
     <button class="map-ctrl-btn on" id="follow-btn" onclick="toggleAutoFollow()" title="オートフォロー">🎯</button>
     <button class="locate-me-btn" onclick="centerOnMe()" title="自分の現在地へ">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -443,20 +447,20 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
       backdrop-filter:blur(6px)">🚗</button>
   </div>
-  <!-- 地図左下のボタン群。駅アイコン（station-btn）は他のボタンと同じ位置の
-       ままにし、GPS状態表示はその右（地図側）にはみ出す形で並べる。
-       これにより左端に余白を作らずに済む -->
+  <!-- 地図左下のボタン群。イベント会場アイコン（event-venue-btn）は他のボタンと
+       同じ位置のままにし、GPS状態表示はその右（地図側）にはみ出す形で並べる。
+       これにより左端に余白を作らずに済む（以前はstation-btnに付けていたが、
+       station-btnを「その他」パネルへまとめたため付け替えた） -->
   <div class="map-btn-stack left">
     <button id="abure-row" onclick="recordAbure()"
       style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
         backdrop-filter:blur(6px)">😔 あぶれ</button>
-    <button class="map-ctrl-btn" id="hotel-btn" onclick="toggleHotels()" title="羽田・成田行きが見込める主要ホテルを地図にハイライト">🏨</button>
-    <!-- position:relativeのラッパー自体は駅ボタン1個ぶんの幅のままにし、
-         GPS状態はその外側（右）にposition:absoluteで重ねる。駅アイコン自体は
+    <!-- position:relativeのラッパー自体はイベント会場ボタン1個ぶんの幅のままにし、
+         GPS状態はその外側（右）にposition:absoluteで重ねる。アイコン自体は
          他のボタンと同じ幅としてセンタリングされるため、縦一列がまっすぐ揃う -->
     <div style="position:relative">
-      <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）">🚉</button>
+      <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
       <div class="gps-pill" title="GPS状態" style="position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%)">
         <span class="gps-dot" id="gps-dot"></span>
         <!-- 詳しい状態文言は幅に収めるため非表示にし、色（gps-dot）と仲間の人数
@@ -465,13 +469,22 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         <span id="online-count" style="color:var(--cyan)">0人</span>
       </div>
     </div>
-    <button class="map-ctrl-btn" id="border-station-btn" onclick="toggleBorderStations()" title="最終電車が出ると神奈川・埼玉・千葉方面へタクシーでしか行けなくなる駅を地図にハイライト">🌉</button>
-    <button class="map-ctrl-btn" id="event-venue-btn" onclick="toggleEventVenues()" title="本日開催中の会場を地図にハイライト">🎪</button>
-    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
-    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/train_status_hub.html'" title="運行情報ハブ（人身事故・故障等）">🚨</button>
+    <button class="map-ctrl-btn" id="more-tools-btn" onclick="toggleMoreToolsPanel()" title="その他のツール">🧰</button>
     <button class="map-ctrl-btn" onclick="promptFuelEntry()" title="燃料の給油量を記録" style="font-size:calc(12px*var(--btn-scale,1));font-weight:800">GAS</button>
     <button class="map-ctrl-btn" onclick="promptHighwayEntry()" title="無料高速（実質無料の高速料金）を記録" style="font-size:calc(10px*var(--btn-scale,1));font-weight:800;line-height:1.15">無料<br>高速</button>
     <button class="map-ctrl-btn" onclick="promptJibaraHighwayEntry()" title="自腹高速（自分で払って戻ってこない高速料金）を記録" style="font-size:calc(10px*var(--btn-scale,1));font-weight:800;line-height:1.15">自腹<br>高速</button>
+  </div>
+  <!-- 元は左右のボタンスタックに個別にあった、地図の補助情報・外部ツールへの
+       リンクをまとめた「その他」パネル。🧰ボタン（more-tools-btn）で開閉する -->
+  <div class="map-more-tools-panel" id="more-tools-panel">
+    <button class="map-ctrl-btn" id="hotel-btn" onclick="toggleHotels()" title="羽田・成田行きが見込める主要ホテルを地図にハイライト">🏨</button>
+    <button class="map-ctrl-btn" id="station-btn" onclick="toggleStations()" title="地下鉄以外の主要駅を地図にハイライト（最終電車後の営業用）">🚉</button>
+    <button class="map-ctrl-btn" id="border-station-btn" onclick="toggleBorderStations()" title="最終電車が出ると神奈川・埼玉・千葉方面へタクシーでしか行けなくなる駅を地図にハイライト">🌉</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/event_hub.html'" title="イベント終演ハブ">🎤</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/train_status_hub.html'" title="運行情報ハブ（人身事故・故障等）">🚨</button>
+    <button class="map-ctrl-btn" id="layer-btn" onclick="toggleLayerBar()" title="地図切替">🗺</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/fare_hub.html'" title="タクシー料金検索">💴</button>
+    <button class="map-ctrl-btn" onclick="location.href='https://odioai001-eng.github.io/ichiban-haneda/shutoko_hub.html'" title="首都高 工事・規制情報">🚦</button>
   </div>
   <div class="driver-panel" id="driver-panel">
     <div class="dp-handle"></div>
@@ -1265,7 +1278,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-139';
+const APP_BUILD='20260902-140';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2381,6 +2394,23 @@ function toggleLayerBar(){
   const visible=bar.style.display!=='none';
   bar.style.display=visible?'none':'flex';
   btn.classList.toggle('on',!visible);
+}
+// 左右のボタンスタックにあった、地図の補助情報・外部ツールへのリンク（駅・
+// 国境駅・ホテルハイライト、イベント終演ハブ、運行情報ハブ、地図切替、料金検索、
+// 首都高規制情報）をまとめた「その他」パネルの開閉。開く位置はボタンの実際の
+// 座標（getBoundingClientRect）からその都度計算する。--btn-scaleによる
+// ボタンサイズの変化やスタックの折り返し（wrap-fit）があっても、固定の
+// CSS座標では位置がずれてしまうため
+function toggleMoreToolsPanel(){
+  const panel=document.getElementById('more-tools-panel');
+  const btn=document.getElementById('more-tools-btn');
+  const visible=panel.style.display!=='none'&&panel.style.display!=='';
+  if(visible){panel.style.display='none';btn.classList.remove('on');return;}
+  const r=btn.getBoundingClientRect();
+  panel.style.left=(r.right+8)+'px';
+  panel.style.bottom=(window.innerHeight-r.bottom)+'px';
+  panel.style.display='grid';
+  btn.classList.add('on');
 }
 
 let gpsLastUpdate=0,gpsStaleTimer=null,gpsRetryTimer=null,gpsWeakHeartbeat=null;
