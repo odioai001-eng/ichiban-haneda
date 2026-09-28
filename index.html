@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-148 -->
+<!-- v20260902-149 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1292,7 +1292,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-148';
+const APP_BUILD='20260902-149';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5527,8 +5527,17 @@ function saveTargetDays(){
 function getTodayShiftFareEntries(){
   const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
   if(isDuty&&dutyStart){
-    // 出勤中は、暦日ではなく「出勤してからの累計」を本日分として扱う（夜勤で日付をまたいでもリセットされない）
-    return log.filter(e=>(e.ts||0)>=dutyStart.getTime());
+    // 出勤中は、暦日ではなく「出勤してからの累計」を本日分として扱う（夜勤で日付をまたいでもリセットされない）。
+    // ただし、同じ営業日中に一旦退勤してすぐ出勤し直した場合（押し間違い等）、それより前の
+    // シフト分の記録がここから抜け落ち、「本日の売上」「本日の目標まであと」が実際より
+    // 少なく（0円に）見えてしまう不具合があった。getBusinessDayFareEntries（グループ
+    // ランキング用）では既に同様の対策済みだったが、こちら（個人の目標表示等で使用）には
+    // 反映されていなかったため、同じ営業日に完了している他のシフトも合算するようにする
+    const bizStart=getBusinessDayStart();
+    const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+    const ranges=[{start:dutyStart.getTime(),end:Infinity}];
+    shiftLog.filter(s=>s.endTs&&s.startTs>=bizStart).forEach(s=>ranges.push({start:s.startTs,end:s.endTs}));
+    return log.filter(e=>ranges.some(r=>(e.ts||0)>=r.start&&(e.ts||0)<=r.end));
   }
   // 退勤後は、直近に完了した出退勤（出勤〜退勤）の時間帯そのものに絞る。
   // 「今日の日付」でフォールバックすると、日をまたいだ夜勤の翌日に確認した時や
