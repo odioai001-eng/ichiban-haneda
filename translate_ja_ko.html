@@ -186,6 +186,9 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
         <label class="sw"><input type="checkbox" id="optAuto"><span></span></label></div>
       <div class="row"><label>話しながら同時翻訳<small>話している途中から翻訳を表示</small></label>
         <label class="sw"><input type="checkbox" id="optLive"><span></span></label></div>
+      <div class="row" style="flex-direction:column;align-items:stretch;gap:8px"><label>音声認識エンジン<small>「AI高精度」は端末内のAI（Whisper）で認識。日本語・韓国語を声から自動判別し、無料・回数無制限</small></label>
+        <select id="optAsr"><option value="browser">標準（ブラウザ内蔵・軽い）</option><option value="whisper-base">AI高精度 Whisper Base（約80MB〜）</option><option value="whisper-small">AI最高精度 Whisper Small（約250MB〜）</option></select>
+        <div class="note" id="asrNote"></div></div>
       <div class="row"><label>話し終わりの判定<small>文の途中で切れる時は「長め」に</small></label>
         <select id="optEndPause"><option value="800">短め（0.8秒）</option><option value="1200">標準（1.2秒）</option><option value="2000">長め（2秒）</option><option value="3000">とても長め（3秒）</option></select></div>
       <div class="row" style="flex-direction:column;align-items:stretch"><label>単語登録（聞き間違いの自動修正）<small>1行に1つ「聞き間違い→正しい語」。人名・地名・店名などに便利</small></label>
@@ -279,7 +282,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem('jk_'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem('jk_'+k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({speak:true, auto:true, live:true, face:true, rate:1.0, size:30, engine:'auto', endPause:1200, dict:''}, store.get('settings', {}));
+const settings = Object.assign({speak:true, auto:true, live:true, face:true, rate:1.0, size:30, engine:'auto', endPause:1200, dict:'', asr:'browser'}, store.get('settings', {}));
 const saveSettings = () => store.set('settings', settings);
 let hist = store.get('hist', []);
 const cache = new Map(store.get('cache', []));
@@ -412,7 +415,7 @@ function speak(text, l, onDone){
   u.lang = LANG[l].bcp; u.rate = settings.rate;
   const v = pickVoice(LANG[l].bcp); if(v) u.voice = v;
   let done = false;
-  const fin = () => { if(done) return; done = true; clearTimeout(speakingTimer); onDone && onDone(); };
+  const fin = () => { if(done) return; done = true; lastSpeakEnd = Date.now(); clearTimeout(speakingTimer); onDone && onDone(); };
   u.onend = fin;
   u.onerror = e => {
     if(e.error === 'not-allowed' && !speakWarned){ speakWarned = true; toast('🔊 画面を一度タップすると読み上げが有効になります / 화면을 한 번 누르면 음성이 켜져요'); }
@@ -455,7 +458,7 @@ function canAutoListen(){
 function scheduleListen(delay){
   clearTimeout(loopTimer);
   if(!handsFree) return;
-  loopTimer = setTimeout(() => { if(canAutoListen()) startListening(turn); }, delay == null ? 250 : delay);
+  loopTimer = setTimeout(() => { if(!canAutoListen()) return; if(useWhisper()){ if(wh.on){ whRings(); whIdleStatus(); } else whStart(); } else if(SR) startListening(turn); }, delay == null ? 250 : delay);
 }
 // ---------- 認識精度を上げるための補助処理 ----------
 // 文字種の一致度（日本語ならかな・漢字、韓国語ならハングルの割合）
@@ -613,17 +616,260 @@ function updateAutoBtn(){
   b.setAttribute('aria-label', handsFree ? '自動会話を一時停止' : '自動会話を再開');
 }
 function startHandsFree(){
-  if(!SR) return;
+  if(!SR && !useWhisper()) return;
   handsFree = true; updateAutoBtn();
-  if(!rec && !busy) startListening(turn);
+  if(!rec && !busy){ if(useWhisper()) whStart(); else startListening(turn); }
   // 一定時間たっても聞き取りが始まらない（ブラウザがタップを要求している）場合だけ案内を出す
   clearTimeout(startWatch);
-  startWatch = setTimeout(() => { if(handsFree && !rec && !busy) showStartOverlay(); }, 4000);
+  startWatch = setTimeout(() => { if(handsFree && !rec && !busy && !wh.on && !wh.loading) showStartOverlay(); }, 4000);
 }
 function stopHandsFree(){
   handsFree = false; updateAutoBtn();
-  clearTimeout(loopTimer); abortListening();
+  clearTimeout(loopTimer); abortListening(); whStop(); wh.force = null;
   setStatus('⏸ 自動会話を停止中（🎤で手動入力）');
+}
+
+// ================= AI高精度音声認識（Whisper・端末内で動作） =================
+// 設定で「AI高精度」を選ぶと、ブラウザ標準の音声認識の代わりに Whisper を端末内で動かす。
+// ・日本語／韓国語を声から自動判別するため、言語の取り違えが起きない
+// ・無料・回数無制限（モデルは初回だけダウンロードし、以降は端末に保存）
+const WH_MODELS = {'whisper-base':'onnx-community/whisper-base', 'whisper-small':'onnx-community/whisper-small'};
+const WH_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.0/dist/transformers.min.js';
+const WH_WORKER_SRC = `
+import { AutoProcessor, AutoTokenizer, WhisperForConditionalGeneration, Tensor, env } from '${WH_LIB}';
+env.allowLocalModels = false;
+let proc, tok, model, ids;
+const progress_callback = p => postMessage({type:'progress', p});
+async function load(id){
+  let device = 'wasm', dtype = 'q8';
+  if(self.navigator && navigator.gpu){
+    try{
+      const a = await navigator.gpu.requestAdapter();
+      if(a){ device = 'webgpu'; dtype = {encoder_model: a.features.has('shader-f16') ? 'fp16' : 'fp32', decoder_model_merged: 'q4'}; }
+    }catch(e){}
+  }
+  proc = await AutoProcessor.from_pretrained(id, {progress_callback});
+  tok = await AutoTokenizer.from_pretrained(id, {progress_callback});
+  try{ model = await WhisperForConditionalGeneration.from_pretrained(id, {dtype, device, progress_callback}); }
+  catch(e){
+    if(device === 'wasm') throw e;
+    device = 'wasm';
+    model = await WhisperForConditionalGeneration.from_pretrained(id, {dtype:'q8', device, progress_callback});
+  }
+  const gc = model.generation_config;
+  ids = {sot: gc.decoder_start_token_id, ja: gc.lang_to_id['<|ja|>'], ko: gc.lang_to_id['<|ko|>']};
+  const warm = await proc(new Float32Array(16000));
+  await model.generate({input_features: warm.input_features, language:'ja', task:'transcribe', max_new_tokens:1});
+  postMessage({type:'ready', device});
+}
+// 最初の1トークンの確率で日本語か韓国語かを判定（Whisper本来の言語判別を2言語に限定）
+async function detect(input_features){
+  const sot = new Tensor('int64', BigInt64Array.from([BigInt(ids.sot)]), [1, 1]);
+  const out = await model({input_features, decoder_input_ids: sot});
+  const L = out.logits, V = L.dims[L.dims.length - 1], d = L.data, base = d.length - V;
+  const ja = Number(d[base + ids.ja]), ko = Number(d[base + ids.ko]);
+  try{ const pk = out.past_key_values; if(pk){ if(pk.dispose) pk.dispose(); else for(const k in pk) pk[k] && pk[k].dispose && pk[k].dispose(); } }catch(e){}
+  return {lang: ja >= ko ? 'ja' : 'ko', margin: Math.abs(ja - ko)};
+}
+onmessage = async e => {
+  const m = e.data;
+  try{
+    if(m.type === 'load') await load(m.id);
+    else if(m.type === 'run'){
+      const {input_features} = await proc(m.audio);
+      let lang = m.lang, margin = 99;
+      if(!lang){ const r = await detect(input_features); lang = r.lang; margin = r.margin; }
+      const out = await model.generate({input_features, language: lang, task: 'transcribe', max_new_tokens: 220, no_repeat_ngram_size: 6});
+      const text = tok.batch_decode(out, {skip_special_tokens: true})[0] || '';
+      postMessage({type:'result', text, lang, margin, seq: m.seq});
+    }
+  }catch(err){ postMessage({type:'error', stage: m.type, message: String(err && err.message || err), seq: m.seq}); }
+};
+`;
+const wh = {worker:null, model:null, ready:false, loading:false, device:'',
+  on:false, stream:null, ctx:null, src:null, node:null,
+  capturing:false, buf:[], pre:[], hot:0, silentMs:0, speechMs:0, noise:0.004,
+  force:null, oneShot:false, running:false, seq:0};
+let lastSpeakEnd = 0;
+// Whisperでよく出る「無音時の幻聴」フレーズ
+const WH_HALLU = /ご視聴ありがとうございました|チャンネル登録|高評価|字幕[はを]|시청해\s*주셔서\s*감사합니다|구독(과|,)?\s*좋아요|구독\s*부탁|자막\s*(제공|by)|MBC\s*뉴스|Thank you for watching|Subtitles by/i;
+function useWhisper(){ return settings.asr !== 'browser' && wh.ready && wh.model === settings.asr; }
+
+function whLoad(){
+  const id = settings.asr;
+  if(!WH_MODELS[id]) return;
+  if(wh.model === id && (wh.ready || wh.loading)) return;
+  whStop();
+  if(wh.worker) wh.worker.terminate();
+  wh.ready = false; wh.loading = true; wh.model = id;
+  let w;
+  try{ w = new Worker(URL.createObjectURL(new Blob([WH_WORKER_SRC], {type:'text/javascript'})), {type:'module'}); }
+  catch(e){ whFail('このブラウザはAI音声認識に未対応です'); return; }
+  wh.worker = w;
+  const files = {};
+  setStatus('🧠 AI音声認識を準備中…（初回はダウンロードに時間がかかります）');
+  updateAsrNote();
+  w.onmessage = e => {
+    const m = e.data;
+    if(m.type === 'progress'){
+      const p = m.p;
+      if(p && p.status === 'progress' && p.total){
+        files[p.file] = [p.loaded, p.total];
+        let a = 0, b = 0; for(const k in files){ a += files[k][0]; b += files[k][1]; }
+        setStatus('🧠 AI音声認識を準備中 <b>' + Math.floor(a / b * 100) + '%</b>（' + Math.round(b / 1048576) + 'MB・初回のみ）');
+      }
+    } else if(m.type === 'ready'){
+      wh.loading = false; wh.ready = true; wh.device = m.device;
+      Object.values(panes).forEach(p => p.mic.hidden = false);
+      toast('🧠 AI高精度音声認識の準備ができました');
+      updateAsrNote();
+      if(handsFree){ abortListening(); scheduleListen(100); }
+      else setStatus('🧠 AI音声認識: <b>準備完了</b>（🎤を押して話してください）');
+    } else if(m.type === 'result'){
+      whOnResult(m);
+    } else if(m.type === 'error'){
+      if(m.stage === 'load') { console.warn('whisper load failed:', m.message); whFail('AI音声認識を準備できませんでした（通信環境・空き容量を確認してください）'); }
+      else { wh.running = false; whRings(); whIdleStatus(); }
+    }
+  };
+  w.onerror = ev => { ev.preventDefault && ev.preventDefault(); if(!wh.ready) whFail('AI音声認識を読み込めませんでした（通信を確認してください）'); };
+  w.postMessage({type:'load', id: WH_MODELS[id]});
+}
+function whFail(msg){
+  whStop();
+  if(wh.worker){ wh.worker.terminate(); wh.worker = null; }
+  wh.ready = false; wh.loading = false; wh.model = null;
+  settings.asr = 'browser'; saveSettings();
+  if(opt && opt.asr) opt.asr.value = 'browser';
+  updateAsrNote();
+  toast(msg + ' → 標準の音声認識に戻します');
+  setStatus(msg, true);
+  if(!SR) Object.values(panes).forEach(p => p.mic.hidden = true);
+  scheduleListen(500);
+}
+function resample(data, from){
+  const ratio = from / 16000, n = Math.floor(data.length / ratio), out = new Float32Array(n);
+  for(let i = 0; i < n; i++){
+    const s = Math.floor(i * ratio), e2 = Math.min(data.length, Math.floor((i + 1) * ratio));
+    let sum = 0; for(let j = s; j < e2; j++) sum += data[j];
+    out[i] = sum / Math.max(1, e2 - s);
+  }
+  return out;
+}
+async function whStart(){
+  if(wh.on || !wh.ready) return;
+  wh.on = true;
+  try{
+    // AudioContextはタップ直後に同期で作る（iPhoneで無音にならないように）
+    const AC = window.AudioContext || window.webkitAudioContext;
+    try{ wh.ctx = new AC({sampleRate:16000}); }catch(e){ wh.ctx = new AC(); }
+    const resumed = wh.ctx.resume().catch(()=>{});
+    if(!wh.stream) wh.stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1}});
+    await resumed;
+    if(!wh.on || !wh.ctx){ whStop(); return; }
+    try{ wh.src = wh.ctx.createMediaStreamSource(wh.stream); }
+    catch(e){ wh.ctx.close(); wh.ctx = new AC(); wh.src = wh.ctx.createMediaStreamSource(wh.stream); } // サンプルレート固定に非対応のブラウザ
+    wh.node = wh.ctx.createScriptProcessor(1024, 1, 1);
+    wh.node.onaudioprocess = e => whFrame(e.inputBuffer.getChannelData(0), wh.ctx.sampleRate);
+    wh.src.connect(wh.node); wh.node.connect(wh.ctx.destination);
+    if(wh.ctx.state !== 'running') await wh.ctx.resume().catch(()=>{});
+    if(wh.ctx.state !== 'running'){ showStartOverlay(); return; } // タップが必要なブラウザ
+    clearTimeout(startWatch); hideStartOverlay();
+    requestWakeLock();
+    whRings(); whIdleStatus();
+  }catch(err){
+    whStop();
+    if(err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')){ handsFree = false; updateAutoBtn(); showStartOverlay(); }
+    else toast('マイクを開始できませんでした / 마이크를 시작할 수 없어요');
+  }
+}
+function whStop(){
+  wh.on = false; wh.capturing = false; wh.buf = []; wh.pre = []; wh.hot = 0;
+  try{ wh.node && wh.node.disconnect(); }catch(e){}
+  try{ wh.src && wh.src.disconnect(); }catch(e){}
+  if(wh.ctx) wh.ctx.close().catch(()=>{});
+  wh.ctx = wh.node = wh.src = null;
+  if(wh.stream){ wh.stream.getTracks().forEach(t => t.stop()); wh.stream = null; }
+  whRings();
+}
+function whRings(){
+  Object.entries(panes).forEach(([l, p]) => {
+    const on = wh.on && !wh.running && (wh.force ? wh.force === l : true);
+    if(useWhisper() || wh.on) p.mic.classList.toggle('on', on);
+    if(useWhisper() || wh.on) setHint(l, on ? LANG[l].hintListen : LANG[l].hintIdle);
+  });
+}
+function whIdleStatus(){
+  if(!wh.on) return;
+  if(wh.force) setStatus('🧠 ' + (wh.force === 'ja' ? '<b>日本語</b>で話してください' : '<b>한국어</b>로 말씀하세요'));
+  else setStatus('🧠 AI認識中 — <b>日本語・한국어 どちらでもどうぞ</b>');
+}
+function whPaused(){
+  return busy || wh.running || typing || document.visibilityState !== 'visible' ||
+    (synth && synth.speaking) || Date.now() - lastSpeakEnd < 450;
+}
+function whFrame(ch, rate){
+  if(!wh.on) return;
+  const d = rate === 16000 ? new Float32Array(ch) : resample(ch, rate);
+  if(whPaused()){ if(wh.capturing){ wh.capturing = false; wh.buf = []; } wh.pre = []; wh.hot = 0; return; }
+  let s = 0; for(let i = 0; i < d.length; i++) s += d[i] * d[i];
+  const rms = Math.sqrt(s / d.length), ms = d.length / 16;
+  const thr = Math.max(0.012, wh.noise * 3.2);
+  const speech = rms > thr;
+  if(!wh.capturing){
+    if(!speech) wh.noise = wh.noise * 0.95 + rms * 0.05; // 周囲の雑音レベルを学習
+    wh.pre.push(d); if(wh.pre.length > 6) wh.pre.shift(); // 話し始めの直前も含める
+    if(speech){
+      if(++wh.hot >= 2){
+        wh.capturing = true; wh.buf = wh.pre; wh.pre = []; wh.silentMs = 0; wh.speechMs = ms * 2;
+        setStatus('🎙️ <b>聞き取り中…</b> 話し終えると自動で翻訳します');
+      }
+    } else wh.hot = 0;
+    return;
+  }
+  wh.buf.push(d);
+  if(speech){ wh.silentMs = 0; wh.speechMs += ms; } else wh.silentMs += ms;
+  const total = wh.buf.length * ms;
+  if(wh.silentMs >= (Number(settings.endPause) || 1200) || total >= 28000) whFinish();
+}
+function whFinish(){
+  const chunks = wh.buf, speechMs = wh.speechMs;
+  wh.capturing = false; wh.buf = []; wh.hot = 0;
+  if(speechMs < 350 || !chunks.length){ whIdleStatus(); return; } // 咳・物音は無視
+  // 末尾の無音は0.3秒だけ残す
+  const keep = Math.max(1, chunks.length - Math.max(0, Math.floor((wh.silentMs - 300) / 64)));
+  let len = 0; for(let i = 0; i < keep; i++) len += chunks[i].length;
+  const audio = new Float32Array(len); let o = 0;
+  for(let i = 0; i < keep; i++){ audio.set(chunks[i], o); o += chunks[i].length; }
+  wh.running = true; whRings();
+  setStatus('🧠 <b>AIが認識中…</b>');
+  wh.worker.postMessage({type:'run', audio, lang: wh.force, seq: ++wh.seq}, [audio.buffer]);
+}
+function whOnResult(m){
+  wh.running = false;
+  const forced = wh.force; wh.force = null;
+  let t = (m.text || '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/(.{1,12}?)\1{3,}/g, '$1'); // 同じ語の繰り返しを除去
+  if(!t || WH_HALLU.test(t) || /^[\s\p{P}\p{S}]*$/u.test(t)){ whRings(); whIdleStatus(); return; }
+  let l = detectLang(t) || m.lang || forced || 'ja';
+  const text = cleanText(t, l);
+  if(!text){ whRings(); whIdleStatus(); return; }
+  if(wh.oneShot && !handsFree){ wh.oneShot = false; whStop(); }
+  whRings();
+  commit(text, l);
+}
+function whMicPress(l){
+  if(wh.capturing && wh.force === l){ whFinish(); return; } // 話し終えたら押すと即認識
+  wh.force = l;
+  if(!wh.on){ wh.oneShot = !handsFree; whStart(); }
+  whRings(); whIdleStatus();
+}
+function updateAsrNote(){
+  const n = document.getElementById('asrNote'); if(!n) return;
+  if(settings.asr === 'browser'){ n.textContent = '話しながら文字が出ます。軽くて速いですが、言語の取り違えが起きることがあります。'; return; }
+  if(wh.loading){ n.textContent = '⏳ AIモデルを準備中です（初回のみダウンロード）。準備が終わるまでは標準の認識で動きます。'; return; }
+  if(wh.ready) n.textContent = '✅ AI高精度音声認識が有効です（' + (wh.device === 'webgpu' ? 'GPUで高速動作' : 'CPUで動作') + '）。日本語・韓国語を声から自動判別します。';
+  else n.textContent = '';
 }
 
 // ================= 会話の確定処理 =================
@@ -676,6 +922,7 @@ async function commit(text, from, alts){
 Object.entries(panes).forEach(([l, p]) => {
   p.mic.addEventListener('click', () => {
     unlockAudio(); prepDeviceSilently();
+    if(useWhisper()){ whMicPress(l); return; }
     if(rec && recLang === l){ stopListening(); return; } // 話し終えたら押すと即翻訳
     startListening(l, true); // 自動会話中でも、押した側の言語に切り替えて聞き取る
   });
@@ -763,7 +1010,7 @@ $('#btnClearHist').onclick = () => {
 };
 
 // 設定
-const opt = {speak:$('#optSpeak'), auto:$('#optAuto'), live:$('#optLive'), face:$('#optFace'), rate:$('#optRate'), size:$('#optSize'), engine:$('#optEngine'), endPause:$('#optEndPause'), dict:$('#optDict')};
+const opt = {speak:$('#optSpeak'), auto:$('#optAuto'), live:$('#optLive'), face:$('#optFace'), rate:$('#optRate'), size:$('#optSize'), engine:$('#optEngine'), endPause:$('#optEndPause'), dict:$('#optDict'), asr:$('#optAsr')};
 function applySettings(){
   document.body.classList.toggle('face', settings.face);
   document.documentElement.style.setProperty('--fs-main', settings.size + 'px');
@@ -771,15 +1018,19 @@ function applySettings(){
 }
 function syncForm(){
   opt.speak.value = settings.speak ? '1' : '0'; opt.auto.checked = settings.auto; opt.live.checked = settings.live;
-  opt.face.checked = settings.face; opt.rate.value = settings.rate; opt.size.value = String(settings.size); opt.engine.value = settings.engine; opt.endPause.value = String(settings.endPause); opt.dict.value = settings.dict;
+  opt.face.checked = settings.face; opt.rate.value = settings.rate; opt.size.value = String(settings.size); opt.engine.value = settings.engine; opt.endPause.value = String(settings.endPause); opt.dict.value = settings.dict; opt.asr.value = settings.asr;
 }
 Object.entries(opt).forEach(([k, el]) => el.addEventListener('change', () => {
-  settings[k] = el.type === 'checkbox' ? el.checked : (k === 'engine' || k === 'dict') ? el.value : k === 'speak' ? el.value === '1' : Number(el.value);
+  settings[k] = el.type === 'checkbox' ? el.checked : (k === 'engine' || k === 'dict' || k === 'asr') ? el.value : k === 'speak' ? el.value === '1' : Number(el.value);
   if(k === 'speak') updateOutBtn();
   saveSettings(); applySettings();
   if(k === 'auto'){ if(settings.auto) startHandsFree(); else stopHandsFree(); }
+  if(k === 'asr'){
+    if(settings.asr === 'browser'){ whStop(); wh.force = null; updateAsrNote(); Object.values(panes).forEach(p => { p.mic.classList.remove('on'); if(!SR) p.mic.hidden = true; }); scheduleListen(200); }
+    else { unlockAudio(); whLoad(); }
+  }
 }));
-$('#btnSettings').onclick = () => { syncForm(); updateDeviceNote(); openModal('mSettings'); };
+$('#btnSettings').onclick = () => { syncForm(); updateDeviceNote(); updateAsrNote(); openModal('mSettings'); };
 $('#btnFlip').onclick = () => { settings.face = !settings.face; saveSettings(); applySettings(); toast(settings.face ? '対面モード ON' : '対面モード OFF'); };
 
 // 端末内AI翻訳（Chrome等の内蔵翻訳。通信不要・回数無制限）
@@ -816,7 +1067,7 @@ async function requestWakeLock(){
 }
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && wakeLock === null && hist.length) requestWakeLock();
-  if(document.visibilityState === 'hidden'){ clearTimeout(loopTimer); abortListening(); if(synth) synth.cancel(); busy = false; }
+  if(document.visibilityState === 'hidden'){ clearTimeout(loopTimer); abortListening(); whStop(); if(synth) synth.cancel(); busy = false; }
   else scheduleListen(300);
 });
 window.addEventListener('online', () => setStatus('オンライン: <b>接続しました</b>'));
@@ -830,12 +1081,13 @@ if(SR){
   setStatus(navigator.onLine ? '準備完了' : 'オフライン: 端末内AI翻訳・定型文のみ利用可', !navigator.onLine);
   if(settings.auto) startHandsFree(); // 開いたらすぐ自動会話を開始
 }
+if(settings.asr !== 'browser'){ if(!SR && settings.auto){ handsFree = true; updateAutoBtn(); } whLoad(); } // AI高精度認識（2回目以降は端末の保存分から読み込み）
 // どこかをタップした時点で音声読み上げを有効化（ブラウザの自動再生制限対策）
 document.addEventListener('pointerdown', () => { unlockAudio(); prepDeviceSilently(); }, {once:true, capture:true});
 document.getElementById('startOverlay').addEventListener('click', () => {
   unlockAudio(); prepDeviceSilently(); hideStartOverlay();
   settings.auto = true; saveSettings();
-  abortListening(); startHandsFree();
+  abortListening(); whStop(); startHandsFree();
 });
 // 読み上げ ⇔ 文字のみ の切り替え
 function updateOutBtn(){
