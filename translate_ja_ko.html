@@ -101,6 +101,14 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
 .toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(20,20,40,.95);border:1px solid var(--border);
   padding:12px 18px;border-radius:12px;font-size:15px;z-index:99;display:none;max-width:86vw;text-align:center}
 .toast.show{display:block}
+#btnAuto.active{border-color:var(--green);color:var(--green)}
+.startov{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:rgba(8,8,20,.92);border:none;color:var(--text);font-family:inherit;padding:24px;text-align:center;cursor:pointer}
+.startov.show{display:flex}
+.startov .sico{width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,var(--ja),var(--ko));display:flex;align-items:center;justify-content:center;font-size:56px;animation:pulse2 1.6s infinite}
+.startov .st1{font-size:21px;font-weight:800}.startov .st2{font-size:19px;font-weight:800;color:#93c5fd}
+.startov .st3{font-size:13px;color:var(--muted);max-width:320px}
+@keyframes pulse2{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 </style>
 </head>
 <body class="face">
@@ -128,6 +136,7 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
 
   <div class="midbar">
     <button class="ibtn" id="btnHistory" aria-label="履歴">📜</button>
+    <button class="ibtn" id="btnAuto" aria-label="自動会話">⏸</button>
     <div class="status" id="status">準備完了</div>
     <button class="ibtn" id="btnFlip" aria-label="対面モード切替">🔄</button>
     <button class="ibtn" id="btnSettings" aria-label="設定">⚙️</button>
@@ -162,8 +171,8 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
     <div class="sbody">
       <div class="row"><label>自動読み上げ<small>翻訳結果を相手の言語で音声再生</small></label>
         <label class="sw"><input type="checkbox" id="optSpeak"><span></span></label></div>
-      <div class="row"><label>連続会話モード<small>読み上げ後、自動で相手側のマイクをON（ハンズフリー）</small></label>
-        <label class="sw"><input type="checkbox" id="optConverse"><span></span></label></div>
+      <div class="row"><label>自動会話（ハンズフリー）<small>アプリを開くと自動で聞き取り開始。🎤を押さずに会話を続けられます</small></label>
+        <label class="sw"><input type="checkbox" id="optAuto"><span></span></label></div>
       <div class="row"><label>話しながら同時翻訳<small>話している途中から翻訳を表示</small></label>
         <label class="sw"><input type="checkbox" id="optLive"><span></span></label></div>
       <div class="row"><label>対面モード<small>韓国語側を上下反転（テーブル越しに使う）</small></label>
@@ -204,6 +213,14 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ブラウザが最初の1回だけタップを要求した場合の案内 -->
+<button class="startov" id="startOverlay">
+  <span class="sico">🎤</span>
+  <span class="st1">画面をタップして会話スタート</span>
+  <span class="st2">화면을 눌러 대화를 시작하세요</span>
+  <span class="st3">最初の1回だけマイクの許可が必要です。以降はボタンを押さずに会話が続きます。</span>
+</button>
 
 <script>
 'use strict';
@@ -246,7 +263,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem('jk_'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem('jk_'+k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({speak:true, converse:false, live:true, face:true, rate:1.0, size:30, engine:'auto'}, store.get('settings', {}));
+const settings = Object.assign({speak:true, auto:true, live:true, face:true, rate:1.0, size:30, engine:'auto'}, store.get('settings', {}));
 const saveSettings = () => store.set('settings', settings);
 let hist = store.get('hist', []);
 const cache = new Map(store.get('cache', []));
@@ -370,7 +387,7 @@ function pickVoice(bcp){
   const c = voices.filter(v => v.lang.replace('_','-').toLowerCase().startsWith(bcp.slice(0,2)));
   return c.find(v => /google|premium|enhanced|siri|yuna|kyoko|o-ren|natural/i.test(v.name)) || c[0] || null;
 }
-let speakingTimer = null;
+let speakingTimer = null, speakWarned = false;
 function speak(text, l, onDone){
   if(!synth || !text){ onDone && onDone(); return; }
   synth.cancel();
@@ -379,7 +396,11 @@ function speak(text, l, onDone){
   const v = pickVoice(LANG[l].bcp); if(v) u.voice = v;
   let done = false;
   const fin = () => { if(done) return; done = true; clearTimeout(speakingTimer); onDone && onDone(); };
-  u.onend = fin; u.onerror = fin;
+  u.onend = fin;
+  u.onerror = e => {
+    if(e.error === 'not-allowed' && !speakWarned){ speakWarned = true; toast('🔊 画面を一度タップすると読み上げが有効になります / 화면을 한 번 누르면 음성이 켜져요'); }
+    fin();
+  };
   clearTimeout(speakingTimer);
   speakingTimer = setTimeout(fin, 3000 + text.length * 300 / settings.rate); // onendが来ない端末対策
   synth.speak(u);
@@ -390,9 +411,14 @@ function unlockAudio(){
   const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u);
 }
 
-// ================= 音声認識 =================
+// ================= 音声認識（ハンズフリー自動会話） =================
+// ボタンを押さなくても常に聞き取りを続ける。
+// ・相手が話し終えたら「次は反対側の言語」を聞く（交互の会話を想定）
+// ・しばらく無音なら聞き取る言語を自動で切り替え、どちらが話しても拾えるようにする
+// ・翻訳の読み上げ中はマイクを止め、自分の声を拾わないようにする
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, recLang = null, liveTimer = null, liveSeq = 0, commitSeq = 0;
+let handsFree = false, turn = 'ja', busy = false, typing = false, loopTimer = null, quickFails = 0, startWatch = null;
 if(!SR){
   Object.values(panes).forEach(p => p.mic.hidden = true);
   setStatus('このブラウザは音声入力非対応です（文字入力は使えます）', true);
@@ -400,20 +426,38 @@ if(!SR){
 function stopListening(){
   if(rec){ try{ rec.stop(); }catch(e){} }
 }
+function abortListening(){
+  if(!rec) return;
+  const r = rec; r.onend = null; r.onerror = null; r.onresult = null;
+  try{ r.abort(); }catch(e){}
+  cleanupRec();
+}
+function canAutoListen(){
+  return handsFree && !rec && !busy && !typing && document.visibilityState === 'visible';
+}
+function scheduleListen(delay){
+  clearTimeout(loopTimer);
+  if(!handsFree) return;
+  loopTimer = setTimeout(() => { if(canAutoListen()) startListening(turn); }, delay == null ? 250 : delay);
+}
 function startListening(l){
   if(!SR) return;
-  if(rec){ const was = recLang; rec.onend = null; try{ rec.abort(); }catch(e){} cleanupRec(); if(was === l) return; }
+  abortListening();
+  clearTimeout(loopTimer);
   if(synth) synth.cancel();
   clearTimeout(speakingTimer);
   const other = LANG[l].other;
   const r = new SR();
   r.lang = LANG[l].bcp; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
-  rec = r; recLang = l;
-  let finalText = '', interimText = '';
+  rec = r; recLang = l; turn = l;
+  let finalText = '', interimText = '', denied = false;
+  const startedAt = Date.now();
   panes[l].mic.classList.add('on');
   setHint(l, LANG[l].hintListen);
-  setMain(l, LANG[l].listening, {placeholder:true}); setSub(l, '');
+  if(panes[l].main.classList.contains('placeholder')) setMain(l, LANG[l].listening, {placeholder:true});
+  setStatus('🎧 ' + (handsFree ? '自動会話中 — ' : '') + '<b>' + (l === 'ja' ? '日本語を聞き取り中' : '한국어 듣는 중') + '</b>');
   requestWakeLock();
+  r.onstart = () => { clearTimeout(startWatch); hideStartOverlay(); };
   r.onresult = e => {
     interimText = '';
     for(let i = e.resultIndex; i < e.results.length; i++){
@@ -422,7 +466,7 @@ function startListening(l){
     }
     const cur = (finalText + interimText).trim();
     if(!cur) return;
-    setMain(l, cur, {live: !!interimText});
+    setMain(l, cur, {live: !!interimText}); setSub(l, '');
     if(settings.live){
       clearTimeout(liveTimer);
       liveTimer = setTimeout(() => {
@@ -434,16 +478,25 @@ function startListening(l){
     }
   };
   r.onerror = e => {
-    if(e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('マイクの使用を許可してください / 마이크를 허용해 주세요');
-    else if(e.error === 'network') toast('音声認識には通信が必要です');
+    if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+      denied = true; handsFree = false; updateAutoBtn();
+      showStartOverlay();
+    } else if(e.error === 'network') setStatus('音声認識に通信が必要です（再接続を待っています）', true);
   };
   r.onend = () => {
     cleanupRec();
     const text = (finalText + interimText).trim();
-    if(text) commit(text, l);
-    else { resetPane(l); toast(LANG[l].noSpeech); }
+    if(text){ quickFails = 0; commit(text, l); return; }
+    if(panes[l].main.textContent === LANG[l].listening) resetPane(l);
+    if(denied) return;
+    if(!handsFree){ toast(LANG[l].noSpeech); setStatus('準備完了'); return; }
+    // 無音で終わった：もう一方の言語に切り替えて聞き続ける
+    if(Date.now() - startedAt < 1000) quickFails++; else quickFails = 0;
+    turn = other;
+    scheduleListen(quickFails ? Math.min(15000, 400 * Math.pow(2, quickFails)) : 150);
   };
-  try{ r.start(); }catch(e){ cleanupRec(); }
+  try{ r.start(); }
+  catch(e){ cleanupRec(); if(handsFree){ quickFails++; scheduleListen(Math.min(15000, 400 * Math.pow(2, quickFails))); } }
 }
 function cleanupRec(){
   clearTimeout(liveTimer); liveSeq++;
@@ -451,17 +504,44 @@ function cleanupRec(){
   rec = null; recLang = null;
 }
 
+// 自動会話の開始・停止
+const startOverlay = () => document.getElementById('startOverlay');
+function showStartOverlay(){ startOverlay().classList.add('show'); }
+function hideStartOverlay(){ startOverlay().classList.remove('show'); }
+function updateAutoBtn(){
+  const b = document.getElementById('btnAuto');
+  b.textContent = handsFree ? '⏸' : '▶️';
+  b.classList.toggle('active', handsFree);
+  b.setAttribute('aria-label', handsFree ? '自動会話を一時停止' : '自動会話を再開');
+}
+function startHandsFree(){
+  if(!SR) return;
+  handsFree = true; updateAutoBtn();
+  if(!rec && !busy) startListening(turn);
+  // 一定時間たっても聞き取りが始まらない（ブラウザがタップを要求している）場合だけ案内を出す
+  clearTimeout(startWatch);
+  startWatch = setTimeout(() => { if(handsFree && !rec && !busy) showStartOverlay(); }, 4000);
+}
+function stopHandsFree(){
+  handsFree = false; updateAutoBtn();
+  clearTimeout(loopTimer); abortListening();
+  setStatus('⏸ 自動会話を停止中（🎤で手動入力）');
+}
+
 // ================= 会話の確定処理 =================
 async function commit(text, from){
   const to = LANG[from].other;
   const seq = ++commitSeq;
+  busy = true; clearTimeout(loopTimer);
+  const done = () => { if(seq !== commitSeq) return; busy = false; turn = to; scheduleListen(200); };
   setMain(from, text); setSub(from, LANG[from].translating);
   setMain(to, LANG[to].translating, {placeholder:true}); setSub(to, text);
   let tr;
   try{ tr = await translate(text, from, to); }
   catch(e){
     if(seq !== commitSeq) return;
-    setSub(from, '⚠️ 翻訳失敗 / 번역 실패'); resetPane(to); return;
+    setSub(from, '⚠️ 翻訳失敗 / 번역 실패'); resetPane(to);
+    busy = false; turn = from; scheduleListen(1500); return;
   }
   if(seq !== commitSeq) return;
   setMain(from, text); setSub(from, '→ ' + tr);
@@ -470,28 +550,28 @@ async function commit(text, from){
   hist.push({f:from, s:text, d:tr, t:Date.now()});
   if(hist.length > 300) hist = hist.slice(-300);
   store.set('hist', hist);
-  if(settings.speak){
-    speak(tr, to, () => { if(settings.converse && seq === commitSeq && !rec) startListening(to); });
-  } else if(settings.converse){
-    setTimeout(() => { if(seq === commitSeq && !rec) startListening(to); }, 600);
-  }
+  if(settings.speak && !rec) speak(tr, to, done);
+  else done();
 }
 
 // ================= イベント =================
 Object.entries(panes).forEach(([l, p]) => {
   p.mic.addEventListener('click', () => {
     unlockAudio(); prepDeviceSilently();
-    if(rec && recLang === l){ stopListening(); return; }
-    startListening(l);
+    if(rec && recLang === l){ stopListening(); return; } // 話し終えたら押すと即翻訳
+    startListening(l); // 自動会話中でも、押した側の言語に切り替えて聞き取る
   });
   p.form.addEventListener('submit', e => {
     e.preventDefault(); unlockAudio();
     const t = p.input.value.trim(); if(!t) return;
     p.input.value = ''; p.input.blur();
-    if(rec){ rec.onend = null; try{ rec.abort(); }catch(e){} cleanupRec(); }
+    abortListening();
     const d = detectLang(t);
     commit(t, d && d !== l ? d : l); // 相手の言語で打たれても自動判別
   });
+  // 文字入力中は聞き取りを止め、入力を終えたら再開
+  p.input.addEventListener('focus', () => { typing = true; clearTimeout(loopTimer); abortListening(); });
+  p.input.addEventListener('blur', () => { typing = false; scheduleListen(400); });
   p.el.querySelector('[data-act=replay]').addEventListener('click', () => {
     unlockAudio();
     if(p.last) speak(p.last, l); else toast(l === 'ja' ? 'まだ翻訳がありません' : '아직 번역이 없어요');
@@ -558,19 +638,20 @@ $('#btnClearHist').onclick = () => {
 };
 
 // 設定
-const opt = {speak:$('#optSpeak'), converse:$('#optConverse'), live:$('#optLive'), face:$('#optFace'), rate:$('#optRate'), size:$('#optSize'), engine:$('#optEngine')};
+const opt = {speak:$('#optSpeak'), auto:$('#optAuto'), live:$('#optLive'), face:$('#optFace'), rate:$('#optRate'), size:$('#optSize'), engine:$('#optEngine')};
 function applySettings(){
   document.body.classList.toggle('face', settings.face);
   document.documentElement.style.setProperty('--fs-main', settings.size + 'px');
   document.documentElement.style.setProperty('--fs-sub', Math.round(settings.size * .55 + 1) + 'px');
 }
 function syncForm(){
-  opt.speak.checked = settings.speak; opt.converse.checked = settings.converse; opt.live.checked = settings.live;
+  opt.speak.checked = settings.speak; opt.auto.checked = settings.auto; opt.live.checked = settings.live;
   opt.face.checked = settings.face; opt.rate.value = settings.rate; opt.size.value = String(settings.size); opt.engine.value = settings.engine;
 }
 Object.entries(opt).forEach(([k, el]) => el.addEventListener('change', () => {
   settings[k] = el.type === 'checkbox' ? el.checked : (k === 'engine' ? el.value : Number(el.value));
   saveSettings(); applySettings();
+  if(k === 'auto'){ if(settings.auto) startHandsFree(); else stopHandsFree(); }
 }));
 $('#btnSettings').onclick = () => { syncForm(); updateDeviceNote(); openModal('mSettings'); };
 $('#btnFlip').onclick = () => { settings.face = !settings.face; saveSettings(); applySettings(); toast(settings.face ? '対面モード ON' : '対面モード OFF'); };
@@ -609,7 +690,8 @@ async function requestWakeLock(){
 }
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && wakeLock === null && hist.length) requestWakeLock();
-  if(document.visibilityState === 'hidden'){ if(rec){ rec.onend = null; try{ rec.abort(); }catch(e){} cleanupRec(); } if(synth) synth.cancel(); }
+  if(document.visibilityState === 'hidden'){ clearTimeout(loopTimer); abortListening(); if(synth) synth.cancel(); busy = false; }
+  else scheduleListen(300);
 });
 window.addEventListener('online', () => setStatus('オンライン: <b>接続しました</b>'));
 window.addEventListener('offline', () => setStatus('オフライン: 端末内AI翻訳・定型文のみ利用可', true));
@@ -617,7 +699,23 @@ window.addEventListener('offline', () => setStatus('オフライン: 端末内AI
 // 初期化
 applySettings();
 ['ja','ko'].forEach(l => { resetPane(l); setHint(l, LANG[l].hintIdle); });
-if(SR) setStatus(navigator.onLine ? '準備完了 — 🎤を押して話してください' : 'オフライン: 端末内AI翻訳・定型文のみ利用可', !navigator.onLine);
+updateAutoBtn();
+if(SR){
+  setStatus(navigator.onLine ? '準備完了' : 'オフライン: 端末内AI翻訳・定型文のみ利用可', !navigator.onLine);
+  if(settings.auto) startHandsFree(); // 開いたらすぐ自動会話を開始
+}
+// どこかをタップした時点で音声読み上げを有効化（ブラウザの自動再生制限対策）
+document.addEventListener('pointerdown', () => { unlockAudio(); prepDeviceSilently(); }, {once:true, capture:true});
+document.getElementById('startOverlay').addEventListener('click', () => {
+  unlockAudio(); prepDeviceSilently(); hideStartOverlay();
+  settings.auto = true; saveSettings();
+  abortListening(); startHandsFree();
+});
+document.getElementById('btnAuto').addEventListener('click', () => {
+  unlockAudio();
+  settings.auto = !handsFree; saveSettings();
+  if(settings.auto) startHandsFree(); else stopHandsFree();
+});
 </script>
 </body>
 </html>
