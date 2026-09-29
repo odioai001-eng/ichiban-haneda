@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>日韓リアルタイム翻訳</title>
+<meta name="description" content="日本語と韓国語を音声・文字でリアルタイム双方向翻訳。無料・登録不要。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="日韓翻訳">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0d1a">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d0d1a;--surface:#161628;--surface2:#1e1e35;--border:#2a2a4a;
+  --text:#e8e8f4;--muted:#8a8ab0;--accent:#4f8ef7;
+  --ja:#ef4444;--ja-soft:rgba(239,68,68,.14);
+  --ko:#3b82f6;--ko-soft:rgba(59,130,246,.14);
+  --green:#22c55e;--amber:#f59e0b;
+  --fs-main:30px;--fs-sub:17px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Apple SD Gothic Neo','Noto Sans KR','Noto Sans JP',sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.5}
+#app{height:100vh;height:100dvh;display:flex;flex-direction:column;max-width:720px;margin:0 auto;
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
+.pane{flex:1 1 0;min-height:0;display:flex;flex-direction:column;padding:12px 14px;gap:10px;position:relative}
+.pane[data-lang=ja]{background:linear-gradient(0deg,var(--ja-soft),transparent 70%)}
+.pane[data-lang=ko]{background:linear-gradient(0deg,var(--ko-soft),transparent 70%)}
+body.face .pane[data-lang=ko]{transform:rotate(180deg)}
+.phead{display:flex;align-items:center;gap:8px}
+.badge{font-weight:800;font-size:15px;padding:4px 12px;border-radius:999px;color:#fff;white-space:nowrap}
+.pane[data-lang=ja] .badge{background:var(--ja)}
+.pane[data-lang=ko] .badge{background:var(--ko)}
+.phint{flex:1;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ibtn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;
+  min-width:42px;height:40px;font-size:18px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0 10px}
+.ibtn:active{transform:scale(.95)}
+.ibtn:disabled{opacity:.35}
+.display{flex:1;min-height:0;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:18px;
+  padding:14px 16px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+.main{font-size:var(--fs-main);font-weight:700;line-height:1.35;word-break:break-word;white-space:pre-wrap}
+.main.placeholder{color:var(--muted);font-weight:500;font-size:calc(var(--fs-main)*.62)}
+.main.live{opacity:.6}
+.sub{font-size:var(--fs-sub);color:var(--muted);word-break:break-word;white-space:pre-wrap}
+.sub:empty{display:none}
+.controls{display:flex;gap:10px;align-items:center}
+.tform{flex:1;display:flex;gap:6px;min-width:0}
+.tform input{flex:1;min-width:0;height:52px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);
+  color:var(--text);font-size:17px;padding:0 12px;font-family:inherit}
+.tform input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.send{height:52px;border-radius:14px;border:none;background:var(--surface2);color:var(--text);font-weight:700;font-size:15px;padding:0 12px;cursor:pointer;border:1px solid var(--border)}
+.mic{flex:0 0 auto;width:76px;height:76px;border-radius:50%;border:none;color:#fff;font-size:32px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.4);position:relative}
+.pane[data-lang=ja] .mic{background:var(--ja)}
+.pane[data-lang=ko] .mic{background:var(--ko)}
+.mic:active{transform:scale(.94)}
+.mic.on::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:3px solid currentColor;animation:pulse 1.2s infinite}
+.pane[data-lang=ja] .mic.on{color:var(--ja)}.pane[data-lang=ko] .mic.on{color:var(--ko)}
+.mic.on span{color:#fff}
+@keyframes pulse{0%{transform:scale(1);opacity:1}100%{transform:scale(1.3);opacity:0}}
+.mic[hidden]{display:none}
+.midbar{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--surface);
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.status{flex:1;font-size:12px;color:var(--muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status b{color:var(--green);font-weight:700}
+.status.err b{color:var(--amber)}
+/* モーダル */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:50}
+.modal.open{display:flex}
+.sheet{background:var(--surface);width:100%;max-width:720px;max-height:86dvh;border-radius:20px 20px 0 0;
+  display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0)}
+.modal.flip .sheet{transform:rotate(180deg);border-radius:0 0 20px 20px}
+.modal.flip{align-items:flex-start}
+.shead{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border)}
+.shead h2{flex:1;font-size:18px}
+.sbody{overflow-y:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.row label{font-size:15px}.row small{display:block;color:var(--muted);font-size:12px}
+.row select,.row input[type=range]{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:6px;font-size:15px}
+.sw{position:relative;width:52px;height:30px;flex:0 0 auto}
+.sw input{opacity:0;width:0;height:0}
+.sw span{position:absolute;inset:0;background:var(--border);border-radius:30px;transition:.2s;cursor:pointer}
+.sw span::before{content:"";position:absolute;width:24px;height:24px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.sw input:checked+span{background:var(--green)}
+.sw input:checked+span::before{transform:translateX(22px)}
+.wbtn{width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:15px;font-weight:700;cursor:pointer}
+.wbtn.danger{color:#fca5a5}
+.hitem{background:var(--surface2);border-radius:14px;padding:10px 12px;border-left:4px solid var(--ja)}
+.hitem.ko{border-left-color:var(--ko)}
+.hitem .hs{font-size:14px;color:var(--muted)}
+.hitem .hd{font-size:17px;font-weight:700;margin-top:2px}
+.hitem .hm{display:flex;gap:6px;margin-top:6px;align-items:center}
+.hitem .ht{flex:1;font-size:11px;color:var(--muted)}
+.hitem button{font-size:13px;min-width:0;height:30px;padding:0 10px}
+.phr{text-align:left;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:10px 14px;color:var(--text);cursor:pointer;font-family:inherit}
+.phr .p1{font-size:18px;font-weight:700}.phr .p2{font-size:14px;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);line-height:1.6}
+.toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(20,20,40,.95);border:1px solid var(--border);
+  padding:12px 18px;border-radius:12px;font-size:15px;z-index:99;display:none;max-width:86vw;text-align:center}
+.toast.show{display:block}
+</style>
+</head>
+<body class="face">
+<div id="app">
+  <!-- 韓国語側（対面モードでは上下反転） -->
+  <section class="pane" data-lang="ko" id="pane-ko">
+    <div class="phead">
+      <span class="badge">🇰🇷 한국어</span>
+      <span class="phint" data-hint></span>
+      <button class="ibtn" data-act="phrases" aria-label="자주 쓰는 말">💬</button>
+      <button class="ibtn" data-act="replay" aria-label="다시 듣기">🔊</button>
+    </div>
+    <div class="display" data-display>
+      <div class="main placeholder" data-main>마이크를 누르고 한국어로 말씀하세요</div>
+      <div class="sub" data-sub></div>
+    </div>
+    <div class="controls">
+      <form class="tform" data-form>
+        <input type="text" enterkeyhint="send" autocomplete="off" placeholder="한국어로 입력" data-input>
+        <button class="send" type="submit">번역</button>
+      </form>
+      <button class="mic" data-mic aria-label="말하기"><span>🎤</span></button>
+    </div>
+  </section>
+
+  <div class="midbar">
+    <button class="ibtn" id="btnHistory" aria-label="履歴">📜</button>
+    <div class="status" id="status">準備完了</div>
+    <button class="ibtn" id="btnFlip" aria-label="対面モード切替">🔄</button>
+    <button class="ibtn" id="btnSettings" aria-label="設定">⚙️</button>
+  </div>
+
+  <!-- 日本語側 -->
+  <section class="pane" data-lang="ja" id="pane-ja">
+    <div class="phead">
+      <span class="badge">🇯🇵 日本語</span>
+      <span class="phint" data-hint></span>
+      <button class="ibtn" data-act="phrases" aria-label="定型文">💬</button>
+      <button class="ibtn" data-act="replay" aria-label="もう一度聞く">🔊</button>
+    </div>
+    <div class="display" data-display>
+      <div class="main placeholder" data-main>マイクを押して日本語で話してください</div>
+      <div class="sub" data-sub></div>
+    </div>
+    <div class="controls">
+      <form class="tform" data-form>
+        <input type="text" enterkeyhint="send" autocomplete="off" placeholder="日本語で入力" data-input>
+        <button class="send" type="submit">翻訳</button>
+      </form>
+      <button class="mic" data-mic aria-label="話す"><span>🎤</span></button>
+    </div>
+  </section>
+</div>
+
+<!-- 設定 -->
+<div class="modal" id="mSettings">
+  <div class="sheet">
+    <div class="shead"><h2>⚙️ 設定</h2><button class="ibtn" data-close>✕</button></div>
+    <div class="sbody">
+      <div class="row"><label>自動読み上げ<small>翻訳結果を相手の言語で音声再生</small></label>
+        <label class="sw"><input type="checkbox" id="optSpeak"><span></span></label></div>
+      <div class="row"><label>連続会話モード<small>読み上げ後、自動で相手側のマイクをON（ハンズフリー）</small></label>
+        <label class="sw"><input type="checkbox" id="optConverse"><span></span></label></div>
+      <div class="row"><label>話しながら同時翻訳<small>話している途中から翻訳を表示</small></label>
+        <label class="sw"><input type="checkbox" id="optLive"><span></span></label></div>
+      <div class="row"><label>対面モード<small>韓国語側を上下反転（テーブル越しに使う）</small></label>
+        <label class="sw"><input type="checkbox" id="optFace"><span></span></label></div>
+      <div class="row"><label>読み上げ速度</label>
+        <input type="range" id="optRate" min="0.6" max="1.4" step="0.1"></div>
+      <div class="row"><label>文字サイズ</label>
+        <select id="optSize"><option value="24">小</option><option value="30">中</option><option value="38">大</option><option value="48">特大</option></select></div>
+      <div class="row"><label>翻訳エンジン<small>「端末内優先」は通信不要・回数無制限（対応ブラウザのみ）</small></label>
+        <select id="optEngine"><option value="auto">自動（高精度優先）</option><option value="device">端末内優先</option></select></div>
+      <button class="wbtn" id="btnPrepDevice">📥 オフライン翻訳を準備（端末内AI）</button>
+      <div class="note" id="deviceNote"></div>
+      <button class="wbtn danger" id="btnClearHist">🗑 会話履歴を消去</button>
+      <div class="note">
+        ・完全無料・登録不要。翻訳結果は端末内にキャッシュされ、同じ文は通信せず即表示します。<br>
+        ・翻訳は複数エンジンを自動で切り替えます（オンライン翻訳 → 端末内AI翻訳 → 予備サーバー）。1つが混雑・制限されても止まりません。<br>
+        ・音声入力は Chrome / Safari / Edge に対応。初回はマイクの許可が必要です。<br>
+        ・会話内容や履歴はこの端末にのみ保存されます。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 履歴 -->
+<div class="modal" id="mHistory">
+  <div class="sheet">
+    <div class="shead"><h2>📜 会話履歴 / 대화 기록</h2><button class="ibtn" id="btnCopyAll">📋</button><button class="ibtn" data-close>✕</button></div>
+    <div class="sbody" id="histList"></div>
+  </div>
+</div>
+
+<!-- 定型文 -->
+<div class="modal" id="mPhrases">
+  <div class="sheet">
+    <div class="shead"><h2 id="phrTitle">💬 定型文</h2><button class="ibtn" data-close>✕</button></div>
+    <div class="sbody" id="phrList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+// ================= 基本データ =================
+const LANG = {
+  ja: {code:'ja', bcp:'ja-JP', other:'ko',
+    idle:'マイクを押して日本語で話してください', listening:'聞き取り中… 話してください',
+    translating:'翻訳中…', youSaid:'あなた', hintIdle:'🎤 または入力', hintListen:'🔴 聞き取り中',
+    phrTitle:'💬 定型文（タップで韓国語に）', noSpeech:'音声が聞き取れませんでした'},
+  ko: {code:'ko', bcp:'ko-KR', other:'ja',
+    idle:'마이크를 누르고 한국어로 말씀하세요', listening:'듣고 있어요… 말씀하세요',
+    translating:'번역 중…', youSaid:'나', hintIdle:'🎤 또는 입력', hintListen:'🔴 듣는 중',
+    phrTitle:'💬 자주 쓰는 말 (누르면 일본어로)', noSpeech:'음성이 인식되지 않았어요'}
+};
+// 定型文（オフラインでも使える確定訳）
+const PHRASES = [
+  ['こんにちは','안녕하세요'],
+  ['はじめまして','처음 뵙겠습니다'],
+  ['お会いできてうれしいです','만나서 반갑습니다'],
+  ['ありがとうございます','감사합니다'],
+  ['すみません','죄송합니다'],
+  ['大丈夫です','괜찮아요'],
+  ['わかりました','알겠습니다'],
+  ['よくわかりません','잘 모르겠습니다'],
+  ['もう一度言ってください','다시 한번 말씀해 주세요'],
+  ['ゆっくり話してください','천천히 말씀해 주세요'],
+  ['ちょっと待ってください','잠시만 기다려 주세요'],
+  ['いくらですか？','얼마예요?'],
+  ['トイレはどこですか？','화장실은 어디예요?'],
+  ['どこへ行きますか？','어디로 가세요?'],
+  ['写真を撮ってもいいですか？','사진 찍어도 될까요?'],
+  ['お名前は何ですか？','성함이 어떻게 되세요?'],
+  ['おいしいです','맛있어요'],
+  ['また会いましょう','또 만나요'],
+  ['さようなら','안녕히 가세요'],
+];
+
+// ================= 設定・保存 =================
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('jk_'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('jk_'+k, JSON.stringify(v)); }catch(e){} }
+};
+const settings = Object.assign({speak:true, converse:false, live:true, face:true, rate:1.0, size:30, engine:'auto'}, store.get('settings', {}));
+const saveSettings = () => store.set('settings', settings);
+let hist = store.get('hist', []);
+const cache = new Map(store.get('cache', []));
+let cacheDirty = false;
+function cachePut(k, v){
+  cache.delete(k); cache.set(k, v);
+  while(cache.size > 600) cache.delete(cache.keys().next().value);
+  cacheDirty = true;
+}
+setInterval(() => { if(cacheDirty){ cacheDirty = false; store.set('cache', [...cache]); } }, 3000);
+// 定型文は最初からキャッシュに入れておく（通信ゼロで訳せる）
+PHRASES.forEach(([j,k]) => { cache.set('ja|ko|'+j, k); cache.set('ko|ja|'+k, j); });
+
+// ================= UI参照 =================
+const $ = s => document.querySelector(s);
+const panes = {};
+['ja','ko'].forEach(l => {
+  const el = document.getElementById('pane-'+l);
+  panes[l] = {el, main:el.querySelector('[data-main]'), sub:el.querySelector('[data-sub]'),
+    mic:el.querySelector('[data-mic]'), input:el.querySelector('[data-input]'), form:el.querySelector('[data-form]'),
+    hint:el.querySelector('[data-hint]'), display:el.querySelector('[data-display]'), last:''};
+});
+const statusEl = $('#status');
+function setStatus(html, err){ statusEl.innerHTML = html; statusEl.classList.toggle('err', !!err); }
+let toastTimer;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1800); }
+function setMain(l, text, {placeholder=false, live=false}={}){
+  const m = panes[l].main;
+  m.textContent = text; m.classList.toggle('placeholder', placeholder); m.classList.toggle('live', live);
+  panes[l].display.scrollTop = 0;
+}
+function setSub(l, text){ panes[l].sub.textContent = text || ''; }
+function resetPane(l){ setMain(l, LANG[l].idle, {placeholder:true}); setSub(l, ''); }
+function setHint(l, t){ panes[l].hint.textContent = t; }
+const detectLang = t => /[가-힯ᄀ-ᇿ㄰-㆏]/.test(t) ? 'ko' : (/[぀-ヿ一-鿿]/.test(t) ? 'ja' : null);
+
+// ================= 翻訳エンジン群 =================
+function fetchT(url, ms=5000, opt={}){
+  const ac = new AbortController(); const t = setTimeout(()=>ac.abort(), ms);
+  return fetch(url, Object.assign({signal:ac.signal}, opt)).finally(()=>clearTimeout(t));
+}
+const deviceTr = {};
+let deviceState = 'unknown';
+async function getDeviceTranslator(sl, tl, allowDownload){
+  const k = sl+tl;
+  if(deviceTr[k]) return deviceTr[k];
+  if(!('Translator' in self)) { deviceState='unsupported'; return null; }
+  const a = await Translator.availability({sourceLanguage:sl, targetLanguage:tl});
+  if(a === 'unavailable'){ deviceState='unsupported'; return null; }
+  if(a !== 'available' && !allowDownload) return null;
+  deviceTr[k] = Translator.create({sourceLanguage:sl, targetLanguage:tl, monitor(m){
+    m.addEventListener('downloadprogress', e => setStatus('端末内AI翻訳を準備中 <b>'+Math.round(e.loaded*100)+'%</b>'));
+  }}).catch(e => { delete deviceTr[k]; throw e; });
+  const tr = await deviceTr[k];
+  deviceTr[k] = tr; deviceState = 'ready';
+  return tr;
+}
+const ENGINES = {
+  async google(text, sl, tl){
+    const u = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl='+sl+'&tl='+tl+'&q='+encodeURIComponent(text);
+    const r = await fetchT(u, 5000); if(!r.ok) throw new Error('google '+r.status);
+    const j = await r.json();
+    return (j[0]||[]).map(x => x[0]).join('');
+  },
+  async google2(text, sl, tl){
+    const u = 'https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl='+sl+'&tl='+tl+'&q='+encodeURIComponent(text);
+    const r = await fetchT(u, 5000); if(!r.ok) throw new Error('google2 '+r.status);
+    let j = await r.json();
+    while(Array.isArray(j)) j = j[0];
+    if(typeof j !== 'string') throw new Error('google2 format');
+    return j;
+  },
+  async device(text, sl, tl){
+    const tr = await getDeviceTranslator(sl, tl, false); if(!tr) throw new Error('device n/a');
+    return await tr.translate(text);
+  },
+  async lingva(text, sl, tl){
+    const r = await fetchT('https://lingva.ml/api/v1/'+sl+'/'+tl+'/'+encodeURIComponent(text), 6000);
+    if(!r.ok) throw new Error('lingva '+r.status);
+    return (await r.json()).translation;
+  },
+  async mymemory(text, sl, tl){
+    const r = await fetchT('https://api.mymemory.translated.net/get?langpair='+sl+'|'+tl+'&q='+encodeURIComponent(text.slice(0,480)), 7000);
+    const j = await r.json();
+    if(j.responseStatus != 200) throw new Error('mymemory '+j.responseStatus);
+    return j.responseData.translatedText;
+  }
+};
+const ENGINE_NAME = {google:'オンライン翻訳', google2:'オンライン翻訳2', device:'端末内AI（無制限）', lingva:'予備サーバー', mymemory:'予備サーバー2', cache:'キャッシュ（即時）'};
+const engineFail = {}; // 一時的に失敗したエンジンは少し休ませる
+async function translate(text, sl, tl, {live=false}={}){
+  text = text.trim(); if(!text) return '';
+  const key = sl+'|'+tl+'|'+text;
+  if(cache.has(key)){ const v = cache.get(key); cachePut(key, v); if(!live) setStatus('翻訳: <b>'+ENGINE_NAME.cache+'</b>'); return v; }
+  let order = settings.engine === 'device' ? ['device','google','google2','lingva','mymemory'] : ['google','google2','device','lingva','mymemory'];
+  if(live) order = order.filter(e => e==='google' || e==='google2' || e==='device'); // 途中経過は軽量エンジンのみ
+  const now = Date.now();
+  const tryOrder = order.filter(e => !(engineFail[e] > now)).concat(order.filter(e => engineFail[e] > now));
+  for(const eng of tryOrder){
+    try{
+      const r = await ENGINES[eng](text, sl, tl);
+      if(r && r.trim()){
+        delete engineFail[eng];
+        if(!live){ cachePut(key, r); setStatus('翻訳: <b>'+ENGINE_NAME[eng]+'</b>'); }
+        return r;
+      }
+    }catch(e){
+      if(eng !== 'device') engineFail[eng] = Date.now() + 60000;
+    }
+  }
+  if(!live) setStatus('翻訳できませんでした（通信を確認してください）', true);
+  throw new Error('translate failed');
+}
+
+// ================= 音声合成 =================
+const synth = window.speechSynthesis;
+let voices = [];
+function loadVoices(){ if(synth) voices = synth.getVoices(); }
+if(synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+function pickVoice(bcp){
+  const c = voices.filter(v => v.lang.replace('_','-').toLowerCase().startsWith(bcp.slice(0,2)));
+  return c.find(v => /google|premium|enhanced|siri|yuna|kyoko|o-ren|natural/i.test(v.name)) || c[0] || null;
+}
+let speakingTimer = null;
+function speak(text, l, onDone){
+  if(!synth || !text){ onDone && onDone(); return; }
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = LANG[l].bcp; u.rate = settings.rate;
+  const v = pickVoice(LANG[l].bcp); if(v) u.voice = v;
+  let done = false;
+  const fin = () => { if(done) return; done = true; clearTimeout(speakingTimer); onDone && onDone(); };
+  u.onend = fin; u.onerror = fin;
+  clearTimeout(speakingTimer);
+  speakingTimer = setTimeout(fin, 3000 + text.length * 300 / settings.rate); // onendが来ない端末対策
+  synth.speak(u);
+}
+let audioUnlocked = false;
+function unlockAudio(){
+  if(audioUnlocked || !synth) return; audioUnlocked = true;
+  const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u);
+}
+
+// ================= 音声認識 =================
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, recLang = null, liveTimer = null, liveSeq = 0, commitSeq = 0;
+if(!SR){
+  Object.values(panes).forEach(p => p.mic.hidden = true);
+  setStatus('このブラウザは音声入力非対応です（文字入力は使えます）', true);
+}
+function stopListening(){
+  if(rec){ try{ rec.stop(); }catch(e){} }
+}
+function startListening(l){
+  if(!SR) return;
+  if(rec){ const was = recLang; rec.onend = null; try{ rec.abort(); }catch(e){} cleanupRec(); if(was === l) return; }
+  if(synth) synth.cancel();
+  clearTimeout(speakingTimer);
+  const other = LANG[l].other;
+  const r = new SR();
+  r.lang = LANG[l].bcp; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  rec = r; recLang = l;
+  let finalText = '', interimText = '';
+  panes[l].mic.classList.add('on');
+  setHint(l, LANG[l].hintListen);
+  setMain(l, LANG[l].listening, {placeholder:true}); setSub(l, '');
+  requestWakeLock();
+  r.onresult = e => {
+    interimText = '';
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      const t = e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalText += t; else interimText += t;
+    }
+    const cur = (finalText + interimText).trim();
+    if(!cur) return;
+    setMain(l, cur, {live: !!interimText});
+    if(settings.live){
+      clearTimeout(liveTimer);
+      liveTimer = setTimeout(() => {
+        const seq = ++liveSeq;
+        translate(cur, l, other, {live:true}).then(tr => {
+          if(seq === liveSeq && recLang === l){ setMain(other, tr + ' …', {live:true}); setSub(other, cur); }
+        }).catch(()=>{});
+      }, 350);
+    }
+  };
+  r.onerror = e => {
+    if(e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('マイクの使用を許可してください / 마이크를 허용해 주세요');
+    else if(e.error === 'network') toast('音声認識には通信が必要です');
+  };
+  r.onend = () => {
+    cleanupRec();
+    const text = (finalText + interimText).trim();
+    if(text) commit(text, l);
+    else { resetPane(l); toast(LANG[l].noSpeech); }
+  };
+  try{ r.start(); }catch(e){ cleanupRec(); }
+}
+function cleanupRec(){
+  clearTimeout(liveTimer); liveSeq++;
+  if(recLang){ panes[recLang].mic.classList.remove('on'); setHint(recLang, LANG[recLang].hintIdle); }
+  rec = null; recLang = null;
+}
+
+// ================= 会話の確定処理 =================
+async function commit(text, from){
+  const to = LANG[from].other;
+  const seq = ++commitSeq;
+  setMain(from, text); setSub(from, LANG[from].translating);
+  setMain(to, LANG[to].translating, {placeholder:true}); setSub(to, text);
+  let tr;
+  try{ tr = await translate(text, from, to); }
+  catch(e){
+    if(seq !== commitSeq) return;
+    setSub(from, '⚠️ 翻訳失敗 / 번역 실패'); resetPane(to); return;
+  }
+  if(seq !== commitSeq) return;
+  setMain(from, text); setSub(from, '→ ' + tr);
+  setMain(to, tr); setSub(to, text);
+  panes[to].last = tr;
+  hist.push({f:from, s:text, d:tr, t:Date.now()});
+  if(hist.length > 300) hist = hist.slice(-300);
+  store.set('hist', hist);
+  if(settings.speak){
+    speak(tr, to, () => { if(settings.converse && seq === commitSeq && !rec) startListening(to); });
+  } else if(settings.converse){
+    setTimeout(() => { if(seq === commitSeq && !rec) startListening(to); }, 600);
+  }
+}
+
+// ================= イベント =================
+Object.entries(panes).forEach(([l, p]) => {
+  p.mic.addEventListener('click', () => {
+    unlockAudio(); prepDeviceSilently();
+    if(rec && recLang === l){ stopListening(); return; }
+    startListening(l);
+  });
+  p.form.addEventListener('submit', e => {
+    e.preventDefault(); unlockAudio();
+    const t = p.input.value.trim(); if(!t) return;
+    p.input.value = ''; p.input.blur();
+    if(rec){ rec.onend = null; try{ rec.abort(); }catch(e){} cleanupRec(); }
+    const d = detectLang(t);
+    commit(t, d && d !== l ? d : l); // 相手の言語で打たれても自動判別
+  });
+  p.el.querySelector('[data-act=replay]').addEventListener('click', () => {
+    unlockAudio();
+    if(p.last) speak(p.last, l); else toast(l === 'ja' ? 'まだ翻訳がありません' : '아직 번역이 없어요');
+  });
+  p.el.querySelector('[data-act=phrases]').addEventListener('click', () => openPhrases(l));
+  // 画面の文字をタップで読み上げ
+  p.display.addEventListener('click', () => {
+    const m = p.main; if(m.classList.contains('placeholder')) return;
+    const txt = m.textContent.replace(/ …$/, ''); unlockAudio();
+    speak(txt, detectLang(txt) || l);
+  });
+});
+
+function openModal(id, flip){
+  const m = document.getElementById(id);
+  m.classList.toggle('flip', !!flip); m.classList.add('open');
+}
+document.querySelectorAll('.modal').forEach(m => {
+  m.addEventListener('click', e => { if(e.target === m || e.target.closest('[data-close]')) m.classList.remove('open'); });
+});
+
+// 定型文
+function openPhrases(l){
+  const other = LANG[l].other;
+  $('#phrTitle').textContent = LANG[l].phrTitle;
+  const list = $('#phrList'); list.innerHTML = '';
+  PHRASES.forEach(pair => {
+    const mine = l === 'ja' ? pair[0] : pair[1], theirs = l === 'ja' ? pair[1] : pair[0];
+    const b = document.createElement('button'); b.className = 'phr';
+    b.innerHTML = '<div class="p1"></div><div class="p2"></div>';
+    b.children[0].textContent = mine; b.children[1].textContent = theirs;
+    b.onclick = () => { unlockAudio(); $('#mPhrases').classList.remove('open'); commit(mine, l); };
+    list.appendChild(b);
+  });
+  openModal('mPhrases', l === 'ko' && settings.face);
+}
+
+// 履歴
+function fmtTime(t){ const d = new Date(t); return d.toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'})+' '+d.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}); }
+function renderHistory(){
+  const list = $('#histList'); list.innerHTML = '';
+  if(!hist.length){ list.innerHTML = '<div class="note" style="text-align:center;padding:30px">まだ会話がありません / 아직 대화가 없어요</div>'; return; }
+  hist.slice().reverse().forEach(h => {
+    const d = document.createElement('div'); d.className = 'hitem ' + h.f;
+    d.innerHTML = '<div class="hs"></div><div class="hd"></div><div class="hm"><span class="ht"></span><button class="ibtn" data-a="s">🔊</button><button class="ibtn" data-a="c">📋</button></div>';
+    d.querySelector('.hs').textContent = (h.f === 'ja' ? '🇯🇵 ' : '🇰🇷 ') + h.s;
+    d.querySelector('.hd').textContent = (h.f === 'ja' ? '🇰🇷 ' : '🇯🇵 ') + h.d;
+    d.querySelector('.ht').textContent = fmtTime(h.t);
+    d.querySelector('[data-a=s]').onclick = () => { unlockAudio(); speak(h.d, LANG[h.f].other); };
+    d.querySelector('[data-a=c]').onclick = () => copy(h.s + '\n' + h.d);
+    list.appendChild(d);
+  });
+}
+function copy(t){
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('コピーしました'), () => {
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast('コピーしました'); }catch(e){} ta.remove();
+  });
+}
+$('#btnHistory').onclick = () => { renderHistory(); openModal('mHistory'); };
+$('#btnCopyAll').onclick = () => copy(hist.map(h => fmtTime(h.t) + '\n' + h.s + '\n' + h.d).join('\n\n'));
+$('#btnClearHist').onclick = () => {
+  if(confirm('会話履歴をすべて消去しますか？')){ hist = []; store.set('hist', hist); toast('消去しました'); }
+};
+
+// 設定
+const opt = {speak:$('#optSpeak'), converse:$('#optConverse'), live:$('#optLive'), face:$('#optFace'), rate:$('#optRate'), size:$('#optSize'), engine:$('#optEngine')};
+function applySettings(){
+  document.body.classList.toggle('face', settings.face);
+  document.documentElement.style.setProperty('--fs-main', settings.size + 'px');
+  document.documentElement.style.setProperty('--fs-sub', Math.round(settings.size * .55 + 1) + 'px');
+}
+function syncForm(){
+  opt.speak.checked = settings.speak; opt.converse.checked = settings.converse; opt.live.checked = settings.live;
+  opt.face.checked = settings.face; opt.rate.value = settings.rate; opt.size.value = String(settings.size); opt.engine.value = settings.engine;
+}
+Object.entries(opt).forEach(([k, el]) => el.addEventListener('change', () => {
+  settings[k] = el.type === 'checkbox' ? el.checked : (k === 'engine' ? el.value : Number(el.value));
+  saveSettings(); applySettings();
+}));
+$('#btnSettings').onclick = () => { syncForm(); updateDeviceNote(); openModal('mSettings'); };
+$('#btnFlip').onclick = () => { settings.face = !settings.face; saveSettings(); applySettings(); toast(settings.face ? '対面モード ON' : '対面モード OFF'); };
+
+// 端末内AI翻訳（Chrome等の内蔵翻訳。通信不要・回数無制限）
+async function updateDeviceNote(){
+  const n = $('#deviceNote');
+  if(!('Translator' in self)){ n.textContent = 'このブラウザは端末内AI翻訳に未対応です（オンライン翻訳で動作します）。PCやAndroidの最新Chromeで利用できます。'; $('#btnPrepDevice').disabled = true; return; }
+  try{
+    const a = await Translator.availability({sourceLanguage:'ja', targetLanguage:'ko'});
+    const b = await Translator.availability({sourceLanguage:'ko', targetLanguage:'ja'});
+    const ok = a === 'available' && b === 'available';
+    n.textContent = ok ? '✅ 端末内AI翻訳は準備済みです。オフラインでも翻訳できます。' : (a === 'unavailable' ? 'この端末では日韓の端末内翻訳が使えません。' : '未ダウンロードです。ボタンを押すと翻訳モデルを取得します（初回のみ）。');
+    $('#btnPrepDevice').disabled = ok || a === 'unavailable';
+  }catch(e){ n.textContent = '端末内AI翻訳の状態を確認できませんでした。'; }
+}
+$('#btnPrepDevice').onclick = async () => {
+  try{
+    await Promise.all([getDeviceTranslator('ja','ko',true), getDeviceTranslator('ko','ja',true)]);
+    setStatus('端末内AI翻訳: <b>準備完了</b>'); toast('オフライン翻訳の準備ができました');
+  }catch(e){ toast('準備できませんでした'); }
+  updateDeviceNote();
+};
+let devTried = false;
+function prepDeviceSilently(){
+  // ユーザー操作のタイミングで端末内翻訳の準備を試みる（既にDL済みなら即利用可能に）
+  if(devTried || !('Translator' in self)) return; devTried = true;
+  getDeviceTranslator('ja','ko', settings.engine === 'device').catch(()=>{});
+  getDeviceTranslator('ko','ja', settings.engine === 'device').catch(()=>{});
+}
+
+// 画面スリープ防止（会話中に画面が消えないように）
+let wakeLock = null;
+async function requestWakeLock(){
+  try{ if('wakeLock' in navigator && !wakeLock){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); } }catch(e){}
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && wakeLock === null && hist.length) requestWakeLock();
+  if(document.visibilityState === 'hidden'){ if(rec){ rec.onend = null; try{ rec.abort(); }catch(e){} cleanupRec(); } if(synth) synth.cancel(); }
+});
+window.addEventListener('online', () => setStatus('オンライン: <b>接続しました</b>'));
+window.addEventListener('offline', () => setStatus('オフライン: 端末内AI翻訳・定型文のみ利用可', true));
+
+// 初期化
+applySettings();
+['ja','ko'].forEach(l => { resetPane(l); setHint(l, LANG[l].hintIdle); });
+if(SR) setStatus(navigator.onLine ? '準備完了 — 🎤を押して話してください' : 'オフライン: 端末内AI翻訳・定型文のみ利用可', !navigator.onLine);
+</script>
+</body>
+</html>
