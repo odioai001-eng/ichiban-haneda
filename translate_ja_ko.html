@@ -102,6 +102,8 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
   padding:12px 18px;border-radius:12px;font-size:15px;z-index:99;display:none;max-width:86vw;text-align:center}
 .toast.show{display:block}
 #btnAuto.active{border-color:var(--green);color:var(--green)}
+.outbtn{font-size:13px;font-weight:700;white-space:nowrap;padding:0 8px}
+.outbtn.voice{border-color:var(--green);color:var(--green)}
 .startov{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;
   background:rgba(8,8,20,.92);border:none;color:var(--text);font-family:inherit;padding:24px;text-align:center;cursor:pointer}
 .startov.show{display:flex}
@@ -137,6 +139,7 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
   <div class="midbar">
     <button class="ibtn" id="btnHistory" aria-label="履歴">📜</button>
     <button class="ibtn" id="btnAuto" aria-label="自動会話">⏸</button>
+    <button class="ibtn outbtn" id="btnOut" aria-label="出力方法の切替"></button>
     <div class="status" id="status">準備完了</div>
     <button class="ibtn" id="btnFlip" aria-label="対面モード切替">🔄</button>
     <button class="ibtn" id="btnSettings" aria-label="設定">⚙️</button>
@@ -169,8 +172,8 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
   <div class="sheet">
     <div class="shead"><h2>⚙️ 設定</h2><button class="ibtn" data-close>✕</button></div>
     <div class="sbody">
-      <div class="row"><label>自動読み上げ<small>翻訳結果を相手の言語で音声再生</small></label>
-        <label class="sw"><input type="checkbox" id="optSpeak"><span></span></label></div>
+      <div class="row"><label>翻訳の出し方<small>中央バーのボタンでもすぐ切り替えられます</small></label>
+        <select id="optSpeak"><option value="1">🔊 読み上げ＋文字</option><option value="0">🔤 文字のみ</option></select></div>
       <div class="row"><label>自動会話（ハンズフリー）<small>アプリを開くと自動で聞き取り開始。🎤を押さずに会話を続けられます</small></label>
         <label class="sw"><input type="checkbox" id="optAuto"><span></span></label></div>
       <div class="row"><label>話しながら同時翻訳<small>話している途中から翻訳を表示</small></label>
@@ -645,11 +648,12 @@ function applySettings(){
   document.documentElement.style.setProperty('--fs-sub', Math.round(settings.size * .55 + 1) + 'px');
 }
 function syncForm(){
-  opt.speak.checked = settings.speak; opt.auto.checked = settings.auto; opt.live.checked = settings.live;
+  opt.speak.value = settings.speak ? '1' : '0'; opt.auto.checked = settings.auto; opt.live.checked = settings.live;
   opt.face.checked = settings.face; opt.rate.value = settings.rate; opt.size.value = String(settings.size); opt.engine.value = settings.engine;
 }
 Object.entries(opt).forEach(([k, el]) => el.addEventListener('change', () => {
-  settings[k] = el.type === 'checkbox' ? el.checked : (k === 'engine' ? el.value : Number(el.value));
+  settings[k] = el.type === 'checkbox' ? el.checked : k === 'engine' ? el.value : k === 'speak' ? el.value === '1' : Number(el.value);
+  if(k === 'speak') updateOutBtn();
   saveSettings(); applySettings();
   if(k === 'auto'){ if(settings.auto) startHandsFree(); else stopHandsFree(); }
 }));
@@ -711,6 +715,19 @@ document.getElementById('startOverlay').addEventListener('click', () => {
   settings.auto = true; saveSettings();
   abortListening(); startHandsFree();
 });
+// 読み上げ ⇔ 文字のみ の切り替え
+function updateOutBtn(){
+  const b = document.getElementById('btnOut');
+  b.textContent = settings.speak ? '🔊 音声' : '🔤 文字';
+  b.classList.toggle('voice', !!settings.speak);
+}
+document.getElementById('btnOut').addEventListener('click', () => {
+  unlockAudio();
+  settings.speak = !settings.speak; saveSettings(); updateOutBtn();
+  if(!settings.speak && synth){ synth.cancel(); } // 読み上げ中なら止める（止まると自動で次の聞き取りへ）
+  toast(settings.speak ? '🔊 読み上げ＋文字 / 음성＋문자' : '🔤 文字のみ / 문자만 표시');
+});
+updateOutBtn();
 document.getElementById('btnAuto').addEventListener('click', () => {
   unlockAudio();
   settings.auto = !handsFree; saveSettings();
