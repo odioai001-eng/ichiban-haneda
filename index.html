@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-152 -->
+<!-- v20260902-153 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1293,7 +1293,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-152';
+const APP_BUILD='20260902-153';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3651,6 +3651,18 @@ function setStatus(s){
       departureWatchCp=spotCp;
     } else {
       waitStartTsUsed=legacyWaitStartTs();
+    }
+    // 列（1号→2号→3号→4号）が進むたびに、その号自体のGPS到着時刻(cpArriveTs)は
+    // 新しくなってしまう。羽田プール本体(haneda)への到着時刻が何らかの理由で
+    // 取れていない場合（プールの円に入らず直接その号へ着いた・GPSの精度で
+    // 一瞬圏外扱いになった等）、上のロジックでは直近の号への到着時刻しか
+    // 使えず、実際にはずっと前から列に並んでいたのに待機時間が「1分」等
+    // 極端に短く計上されてしまう不具合があった。spotChangeHistory（号を選んだ
+    // 記録、GPSに頼らず本人の操作で記録される）の先頭＝最初に号を選んだ時刻も
+    // 候補に加え、より古い方を採用することで、この場合でも正しい待機開始
+    // 時刻を使えるようにする
+    if(spotChangeHistory.length&&spotChangeHistory[0].ts&&(!waitStartTsUsed||spotChangeHistory[0].ts<waitStartTsUsed)){
+      waitStartTsUsed=spotChangeHistory[0].ts;
     }
     const waitMins=waitStartTsUsed?Math.round((Date.now()-waitStartTsUsed)/60000):null;
     // 実車ボタンの押し忘れ検知（GPS自動判定）で実車になったかどうかを記録しておく。
