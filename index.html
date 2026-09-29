@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-151 -->
+<!-- v20260902-152 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -817,12 +817,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
  </div>
  <div id="carryover-status" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
 </div>
-<div class="sec">🛣 自腹高速代（いつでも記録）</div>
-<div class="card">
- <label>金額（円）</label>
- <input type="number" id="toll-only-input" placeholder="例: 500">
- <button class="btn btn-p" onclick="saveTollEntry()" style="width:100%">記録する</button>
-</div>
   <div class="sec">📊 本日の記録</div>
   <div class="card">
     <div class="row2"><span class="rl">乗務開始</span><span class="rv" id="duty-start">-</span></div>
@@ -1299,7 +1293,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-151';
+const APP_BUILD='20260902-152';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6609,13 +6603,6 @@ function syncFareLogEtcByTripTs(trip,etc,etcPaymentMethod){
  renderSalesStats();
  updateDailyBar();
  pushTeamSales();
-}
-
-function saveTollEntry(){
- const toll=parseInt(document.getElementById('toll-only-input').value)||0;
- if(toll<=0){toast('⚠️ 金額を入力してください');return;}
- saveFareEntry(0,toll);
- document.getElementById('toll-only-input').value='';
 }
 
 function skipFareModal(){
