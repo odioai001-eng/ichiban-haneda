@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>(ここにテーマ名)マンガ動画シナリオ テンプレート</title>
+<!--
+  これはテンプレートです。<div class="sub">以下、テーマ・登場人物・本編シナリオ(S1〜)・
+  接客フレーズ集・事例・参考情報を、実際の依頼テーマの内容に書き換えてください。
+  CSSのトーン(ダーク背景・カードUI・バッジ・黄色いテロップ風ラベル)はそのまま使えます。
+  サンプルとして「デスク周りの充電ケーブルを通路に置かない」という汎用テーマの
+  シナリオ例を入れてあります(manga_video_template.htmlのサンプルと対になっています)。
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
+  background:#0d0d1a;color:#e8e8f4;min-height:100vh;padding:20px 16px 48px;max-width:640px;margin:0 auto;line-height:1.7}
+h1{font-size:20px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:#7878a0;margin-bottom:20px}
+.cat{font-size:11px;font-weight:700;color:#7878a0;text-transform:uppercase;letter-spacing:.8px;
+  margin:26px 0 10px;display:flex;align-items:center;gap:6px}
+.card{background:#161628;border:1px solid #2a2a4a;border-radius:14px;padding:16px;margin-bottom:12px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px}
+.badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;
+  background:rgba(255,255,255,.06);color:#c0c0d8;border:1px solid #2a2a4a}
+.badge.red{color:#f87171;border-color:rgba(239,68,68,.3)}
+.badge.amber{color:#fbbf24;border-color:rgba(245,158,11,.3)}
+.badge.cyan{color:#67e8f9;border-color:rgba(6,182,212,.3)}
+.badge.green{color:#4ade80;border-color:rgba(74,222,128,.3)}
+.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.ov-item{background:#101022;border:1px solid #26264a;border-radius:10px;padding:10px 12px}
+.ov-item .k{font-size:10px;color:#7878a0;margin-bottom:3px}
+.ov-item .v{font-size:13px;font-weight:700}
+.cast{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
+.cast .ic{width:38px;height:38px;border-radius:10px;background:rgba(79,142,247,.18);
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.cast .name{font-size:14px;font-weight:700}
+.cast .desc{font-size:12px;color:#9999b8}
+.scene{background:#161628;border:1px solid #2a2a4a;border-radius:14px;padding:16px;margin-bottom:12px;position:relative}
+.scene.img{border-color:rgba(79,142,247,.5);box-shadow:0 0 0 1px rgba(79,142,247,.15) inset}
+.scene-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.scene-no{font-size:13px;font-weight:800;color:#4f8ef7}
+.tc{font-size:11px;color:#7878a0;font-weight:700}
+.dur{font-size:10px;color:#9999b8;background:#101022;border:1px solid #26264a;border-radius:20px;padding:2px 8px}
+.imgtag{font-size:10px;font-weight:700;color:#67e8f9;background:rgba(6,182,212,.12);
+  border:1px solid rgba(6,182,212,.3);border-radius:20px;padding:2px 8px}
+.lbl{font-size:10px;font-weight:700;color:#7878a0;margin-top:10px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
+.txt{font-size:13px;color:#e8e8f4;line-height:1.75}
+.line{font-size:13px;color:#c9c9e6;background:#101022;border-left:3px solid #4f8ef7;
+  padding:8px 10px;border-radius:0 8px 8px 0;margin-top:2px}
+.telop{display:inline-block;font-size:12px;font-weight:700;color:#0d0d1a;background:#fbbf24;
+  padding:4px 10px;border-radius:6px;margin-top:2px}
+.mapwrap{background:#101022;border:1px solid #26264a;border-radius:12px;padding:10px;margin-top:10px}
+.caption{font-size:11px;color:#7878a0;text-align:center;margin-top:6px}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.cc{border-radius:12px;padding:12px;font-size:12px;line-height:1.7}
+.cc.pickup{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3)}
+.cc.refuse{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3)}
+.cc h4{font-size:12px;margin-bottom:8px}
+.cc .step{padding:6px 8px;background:#101022;border-radius:8px;margin-bottom:6px;border:1px solid #26264a}
+.cc .arrow{text-align:center;color:#7878a0;font-size:11px;margin:2px 0}
+.note{background:#161628;border:1px solid #2a2a4a;border-radius:12px;padding:14px 16px;
+  font-size:12px;color:#9999b8;line-height:1.8;margin-top:14px}
+.note b{color:#e8e8f4}
+.phrase{background:#101022;border:1px solid #26264a;border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:13px}
+.phrase b{color:#4ade80}
+.src{font-size:11px;color:#7878a0;line-height:1.9}
+.src a{color:#67e8f9;text-decoration:none}
+</style>
+</head>
+<body>
+
+<h1>🎬 (ここにテーマ名)マンガ動画シナリオ</h1>
+<div class="sub">(サンプル)デスク周りの充電ケーブルを通路に置かない、をテーマにしたマンガ動画・台本テンプレート</div>
+
+<div class="card">
+  <div class="overview-grid">
+    <div class="ov-item"><div class="k">尺</div><div class="v">約1〜3分</div></div>
+    <div class="ov-item"><div class="k">形式</div><div class="v">マンガ動画+解説画像1〜2点</div></div>
+    <div class="ov-item"><div class="k">語り手</div><div class="v">主人公(先輩社員)</div></div>
+    <div class="ov-item"><div class="k">対象視聴者</div><div class="v">新入社員〜中堅社員</div></div>
+    <div class="ov-item" style="grid-column:1/-1;border-color:rgba(74,222,128,.35)"><div class="k">動機づけの軸</div><div class="v">(例: 表彰制度・評価・顧客満足度など。誰が誰に与えるものかを確認してから書く)</div></div>
+  </div>
+  <div class="meta" style="margin-top:12px">
+    <span class="badge cyan">ルールの基礎知識</span>
+    <span class="badge red">やってしまったら</span>
+    <span class="badge amber">やるべきなのにやらなかったら</span>
+    <span class="badge green">正しい対応法</span>
+  </div>
+</div>
+
+<div class="cat">🎭 登場人物</div>
+<div class="card">
+  <div class="cast">
+    <div class="ic">🧑‍💼</div>
+    <div><div class="name">主人公(先輩社員)</div><div class="desc">経験があり、失敗談も含めて語れる立場。視聴者に信頼される語り手。</div></div>
+  </div>
+  <div class="cast">
+    <div class="ic">🔰</div>
+    <div><div class="name">新人社員</div><div class="desc">ルールをまだ知らず、視聴者の分身としてヒヤリとする失敗を実演する役。</div></div>
+  </div>
+  <div class="cast">
+    <div class="ic">🎫</div>
+    <div><div class="name">(取り締まる側・注意する側の役)</div><div class="desc">実在の制度がテーマなら、正式な呼称を使う(例:「〇〇センターの巡回員」)。</div></div>
+  </div>
+</div>
+
+<div class="cat">📖 本編シナリオ</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S1</span><span class="tc">0:00-0:08</span><span class="dur">8秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">夜のオフィス。デスクから通路をまたいで伸びる充電ケーブルに、通りかかった人の足が引っかかりそうになる。</div>
+  <div class="lbl">ナレーション</div>
+  <div class="line">「それ、通路に置いたままですか？――充電ケーブルが通路をまたいでいる、よくある光景ですが、実はこれ、立派な労災リスクなんです。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">それ、通路に置いたままですか？</div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S2</span><span class="tc">0:08-0:20</span><span class="dur">12秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">休憩スペース。壁にヒヤリハット報告の掲示。先輩社員が少し神妙な顔で語りかける。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「うちのオフィスでも、通路をまたぐケーブルで転びかけた人が出て、ヒヤリハット報告に載ったことがあるんです。今日はその話をします。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">うちの職場も一度、ヒヤリハット報告が出ました</div>
+</div>
+
+<div class="scene img">
+  <div class="scene-head"><span class="scene-no">S3</span><span class="tc">0:20-0:34</span><span class="dur">14秒</span><span class="imgtag">🖼 解説画像①</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">オフィスのレイアウト図。デスクの島に囲まれた通路部分が赤く示される。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「デスクの島と島の間、避難経路にもなっている通路をケーブルがまたぐと、つまずきだけでなく、緊急時の避難の妨げにもなります。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">通路の“これだけは避けたい”ゾーン</div>
+  <div class="mapwrap">
+    <div class="caption">(ここにSVGなどで簡易な図解を入れる。manga_video_template.htmlのdrawMap()相当のイメージ)</div>
+  </div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S4</span><span class="tc">0:34-0:48</span><span class="dur">14秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">新人社員が通路のケーブルに足を引っかけ、驚いた表情。手に持っていた書類が散らばる。</div>
+  <div class="lbl">ナレーション</div>
+  <div class="line">「ケーブルを通路にそのまま置いてしまうと、転倒によるケガだけでなく、断線や機材の落下・故障にもつながります。実際に転倒者が出れば、労災扱いになることもあります。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">やってしまったらどうなる？</div>
+</div>
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S5</span><span class="tc">0:48-1:02</span><span class="dur">14秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">先輩社員が配線カバーを指差しながら、通りかかった新人に説明している。</div>
+  <div class="lbl">セリフ</div>
+  <div class="line">「通路をまたぐ配線は、床用の配線カバーを使う、壁沿いに結束して這わせる、そもそも通路をまたがないレイアウトにする――このどれか1つで、リスクはぐっと減ります。」</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">配線カバー・結束・迂回、どれか1つでOK</div>
+</div>
+
+<!--
+  実際の依頼テーマでは、さらに次を必ずどこかのシーンで扱う:
+  - 「本来対応しなければいけない場面で対応しなかったらどうなるか」というもう1つの失敗パターン
+    (このサンプルでは省略しているが、多くのテーマでは2種類目のNGパターンを描くと説得力が増す)
+  - 尺の目安は8〜10シーンで合計180秒(3分)。このサンプルは短縮版(6シーン・約1分)。
+-->
+
+<div class="scene">
+  <div class="scene-head"><span class="scene-no">S6</span><span class="tc">1:02-1:10</span><span class="dur">8秒</span></div>
+  <div class="lbl">絵コンテ</div>
+  <div class="txt">ロゴ表示。</div>
+  <div class="lbl">テロップ</div>
+  <div class="telop">次回：デスク周りの防災あるあるも解説予定</div>
+</div>
+
+<div class="cat">💬 正しい対応につながるフレーズ集</div>
+<div class="card">
+  <div class="phrase"><b>OK:</b> 「ここは配線カバーを通しましょう、足を引っかけにくくなります」</div>
+  <div class="phrase"><b>OK:</b> 「通路をまたぐ配線は、壁沿いに結束してから使いましょう」</div>
+  <div class="phrase"><b>NG:</b> 気づいていながら「まあ大丈夫でしょう」で放置する</div>
+</div>
+
+<div class="cat">📌 実際に起きている事例</div>
+<div class="note">
+  <b>現場でよくあるケース：</b>(ここに、実在の事例・統計・社内での実話などを書く。実在の制度・規制がテーマの場合は、Web検索で裏付けを取ってから書くこと)<br><br>
+  <b>影響：</b>(違反・放置した場合に、個人・組織それぞれにどんな影響が出るかを書く)
+</div>
+
+<div class="cat">🔗 参考情報</div>
+<div class="card src">
+  ・(一次情報のリンクをここに列挙する)<br>
+  <div style="margin-top:8px;color:#666690">※ 制度の詳細は改定される場合があります。公開前に最新の公式情報でファクトチェックしてください。</div>
+</div>
+
+</body>
+</html>
