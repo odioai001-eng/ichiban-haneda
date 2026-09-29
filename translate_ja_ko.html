@@ -46,6 +46,10 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
 .main.live{opacity:.6}
 .sub{font-size:var(--fs-sub);color:var(--muted);word-break:break-word;white-space:pre-wrap}
 .sub:empty{display:none}
+.alts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.alts:empty{display:none}
+.altlab{font-size:12px;color:var(--muted)}
+.altchip{font-family:inherit;font-size:14px;padding:5px 10px;border-radius:999px;border:1px dashed var(--muted);background:transparent;color:var(--text);cursor:pointer}
 .controls{display:flex;gap:10px;align-items:center}
 .tform{flex:1;display:flex;gap:6px;min-width:0}
 .tform input{flex:1;min-width:0;height:52px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);
@@ -121,11 +125,13 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
       <span class="badge">🇰🇷 한국어</span>
       <span class="phint" data-hint></span>
       <button class="ibtn" data-act="phrases" aria-label="자주 쓰는 말">💬</button>
+      <button class="ibtn" data-act="edit" aria-label="수정">✏️</button>
       <button class="ibtn" data-act="replay" aria-label="다시 듣기">🔊</button>
     </div>
     <div class="display" data-display>
       <div class="main placeholder" data-main>마이크를 누르고 한국어로 말씀하세요</div>
       <div class="sub" data-sub></div>
+      <div class="alts" data-alts></div>
     </div>
     <div class="controls">
       <form class="tform" data-form>
@@ -151,11 +157,13 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
       <span class="badge">🇯🇵 日本語</span>
       <span class="phint" data-hint></span>
       <button class="ibtn" data-act="phrases" aria-label="定型文">💬</button>
+      <button class="ibtn" data-act="edit" aria-label="修正">✏️</button>
       <button class="ibtn" data-act="replay" aria-label="もう一度聞く">🔊</button>
     </div>
     <div class="display" data-display>
       <div class="main placeholder" data-main>マイクを押して日本語で話してください</div>
       <div class="sub" data-sub></div>
+      <div class="alts" data-alts></div>
     </div>
     <div class="controls">
       <form class="tform" data-form>
@@ -178,6 +186,10 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
         <label class="sw"><input type="checkbox" id="optAuto"><span></span></label></div>
       <div class="row"><label>話しながら同時翻訳<small>話している途中から翻訳を表示</small></label>
         <label class="sw"><input type="checkbox" id="optLive"><span></span></label></div>
+      <div class="row"><label>話し終わりの判定<small>文の途中で切れる時は「長め」に</small></label>
+        <select id="optEndPause"><option value="800">短め（0.8秒）</option><option value="1200">標準（1.2秒）</option><option value="2000">長め（2秒）</option><option value="3000">とても長め（3秒）</option></select></div>
+      <div class="row" style="flex-direction:column;align-items:stretch"><label>単語登録（聞き間違いの自動修正）<small>1行に1つ「聞き間違い→正しい語」。人名・地名・店名などに便利</small></label>
+        <textarea id="optDict" rows="4" placeholder="例）はねだ→羽田" style="width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px;font-size:15px;font-family:inherit"></textarea></div>
       <div class="row"><label>対面モード<small>韓国語側を上下反転（テーブル越しに使う）</small></label>
         <label class="sw"><input type="checkbox" id="optFace"><span></span></label></div>
       <div class="row"><label>読み上げ速度</label>
@@ -190,6 +202,7 @@ body.face .pane[data-lang=ko]{transform:rotate(180deg)}
       <div class="note" id="deviceNote"></div>
       <button class="wbtn danger" id="btnClearHist">🗑 会話履歴を消去</button>
       <div class="note">
+        【認識精度を上げるコツ】スマホから30cm以内で、普段の速さで続けて話すと最も正確です。周囲がうるさい時や同じ人が続けて話す時は、話す側の🎤を押してから話すと言語の取り違えがなくなります。<br>
         ・完全無料・登録不要。翻訳結果は端末内にキャッシュされ、同じ文は通信せず即表示します。<br>
         ・翻訳は複数エンジンを自動で切り替えます（オンライン翻訳 → 端末内AI翻訳 → 予備サーバー）。1つが混雑・制限されても止まりません。<br>
         ・音声入力は Chrome / Safari / Edge に対応。初回はマイクの許可が必要です。<br>
@@ -266,7 +279,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem('jk_'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem('jk_'+k, JSON.stringify(v)); }catch(e){} }
 };
-const settings = Object.assign({speak:true, auto:true, live:true, face:true, rate:1.0, size:30, engine:'auto'}, store.get('settings', {}));
+const settings = Object.assign({speak:true, auto:true, live:true, face:true, rate:1.0, size:30, engine:'auto', endPause:1200, dict:''}, store.get('settings', {}));
 const saveSettings = () => store.set('settings', settings);
 let hist = store.get('hist', []);
 const cache = new Map(store.get('cache', []));
@@ -287,7 +300,8 @@ const panes = {};
   const el = document.getElementById('pane-'+l);
   panes[l] = {el, main:el.querySelector('[data-main]'), sub:el.querySelector('[data-sub]'),
     mic:el.querySelector('[data-mic]'), input:el.querySelector('[data-input]'), form:el.querySelector('[data-form]'),
-    hint:el.querySelector('[data-hint]'), display:el.querySelector('[data-display]'), last:''};
+    hint:el.querySelector('[data-hint]'), display:el.querySelector('[data-display]'), alts:el.querySelector('[data-alts]'),
+    last:'', mine:'', fixing:false};
 });
 const statusEl = $('#status');
 function setStatus(html, err){ statusEl.innerHTML = html; statusEl.classList.toggle('err', !!err); }
@@ -443,7 +457,58 @@ function scheduleListen(delay){
   if(!handsFree) return;
   loopTimer = setTimeout(() => { if(canAutoListen()) startListening(turn); }, delay == null ? 250 : delay);
 }
-function startListening(l){
+// ---------- 認識精度を上げるための補助処理 ----------
+// 文字種の一致度（日本語ならかな・漢字、韓国語ならハングルの割合）
+const RE_HANGUL = /[가-힯ᄀ-ᇿ㄰-㆏]/g;
+const RE_JA = /[぀-ヿ一-鿿々]/g;
+const RE_KATA = /[゠-ヿ]/g;
+function scriptScore(t, l){
+  const letters = t.replace(/[\s\d\p{P}\p{S}]/gu, '').length || 1;
+  const ko = (t.match(RE_HANGUL) || []).length, ja = (t.match(RE_JA) || []).length;
+  return l === 'ko' ? (ko - ja) / letters : (ja - ko) / letters;
+}
+// 複数候補から「その言語らしさ＋認識の自信度」が最も高いものを選ぶ
+function pickBest(res, l){
+  const alts = [];
+  for(let k = 0; k < res.length; k++){
+    const t = (res[k].transcript || '').trim(); if(!t) continue;
+    const c = typeof res[k].confidence === 'number' ? res[k].confidence : 0;
+    alts.push({text:t, conf:c, score:c + scriptScore(t, l) * 0.6 + (k === 0 ? 0.05 : 0)});
+  }
+  if(!alts.length) return null;
+  const best = alts.slice().sort((a, b) => b.score - a.score)[0];
+  best.alts = alts.map(a => a.text).filter((t, i, arr) => t !== best.text && arr.indexOf(t) === i);
+  return best;
+}
+// 登録単語（聞き間違い→正しい語）
+function parseDict(){
+  return (settings.dict || '').split('\n').map(s => s.split(/\s*(?:→|->|=>|＝|=)\s*/)).filter(a => a.length === 2 && a[0] && a[1]);
+}
+// 認識結果の整形：言いよどみ除去・余計な空白の除去・句点補完・登録単語の置換
+function cleanText(t, l){
+  t = t.replace(/\s+/g, ' ').trim();
+  if(l === 'ja'){
+    t = t.replace(/(^|[\s、。])(えーっと|えーと|えっと|え[ー〜]+|あの[ー〜]+|あのう|うーん|んー+|まあ[ー〜]+)(?=[\s、。]|$)/g, '$1');
+    t = t.replace(/([　-ヿ一-鿿＀-￯])\s+(?=[　-ヿ一-鿿＀-￯])/g, '$1'); // 日本語の間の空白
+  } else {
+    t = t.replace(/(^|\s)(음+|으음+|어+|어어+|에+|아+|저기+)(?=\s|$)/g, '$1');
+  }
+  parseDict().forEach(([a, b]) => { t = t.split(a).join(b); });
+  t = t.replace(/\s+/g, ' ').replace(/^[\s、,]+/, '').trim();
+  if(l === 'ja' && t && !/[。！？!?…]$/.test(t)) t += /(か|かな|かね|の|でしょう)$/.test(t) ? '？' : '。';
+  return t;
+}
+// 相手の言語を誤って聞き取った可能性が高いか（自動会話で言語を取り違えた時の保険）
+function looksWrongLang(text, l, conf){
+  if(conf > 0 && conf < 0.35) return true;
+  if(l === 'ja'){
+    const kata = (text.match(RE_KATA) || []).length, letters = text.replace(/[\s\p{P}]/gu, '').length;
+    if(letters >= 6 && kata / letters > 0.7 && (conf === 0 || conf < 0.75)) return true; // 韓国語をカタカナで拾った形
+  }
+  return false;
+}
+
+function startListening(l, manual){
   if(!SR) return;
   abortListening();
   clearTimeout(loopTimer);
@@ -451,10 +516,19 @@ function startListening(l){
   clearTimeout(speakingTimer);
   const other = LANG[l].other;
   const r = new SR();
-  r.lang = LANG[l].bcp; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  // continuous：文の途中の短い間で切らず、文全体の文脈で認識させる（精度向上）。
+  // 話し終わりは下の「無音タイマー」で判定する。
+  r.lang = LANG[l].bcp; r.interimResults = true; r.continuous = true; r.maxAlternatives = 5;
   rec = r; recLang = l; turn = l;
-  let finalText = '', interimText = '', denied = false;
+  let finals = [], interimText = '', denied = false, gotSpeech = false, endTimer = null, capTimer = null, silenceTimer = null;
   const startedAt = Date.now();
+  const endPause = Number(settings.endPause) || 1200;
+  const finishSoon = ms => { clearTimeout(endTimer); endTimer = setTimeout(() => { try{ r.stop(); }catch(e){} }, ms); };
+  // 誰も話さなければ7秒で打ち切って、もう一方の言語へ（自動会話時）
+  silenceTimer = setTimeout(() => { if(!gotSpeech && rec === r){ try{ r.abort(); }catch(e){} } }, manual ? 12000 : 7000);
+  capTimer = setTimeout(() => { try{ r.stop(); }catch(e){} }, 45000); // 長すぎる発話は区切る
+  const joinFinals = () => finals.map(f => f.text).join(l === 'ja' ? '' : ' ');
+  const avgConf = () => { const c = finals.filter(f => f.conf > 0); return c.length ? c.reduce((s, f) => s + f.conf, 0) / c.length : 0; };
   panes[l].mic.classList.add('on');
   setHint(l, LANG[l].hintListen);
   if(panes[l].main.classList.contains('placeholder')) setMain(l, LANG[l].listening, {placeholder:true});
@@ -462,14 +536,23 @@ function startListening(l){
   requestWakeLock();
   r.onstart = () => { clearTimeout(startWatch); hideStartOverlay(); };
   r.onresult = e => {
-    interimText = '';
-    for(let i = e.resultIndex; i < e.results.length; i++){
-      const t = e.results[i][0].transcript;
-      if(e.results[i].isFinal) finalText += t; else interimText += t;
+    // 毎回すべての結果から組み立て直す（Android Chromeの重複結果対策）
+    finals = []; interimText = '';
+    for(let i = 0; i < e.results.length; i++){
+      const res = e.results[i];
+      if(res.isFinal){
+        const b = pickBest(res, l); if(!b) continue;
+        const last = finals[finals.length - 1];
+        if(last && b.text.startsWith(last.text)) finals[finals.length - 1] = b;       // 累積型の重複
+        else if(last && last.text.startsWith(b.text)) continue;
+        else finals.push(b);
+      } else interimText += res[0].transcript;
     }
-    const cur = (finalText + interimText).trim();
+    const cur = cleanText(joinFinals() + (interimText ? (l === 'ja' ? '' : ' ') + interimText : ''), l).replace(/[。？]$/, interimText ? '' : '$&');
     if(!cur) return;
-    setMain(l, cur, {live: !!interimText}); setSub(l, '');
+    gotSpeech = true; clearTimeout(silenceTimer);
+    finishSoon(interimText ? endPause + 600 : endPause); // 声が途切れてから一定時間で確定
+    setMain(l, cur, {live: !!interimText}); setSub(l, ''); showAlts(l, null);
     if(settings.live){
       clearTimeout(liveTimer);
       liveTimer = setTimeout(() => {
@@ -487,9 +570,21 @@ function startListening(l){
     } else if(e.error === 'network') setStatus('音声認識に通信が必要です（再接続を待っています）', true);
   };
   r.onend = () => {
+    clearTimeout(endTimer); clearTimeout(capTimer); clearTimeout(silenceTimer);
     cleanupRec();
-    const text = (finalText + interimText).trim();
-    if(text){ quickFails = 0; commit(text, l); return; }
+    const raw = joinFinals() + (interimText ? (l === 'ja' ? '' : ' ') + interimText : '');
+    const text = cleanText(raw, l);
+    if(text){
+      quickFails = 0;
+      // 自動会話で言語を取り違えたらしい時は翻訳せず、相手の言語に切り替えて聞き直す
+      if(handsFree && !manual && looksWrongLang(raw, l, avgConf())){
+        setMain(l, text, {live:true}); setSub(l, '');
+        toast(l === 'ja' ? '🔁 한국어로 전환했어요. 다시 말씀해 주세요' : '🔁 日本語に切り替えました。もう一度どうぞ');
+        turn = other; scheduleListen(200); return;
+      }
+      const alts = finals.length === 1 ? finals[0].alts.map(a => cleanText(a, l)).filter(a => a && a !== text).slice(0, 3) : [];
+      commit(text, l, alts); return;
+    }
     if(panes[l].main.textContent === LANG[l].listening) resetPane(l);
     if(denied) return;
     if(!handsFree){ toast(LANG[l].noSpeech); setStatus('準備完了'); return; }
@@ -532,11 +627,31 @@ function stopHandsFree(){
 }
 
 // ================= 会話の確定処理 =================
-async function commit(text, from){
+// 他の認識候補（タップするとその文で訳し直す）
+function showAlts(l, alts){
+  const box = panes[l].alts; box.innerHTML = '';
+  if(!alts || !alts.length) return;
+  const lab = document.createElement('span'); lab.className = 'altlab';
+  lab.textContent = l === 'ja' ? '他の候補:' : '다른 후보:'; box.appendChild(lab);
+  alts.forEach(a => {
+    const b = document.createElement('button'); b.className = 'altchip'; b.textContent = a;
+    b.onclick = ev => { ev.stopPropagation(); unlockAudio(); abortListening(); fixLastHistory(l); commit(a, l); };
+    box.appendChild(b);
+  });
+}
+// 訳し直す時は直前の履歴（誤認識分）を置き換える
+function fixLastHistory(l){
+  const h = hist[hist.length - 1];
+  if(h && h.f === l && h.s === panes[l].mine){ hist.pop(); store.set('hist', hist); }
+}
+
+async function commit(text, from, alts){
   const to = LANG[from].other;
   const seq = ++commitSeq;
   busy = true; clearTimeout(loopTimer);
   const done = () => { if(seq !== commitSeq) return; busy = false; turn = to; scheduleListen(200); };
+  panes[from].mine = text;
+  showAlts(from, alts); showAlts(to, null);
   setMain(from, text); setSub(from, LANG[from].translating);
   setMain(to, LANG[to].translating, {placeholder:true}); setSub(to, text);
   let tr;
@@ -562,13 +677,20 @@ Object.entries(panes).forEach(([l, p]) => {
   p.mic.addEventListener('click', () => {
     unlockAudio(); prepDeviceSilently();
     if(rec && recLang === l){ stopListening(); return; } // 話し終えたら押すと即翻訳
-    startListening(l); // 自動会話中でも、押した側の言語に切り替えて聞き取る
+    startListening(l, true); // 自動会話中でも、押した側の言語に切り替えて聞き取る
+  });
+  // ✏️ 直前に話した文を入力欄に出して手直し → 訳し直し
+  p.el.querySelector('[data-act=edit]').addEventListener('click', () => {
+    if(!p.mine){ toast(l === 'ja' ? 'まだ話した文がありません' : '아직 말한 문장이 없어요'); return; }
+    p.fixing = true; p.input.value = p.mine; p.input.focus();
+    try{ p.input.setSelectionRange(p.mine.length, p.mine.length); }catch(e){}
   });
   p.form.addEventListener('submit', e => {
     e.preventDefault(); unlockAudio();
     const t = p.input.value.trim(); if(!t) return;
     p.input.value = ''; p.input.blur();
     abortListening();
+    if(p.fixing){ p.fixing = false; fixLastHistory(l); }
     const d = detectLang(t);
     commit(t, d && d !== l ? d : l); // 相手の言語で打たれても自動判別
   });
@@ -641,7 +763,7 @@ $('#btnClearHist').onclick = () => {
 };
 
 // 設定
-const opt = {speak:$('#optSpeak'), auto:$('#optAuto'), live:$('#optLive'), face:$('#optFace'), rate:$('#optRate'), size:$('#optSize'), engine:$('#optEngine')};
+const opt = {speak:$('#optSpeak'), auto:$('#optAuto'), live:$('#optLive'), face:$('#optFace'), rate:$('#optRate'), size:$('#optSize'), engine:$('#optEngine'), endPause:$('#optEndPause'), dict:$('#optDict')};
 function applySettings(){
   document.body.classList.toggle('face', settings.face);
   document.documentElement.style.setProperty('--fs-main', settings.size + 'px');
@@ -649,10 +771,10 @@ function applySettings(){
 }
 function syncForm(){
   opt.speak.value = settings.speak ? '1' : '0'; opt.auto.checked = settings.auto; opt.live.checked = settings.live;
-  opt.face.checked = settings.face; opt.rate.value = settings.rate; opt.size.value = String(settings.size); opt.engine.value = settings.engine;
+  opt.face.checked = settings.face; opt.rate.value = settings.rate; opt.size.value = String(settings.size); opt.engine.value = settings.engine; opt.endPause.value = String(settings.endPause); opt.dict.value = settings.dict;
 }
 Object.entries(opt).forEach(([k, el]) => el.addEventListener('change', () => {
-  settings[k] = el.type === 'checkbox' ? el.checked : k === 'engine' ? el.value : k === 'speak' ? el.value === '1' : Number(el.value);
+  settings[k] = el.type === 'checkbox' ? el.checked : (k === 'engine' || k === 'dict') ? el.value : k === 'speak' ? el.value === '1' : Number(el.value);
   if(k === 'speak') updateOutBtn();
   saveSettings(); applySettings();
   if(k === 'auto'){ if(settings.auto) startHandsFree(); else stopHandsFree(); }
