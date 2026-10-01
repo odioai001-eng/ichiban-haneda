@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-155 -->
+<!-- v20260902-156 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1298,7 +1298,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-155';
+const APP_BUILD='20260902-156';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1662,6 +1662,52 @@ function showGpsUnavailableBanner(){
 function hideGpsUnavailableBanner(){
   const b=document.getElementById('gps-unavailable-banner');
   if(b)b.remove();
+}
+// 管理者が送り先データの月次リセットを行うと、そのリセット直前の自分のデータが
+// 3日間だけダウンロード可能になる（downloadMyBackedUpDests参照）。設定タブに
+// 埋もれていて気づかれず期限切れになることが無いよう、リセット直後から3日間、
+// 残り時間のカウントダウン付きの目立つバナーを表示する
+let postResetBannerInterval=null;
+function showPostResetDataBanner(backupTs){
+  if(document.getElementById('post-reset-data-banner'))return;
+  const b=document.createElement('div');
+  b.id='post-reset-data-banner';
+  b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99997;background:var(--gold);color:#1a1200;'
+    +'display:flex;align-items:center;justify-content:space-between;gap:8px;'
+    +'font-size:12px;font-weight:700;'
+    +'padding:9px 10px calc(9px + env(safe-area-inset-top,0px)) 14px;';
+  const textEl=document.createElement('div');
+  textEl.style.cssText='flex:1;cursor:pointer';
+  textEl.onclick=()=>downloadMyBackedUpDests();
+  const closeBtn=document.createElement('button');
+  closeBtn.textContent='✕';
+  closeBtn.style.cssText='background:none;border:none;color:#1a1200;font-size:16px;font-weight:700;cursor:pointer;padding:0 4px;flex-shrink:0';
+  closeBtn.onclick=hidePostResetDataBanner;
+  b.appendChild(textEl);b.appendChild(closeBtn);
+  document.body.appendChild(b);
+  const update=()=>{
+    const remain=backupTs+POST_RESET_DOWNLOAD_WINDOW_MS-Date.now();
+    if(remain<=0){hidePostResetDataBanner();return;}
+    const h=Math.floor(remain/3600000),m=Math.floor((remain%3600000)/60000);
+    textEl.textContent=`🗑 月次リセットが行われました。タップで自分の送り先データを保存（残り${h}時間${m}分）`;
+  };
+  update();
+  if(postResetBannerInterval)clearInterval(postResetBannerInterval);
+  postResetBannerInterval=setInterval(update,60000);
+}
+function hidePostResetDataBanner(){
+  const b=document.getElementById('post-reset-data-banner');
+  if(b)b.remove();
+  if(postResetBannerInterval){clearInterval(postResetBannerInterval);postResetBannerInterval=null;}
+}
+// Firebase接続時・team_dests_backupが更新されるたびに呼ばれ、まだダウンロード
+// 済みでなければバナーを表示する
+function checkPostResetOwnDataBanner(backup){
+  if(!backup||!backup.ts){hidePostResetDataBanner();return;}
+  const age=Date.now()-backup.ts;
+  if(age>POST_RESET_DOWNLOAD_WINDOW_MS){hidePostResetDataBanner();return;}
+  if(localStorage.getItem('taxi_reset_backup_downloaded_ts')===String(backup.ts))return;
+  showPostResetDataBanner(backup.ts);
 }
 
 function syncZoomCtrlVisibility(visible){
@@ -3158,7 +3204,12 @@ async function downloadMyBackedUpDests(){
     return;
   }
   const myEntries=Object.values((backup.data&&backup.data[myId])||{});
-  if(!myEntries.length){toast('⚠️ 直近のリセット時点で、あなたの送り先データはありませんでした');return;}
+  if(!myEntries.length){
+    toast('⚠️ 直近のリセット時点で、あなたの送り先データはありませんでした');
+    localStorage.setItem('taxi_reset_backup_downloaded_ts',String(backup.ts));
+    hidePostResetDataBanner();
+    return;
+  }
   const rows=[['日付','種別','乗車時刻','乗車地','降車時刻','降車地','待機時間','運賃(円)']];
   myEntries.forEach(e=>{
     if(e.type==='trip'){
@@ -3180,6 +3231,8 @@ async function downloadMyBackedUpDests(){
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
   toast('📥 ダウンロードしました');
+  localStorage.setItem('taxi_reset_backup_downloaded_ts',String(backup.ts));
+  hidePostResetDataBanner();
 }
 
 let paymentConfirmed=false;
@@ -3995,6 +4048,11 @@ function connectFirebase(config){
     db.ref('chat_reads').on('value',snap=>{
       chatReadMap=snap.val()||{};
       refreshChatReadCounts();
+    });
+    // 管理者が月次リセットを実行した瞬間（既にアプリを開いている仲間がいても）
+    // すぐにバナーで気づけるよう、一度きりの読み込みではなくリアルタイムで購読する
+    db.ref('team_dests_backup').on('value',snap=>{
+      checkPostResetOwnDataBanner(snap.val());
     });
     // team_dests全体をルートで1本の'value'リスナーとして購読すると、
     // 誰か1人が1件記録するたびに「その時点の仲間全員分の全期間の記録」を
