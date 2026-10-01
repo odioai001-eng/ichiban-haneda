@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-154 -->
+<!-- v20260902-155 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -634,6 +634,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button class="btn btn-g" onclick="recoverOrphanedFareLogTrips()" style="width:100%;margin-bottom:8px">🩹 運賃記録から送り先カードを復元する</button>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">アプリの再インストール等で自分のIDが変わってしまい、過去に送信済みだった記録が見えなくなった場合、氏名を手がかりにクラウド上に残っている過去の記録を探して、今のアカウントに取り込めます。</div>
     <button class="btn btn-g" onclick="recoverDataByName()" style="width:100%">🔎 氏名から過去のデータを復元する</button>
+  </div>
+  <div class="sec">📥 月末リセット直後の自分のデータ保存</div>
+  <div class="card">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">管理者が送り先データの月次リセットを行った直後から3日間だけ、リセット直前の自分の送り先データをCSVで保存できます（3日を過ぎると保存できなくなります）。</div>
+    <button class="btn btn-g" onclick="downloadMyBackedUpDests()" style="width:100%">📥 自分の送り先データを保存する</button>
   </div>
   <div id="admin-lock-area">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
@@ -1293,7 +1298,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-154';
+const APP_BUILD='20260902-155';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3125,13 +3130,56 @@ function closeHotelShuttleModal(){
   document.getElementById('hotel-shuttle-overlay').classList.remove('open');
 }
 
+// 月末リセットでteam_destsが削除されると、仲間（管理者以外）はそれまで自分の
+// データをダウンロードする手段が無かった（CSV保存・削除の画面自体が管理者にしか
+// 開かれないため）。削除の直前の内容をここに控えておき、リセット後も3日間だけは
+// 各自が自分の分をダウンロードできるようにする（downloadMyBackedUpDests参照）
+const POST_RESET_DOWNLOAD_WINDOW_MS=3*24*3600*1000;
 async function confirmCsvExportDelete(){
   if(!confirm('仲間全員分の送り先データを削除してリセットしますか？'))return;
   closeCsvExportModal();
+  const snap=await db.ref('team_dests').once('value');
+  await db.ref('team_dests_backup').set({ts:Date.now(),data:snap.val()||{}});
   await db.ref('team_dests').remove();
   destinations=[];
   saveDests();renderDests();
   toast('🗑 送り先データを全員分リセットしました');
+}
+// リセット直後から3日間、自分の送り先データ（リセット直前の内容）をCSVで
+// ダウンロードできるようにする。管理者でなくても使える
+async function downloadMyBackedUpDests(){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  const snap=await db.ref('team_dests_backup').once('value');
+  const backup=snap.val();
+  if(!backup||!backup.ts){toast('⚠️ まだリセットが行われていません');return;}
+  const age=Date.now()-backup.ts;
+  if(age>POST_RESET_DOWNLOAD_WINDOW_MS){
+    toast('⚠️ 直近のリセットから3日以上経過しているため、ダウンロードできません');
+    return;
+  }
+  const myEntries=Object.values((backup.data&&backup.data[myId])||{});
+  if(!myEntries.length){toast('⚠️ 直近のリセット時点で、あなたの送り先データはありませんでした');return;}
+  const rows=[['日付','種別','乗車時刻','乗車地','降車時刻','降車地','待機時間','運賃(円)']];
+  myEntries.forEach(e=>{
+    if(e.type==='trip'){
+      const boardDesc=e.boardSpot?`東京都大田区羽田空港${e.boardSpot}乗り場`:(e.boardAddr||'');
+      rows.push([e.dateStr||'','送迎',e.boardTime||'',boardDesc,e.alightTime||'',e.alightAddr||'',e.waitMinsStr||(e.waitMins?e.waitMins+'分':''),e.fare||0]);
+    }else if(e.type==='cp'){
+      rows.push([e.dateStr||'','待機',e.startTime||'',e.name||'',e.endTime||'','',(e.durMins||0)+'分','']);
+    }
+  });
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const resetDateStr=new Date(backup.ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`自分の送り先データ_${resetDateStr}リセット分.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+  toast('📥 ダウンロードしました');
 }
 
 let paymentConfirmed=false;
