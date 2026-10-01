@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-157 -->
+<!-- v20260902-158 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1300,7 +1300,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-157';
+const APP_BUILD='20260902-158';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1674,10 +1674,13 @@ function showPostResetDataBanner(backupTs){
   if(document.getElementById('post-reset-data-banner'))return;
   const b=document.createElement('div');
   b.id='post-reset-data-banner';
-  b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99997;background:var(--gold);color:#1a1200;'
+  // ヘッダー（出勤する・設定ボタン等）に重なって操作できなくなることが無いよう、
+  // 画面の一番上（top:0）ではなく、ヘッダーのすぐ下＝地図画面などページ本体の
+  // 上端に表示する
+  b.style.cssText='position:fixed;left:0;right:0;top:calc(var(--hh) + env(safe-area-inset-top,0px));z-index:900;background:var(--gold);color:#1a1200;'
     +'display:flex;align-items:center;justify-content:space-between;gap:8px;'
     +'font-size:12px;font-weight:700;'
-    +'padding:9px 10px calc(9px + env(safe-area-inset-top,0px)) 14px;';
+    +'padding:9px 10px 9px 14px;';
   const textEl=document.createElement('div');
   textEl.style.cssText='flex:1;cursor:pointer';
   textEl.onclick=()=>downloadMyBackedUpDests();
