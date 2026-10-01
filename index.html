@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-158 -->
+<!-- v20260902-159 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -902,8 +902,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="modal">
     <h3>送り先データのCSV保存 <button class="mc" onclick="closeCsvExportModal()">✕</button></h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">下のボタンをタップしてCSVファイルを保存してください。保存が完了したら「削除する」を押すと、仲間全員分の送り先データがFirebase上から削除されます。</div>
-    <a id="csv-download-link" class="btn btn-p" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box">📥 送り先データをダウンロード</a>
-    <a id="csv-sales-download-link" class="btn btn-g" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box">📊 今月の売り上げランキングをダウンロード</a>
+    <a id="csv-download-link" class="btn btn-p" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box" onclick="saveCsvFile(pendingCsvFilename,pendingCsvText);toast('📥 保存しました');return false;">📥 送り先データをダウンロード</a>
+    <a id="csv-sales-download-link" class="btn btn-g" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box" onclick="saveCsvFile(pendingSalesCsvFilename,pendingSalesCsvText);toast('📥 保存しました');return false;">📊 今月の売り上げランキングをダウンロード</a>
     <div style="display:flex;gap:10px">
       <button class="btn btn-g" onclick="closeCsvExportModal()" style="flex:1">キャンセル</button>
       <button class="btn btn-d" onclick="confirmCsvExportDelete()" style="flex:1">🗑 削除する</button>
@@ -916,7 +916,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="modal">
     <h3>今月の乗務記録のCSV保存 <button class="mc" onclick="closeMyRecordCsvModal()">✕</button></h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">月が変わる前に、ご自身の今月分の出退勤・売上の記録をCSVファイルとして保存できます。</div>
-    <a id="my-record-csv-link" class="btn btn-p" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box">📥 CSVをダウンロード</a>
+    <a id="my-record-csv-link" class="btn btn-p" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box" onclick="saveCsvFile(pendingMyRecordCsvFilename,pendingMyRecordCsvText);toast('📥 保存しました');return false;">📥 CSVをダウンロード</a>
     <button class="btn btn-g" onclick="closeMyRecordCsvModal()" style="width:100%">閉じる</button>
   </div>
 </div>
@@ -1300,7 +1300,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-158';
+const APP_BUILD='20260902-159';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2991,13 +2991,34 @@ function checkMonthEndDestsReset(){
 // 待機/送先タブの記録（仲間全員分）をCSVで保存し、Firebase上のデータを削除してリセットする。
 // 自動・手動（設定タブの管理者ボタン）のどちらの経路からも必ずこの関数を通るため、
 // 権限チェック・勤務中チェックはここに集約する
-let pendingCsvBlobUrl=null;
-let pendingSalesCsvBlobUrl=null;
-// モバイルブラウザ（特にiOS Safari・PWA）は、非同期処理を挟んだ後の
-// a.click()によるダウンロードを「ユーザー操作起因ではない」として
-// 無音でブロックすることがある。そのため自動ダウンロードは行わず、
-// データ準備が終わった後にモーダルを表示し、ユーザー自身がリンクを
-// タップすることで確実にダウンロードが発生するようにする。
+let pendingCsvText=null,pendingCsvFilename=null;
+let pendingSalesCsvText=null,pendingSalesCsvFilename=null;
+// CSVファイルの保存処理。Android版アプリ（WebViewで仲間アプリを表示する
+// ネイティブアプリ）は、Blob URL + <a download>によるファイル保存に
+// 対応しておらず、ボタンを押しても無言で何も起きない。
+// AndroidBridge.saveTextFile(filename, content)が実装されていれば
+// そちらを使って端末のダウンロードフォルダに直接保存し、それが無い
+// 通常のブラウザ（PC・iOS Safari等）では従来通りBlob+aタグ方式で保存する。
+// モバイルブラウザは非同期処理を挟んだ後のa.click()を「ユーザー操作起因で
+// ない」として無音でブロックすることがあるため、この関数は常に
+// ユーザーのタップ（onclick）から直接呼び出すこと。
+function saveCsvFile(filename,csvText){
+  if(window.AndroidBridge&&typeof window.AndroidBridge.saveTextFile==='function'){
+    try{
+      window.AndroidBridge.saveTextFile(filename,csvText);
+      return;
+    }catch(e){console.error('AndroidBridge.saveTextFileに失敗しました',e);}
+  }
+  const blob=new Blob(['﻿'+csvText],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
 async function exportAndResetTeamDests(manual){
   if(!db){toast('⚠️ Firebase未接続');return;}
   if(!isAdmin){toast('⚠️ 管理者のみ実行できます');return;}
@@ -3022,23 +3043,13 @@ async function exportAndResetTeamDests(manual){
     toast('保存する送り先データがありません');
     if(!manual)return;
   }
-  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
-  if(pendingCsvBlobUrl)URL.revokeObjectURL(pendingCsvBlobUrl);
-  pendingCsvBlobUrl=URL.createObjectURL(blob);
   const monthStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'}).replace(/\//g,'-');
-  const link=document.getElementById('csv-download-link');
-  link.href=pendingCsvBlobUrl;
-  link.download=`送り先記録_${monthStr}.csv`;
+  pendingCsvText=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  pendingCsvFilename=`送り先記録_${monthStr}.csv`;
   // 送り先データのリセットと同じタイミングで、今月の売り上げランキング
   // （team_sales）も、月が変わって数値が上書きされる前にCSVで残しておく
-  const salesCsv=buildMonthSalesRankingCsv();
-  const salesBlob=new Blob(['﻿'+salesCsv],{type:'text/csv;charset=utf-8;'});
-  if(pendingSalesCsvBlobUrl)URL.revokeObjectURL(pendingSalesCsvBlobUrl);
-  pendingSalesCsvBlobUrl=URL.createObjectURL(salesBlob);
-  const salesLink=document.getElementById('csv-sales-download-link');
-  salesLink.href=pendingSalesCsvBlobUrl;
-  salesLink.download=`今月の売り上げランキング_${monthStr}.csv`;
+  pendingSalesCsvText=buildMonthSalesRankingCsv();
+  pendingSalesCsvFilename=`今月の売り上げランキング_${monthStr}.csv`;
   document.getElementById('csv-export-overlay').classList.add('open');
 }
 // 乗り場別送先リスト（spot_dest_stats）の再集計を検討する際の参考情報として、
@@ -3162,14 +3173,14 @@ function buildMonthSalesRankingCsv(){
 }
 function closeCsvExportModal(){
   document.getElementById('csv-export-overlay').classList.remove('open');
-  if(pendingCsvBlobUrl){URL.revokeObjectURL(pendingCsvBlobUrl);pendingCsvBlobUrl=null;}
-  if(pendingSalesCsvBlobUrl){URL.revokeObjectURL(pendingSalesCsvBlobUrl);pendingSalesCsvBlobUrl=null;}
+  pendingCsvText=null;pendingCsvFilename=null;
+  pendingSalesCsvText=null;pendingSalesCsvFilename=null;
 }
 // 自分の今月分の乗務記録（出退勤・売上）をCSVで保存する。月が変わって
 // 「今月」の集計対象から外れる前に、ドライバー各自が個人の記録を
 // 手元に残せるようにする（送り先データと違いローカル保存のみのため、
 // 仲間全員分ではなく本人分のみ・削除は行わない）
-let pendingMyRecordCsvBlobUrl=null;
+let pendingMyRecordCsvText=null,pendingMyRecordCsvFilename=null;
 function buildMyMonthlyRecordCsv(){
   const ref=getEffectiveMonthRefDate();
   const monthStart=new Date(ref.getFullYear(),ref.getMonth(),1).getTime();
@@ -3197,18 +3208,14 @@ function checkMonthEndOwnRecordCsv(force){
     localStorage.setItem('taxi_last_own_csv_month',monthKey);
   }
   const {csv,monthStr}=buildMyMonthlyRecordCsv();
-  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
-  if(pendingMyRecordCsvBlobUrl)URL.revokeObjectURL(pendingMyRecordCsvBlobUrl);
-  pendingMyRecordCsvBlobUrl=URL.createObjectURL(blob);
   const name=localStorage.getItem('taxi_name')||'自分';
-  const link=document.getElementById('my-record-csv-link');
-  link.href=pendingMyRecordCsvBlobUrl;
-  link.download=`乗務記録_${name}_${monthStr}.csv`;
+  pendingMyRecordCsvText=csv;
+  pendingMyRecordCsvFilename=`乗務記録_${name}_${monthStr}.csv`;
   document.getElementById('my-record-csv-overlay').classList.add('open');
 }
 function closeMyRecordCsvModal(){
   document.getElementById('my-record-csv-overlay').classList.remove('open');
-  if(pendingMyRecordCsvBlobUrl){URL.revokeObjectURL(pendingMyRecordCsvBlobUrl);pendingMyRecordCsvBlobUrl=null;}
+  pendingMyRecordCsvText=null;pendingMyRecordCsvFilename=null;
 }
 
 // 羽田空港⇔ホテル間の無料送迎バスを運行している周辺ホテルの案内。
@@ -3286,16 +3293,8 @@ async function downloadMyBackedUpDests(){
     }
   });
   const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
   const resetDateStr=new Date(backup.ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=`自分の送り先データ_${resetDateStr}リセット分.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),10000);
+  saveCsvFile(`自分の送り先データ_${resetDateStr}リセット分.csv`,csv);
   toast('📥 ダウンロードしました');
   localStorage.setItem('taxi_reset_backup_downloaded_ts',String(backup.ts));
   hidePostResetDataBanner();
