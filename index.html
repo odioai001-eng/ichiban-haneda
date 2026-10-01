@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-153 -->
+<!-- v20260902-154 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1293,7 +1293,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-153';
+const APP_BUILD='20260902-154';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2907,9 +2907,23 @@ function isLastDayOfMonth(d){
   return next.getMonth()!==d.getMonth();
 }
 
-// 月末の退勤時に、まだ今月分のCSV保存・リセットが済んでいなければ自動で実行する
+// 自分以外に、現在勤務中（出勤中）の仲間がいないかを確認する。1人でもいれば、
+// まだ記録中の送り先データが月末リセットに巻き込まれて画面から消えてしまう
+// （syncOwnDestinationsFromFirebase参照）ため、リセットを実行しない
+function anyoneElseOnDuty(){
+  const now=Date.now();
+  return Object.entries(driverData).some(([id,d])=>{
+    if(id===myId||!d)return false;
+    return d.dutyActive===true&&(now-(d.ts||0))<PEER_ALIVE_MS;
+  });
+}
+// 月末の退勤時に、まだ今月分のCSV保存・リセットが済んでいなければ自動で実行する。
+// 送り先データの削除は管理者の操作に限定するため、退勤したのが管理者でない場合は
+// 何もしない（その月、管理者が退勤するまでリセットは行われない。手動で管理者が
+// 実行することもできる）
 function checkMonthEndDestsReset(){
-  if(!db||!isLastDayOfMonth(new Date()))return;
+  if(!db||!isAdmin||!isLastDayOfMonth(new Date()))return;
+  if(anyoneElseOnDuty())return; // 他に勤務中の仲間がいる間は実行しない。次に管理者が退勤した時に再度確認される
   const monthKey=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'});
   db.ref('team_config/last_dests_reset_month').once('value',snap=>{
     if(snap.val()===monthKey)return; // 今月は他の誰かが既にリセット済み
@@ -2918,7 +2932,9 @@ function checkMonthEndDestsReset(){
   });
 }
 
-// 待機/送先タブの記録（仲間全員分）をCSVで保存し、Firebase上のデータを削除してリセットする
+// 待機/送先タブの記録（仲間全員分）をCSVで保存し、Firebase上のデータを削除してリセットする。
+// 自動・手動（設定タブの管理者ボタン）のどちらの経路からも必ずこの関数を通るため、
+// 権限チェック・勤務中チェックはここに集約する
 let pendingCsvBlobUrl=null;
 let pendingSalesCsvBlobUrl=null;
 // モバイルブラウザ（特にiOS Safari・PWA）は、非同期処理を挟んだ後の
@@ -2928,6 +2944,11 @@ let pendingSalesCsvBlobUrl=null;
 // タップすることで確実にダウンロードが発生するようにする。
 async function exportAndResetTeamDests(manual){
   if(!db){toast('⚠️ Firebase未接続');return;}
+  if(!isAdmin){toast('⚠️ 管理者のみ実行できます');return;}
+  if(anyoneElseOnDuty()){
+    toast('⚠️ まだ勤務中の仲間がいるため実行できません。全員の退勤後に行ってください');
+    return;
+  }
   const snap=await db.ref('team_dests').once('value');
   const all=snap.val()||{};
   const rows=[['氏名','日付','種別','乗車時刻','乗車地','降車時刻','降車地','待機時間','運賃(円)']];
