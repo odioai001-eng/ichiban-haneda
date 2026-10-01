@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-156 -->
+<!-- v20260902-157 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -732,6 +732,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">仲間全員分の待機/送り先データをCSVファイルとして保存してから、Firebase上のデータを削除してリセットします。毎月末の退勤時に自動でも実行されますが、ここから手動でも実行できます。</div>
       <button class="btn btn-d" onclick="exportAndResetTeamDests(true)" style="width:100%">📥 CSV保存してリセットする</button>
       <button class="btn btn-g" onclick="adminCheckTeamDestsRange()" style="width:100%;margin-top:8px">🔍 現在の記録範囲を確認する（削除しません）</button>
+      <div style="font-size:12px;color:var(--muted);margin-top:10px;margin-bottom:8px;line-height:1.6">アプリの再インストール等で同じ人が複数の端末IDを持ってしまい、「現在の記録範囲を確認する」で同じ氏名が複数回出てくる場合、ここでまとめられます（最新の記録があるIDに他をまとめ、古いIDは削除します）。</div>
+      <button class="btn btn-g" onclick="mergeDuplicateTeamDests()" style="width:100%">🔗 同じ氏名の重複した記録をまとめる</button>
     </div>
     <div class="sec">📡 Firebase接続</div>
     <div class="card">
@@ -1298,7 +1300,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-156';
+const APP_BUILD='20260902-157';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3073,15 +3075,76 @@ async function adminCheckTeamDestsRange(){
   perDriver.sort((a,b)=>(b.driverMaxTs||0)-(a.driverMaxTs||0));
   const fmt=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}):'−';
   const fmtDT=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'記録なし';
-  const perDriverLines=perDriver.map(d=>`${d.driverName}: ${d.driverTripCount}件 / 最新 ${fmtDT(d.driverMaxTs)}`).join('\n');
+  // 同じ氏名が複数の端末ID（アプリ再インストール等）に分かれて記録されていないか、
+  // ここで一緒に確認できるようにする（🔗 同じ氏名の重複した記録をまとめる、で解消できる）
+  const nameCounts={};
+  perDriver.forEach(d=>{nameCounts[d.driverName]=(nameCounts[d.driverName]||0)+1;});
+  // 直近7日間記録が無い人は、本当にアプリを使っていないのか、重複した古いIDの
+  // 方を見てしまっているだけなのかの参考になるよう、警告マークを付ける
+  const staleThreshold=Date.now()-7*24*3600*1000;
+  const perDriverLines=perDriver.map(d=>{
+    const dupMark=nameCounts[d.driverName]>1?'⚠️重複 ':'';
+    const staleMark=(d.driverMaxTs&&d.driverMaxTs<staleThreshold)?'🔴7日以上記録なし ':'';
+    return `${dupMark}${staleMark}${d.driverName}: ${d.driverTripCount}件 / 最新 ${fmtDT(d.driverMaxTs)}`;
+  }).join('\n');
   const msg=`team_dests確認結果\n\n`+
     `乗車記録（送迎）件数: ${tripCount}件\n`+
     `うち乗り場からの記録: ${withBoardSpot}件\n`+
     `うち降車地が大田区: ${otaFromSpot}件（${withBoardSpot?Math.round(otaFromSpot/withBoardSpot*100):0}%）\n`+
     `最も古い記録: ${fmt(minTs)}\n`+
     `最も新しい記録: ${fmt(maxTs)}\n\n`+
-    `【ドライバーごとの最新記録】\n${perDriverLines||'(記録なし)'}`;
+    `【ドライバーごとの最新記録】\n${perDriverLines||'(記録なし)'}\n\n`+
+    `⚠️重複：同じ氏名が複数の端末IDに分かれています（「🔗 同じ氏名の重複した記録をまとめる」で統合できます）\n`+
+    `🔴7日以上記録なし：重複をまとめた上でなお記録が無ければ、直近7日間アプリで記録していない可能性があります`;
   alert(msg);
+}
+// 同じ氏名のドライバーが複数の端末ID（アプリ再インストール等）に分かれて
+// team_destsに記録されている場合、最新の記録があるIDに他のIDの記録をまとめ、
+// 古いIDは削除する。氏名が一致するかだけで判定するため、実行前に必ず内容を
+// 確認ダイアログで提示し、管理者の確認を経てから実行する
+async function mergeDuplicateTeamDests(){
+  if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  toast('🔍 重複を確認中...');
+  const snap=await db.ref('team_dests').once('value');
+  const all=snap.val()||{};
+  const byName={};
+  Object.entries(all).forEach(([driverId,entries])=>{
+    const vals=Object.values(entries||{});
+    let name='',maxTs=null;
+    vals.forEach(e=>{
+      if(e.driverName)name=e.driverName;
+      if(e.ts&&(maxTs===null||e.ts>maxTs))maxTs=e.ts;
+    });
+    if(!name)return;
+    if(!byName[name])byName[name]=[];
+    byName[name].push({driverId,count:vals.length,maxTs});
+  });
+  const dupGroups=Object.entries(byName).filter(([name,ids])=>ids.length>1);
+  if(!dupGroups.length){alert('氏名が重複している記録は見つかりませんでした。');return;}
+  const fmt=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}):'記録なし';
+  dupGroups.forEach(([name,ids])=>ids.sort((a,b)=>(b.maxTs||0)-(a.maxTs||0)));
+  const previewLines=dupGroups.map(([name,ids])=>{
+    const [primary,...others]=ids;
+    return `${name}：最新のID（${primary.count}件・最終${fmt(primary.maxTs)}）に、${others.map(o=>`${o.count}件（最終${fmt(o.maxTs)}）`).join('、')}をまとめます`;
+  }).join('\n\n');
+  if(!confirm(`以下の内容で重複した記録をまとめます。古い方のIDは削除され、元に戻せません。よろしいですか？\n\n${previewLines}`))return;
+  let mergedCount=0,removedIdCount=0;
+  for(const [name,ids] of dupGroups){
+    const [primary,...others]=ids;
+    for(const o of others){
+      const entries=all[o.driverId]||{};
+      const updates={};
+      Object.entries(entries).forEach(([key,e])=>{
+        updates[`team_dests/${primary.driverId}/${key}`]={...e,driverId:primary.driverId};
+        mergedCount++;
+      });
+      if(Object.keys(updates).length)await db.ref().update(updates);
+      await db.ref(`team_dests/${o.driverId}`).remove();
+      removedIdCount++;
+    }
+  }
+  alert(`統合が完了しました。\n統合した記録: ${mergedCount}件\n削除した重複ID: ${removedIdCount}件`);
 }
 // 今月の売り上げランキング（team_sales・グループ全員分）をCSV文字列にする
 function buildMonthSalesRankingCsv(){
