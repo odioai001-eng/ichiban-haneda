@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-162 -->
+<!-- v20260902-163 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -407,7 +407,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
      <div id="daily-amount-left" style="font-size:16px;font-weight:800;color:var(--cyan)">-</div>
     </div>
     <div style="text-align:center">
-     <div style="font-size:10px;color:var(--muted)">現在単価</div>
+     <div style="font-size:10px;color:var(--muted)">現在時間単価</div>
      <div id="daily-hourly-rate" style="font-size:16px;font-weight:800;color:var(--gold)">-</div>
     </div>
    </div>
@@ -1308,7 +1308,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-162';
+const APP_BUILD='20260902-163';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
