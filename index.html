@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-164 -->
+<!-- v20260902-165 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1308,7 +1308,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-164';
+const APP_BUILD='20260902-165';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -8815,7 +8815,7 @@ function togglePoolPanel(){
   poolPanelOpen=!poolPanelOpen;
   const el=document.getElementById('pool-panel');
   if(el)el.style.display=poolPanelOpen?'block':'none';
-  if(poolPanelOpen){renderPoolSelectOptions();refreshPoolHistory(null);startPoolHistoryTimer();}else{stopPoolHistoryTimer();}
+  if(poolPanelOpen){renderPoolChart();renderPoolButtons();refreshPoolHistory(null);startPoolHistoryTimer();}else{stopPoolHistoryTimer();}
   syncPoolHistoryBottom();
 }
 let poolHistoryTimer=null;
@@ -8946,7 +8946,12 @@ function isInHanedaPool(){
 function recordPoolMove(spot,lane){
   if(!db){toast('⚠️ Firebase未接続');return;}
   if(testMode){toast('🧪 テストモード中は仲間と共有される列データを変更できません');return;}
-  if(!isAdmin){
+  // 号を選択して待機中（＝地図に「〇号 n分」バッジが出ている状態）であれば、
+  // 既にプール内にいると確定済みのため、GPSの瞬間値による再チェックは行わない。
+  // ビル・高架道路が近いプール付近はGPSが数百m単位でブレることがあり、実際には
+  // プール内にいる仲間が「羽田プールエリア内のみ操作できます」で弾かれてしまう
+  // 不具合があったため
+  if(!isAdmin&&!currentPoolWait()){
     const loc=isInHanedaPool();
     if(loc===null){toast('⚠️ GPS未取得のため位置確認できません。出勤ボタンを押してGPSを起動してください');return;}
     if(!loc){toast('⚠️ 羽田プールエリア内のみ操作できます');return;}
@@ -8998,7 +9003,9 @@ function cleanupExpiredProgressIfNeeded(globalLastActivity,now){
 function recordProgress(spot,amount){
   if(!db){toast('⚠️ Firebase未接続');return;}
   if(testMode){toast('🧪 テストモード中は仲間と共有される列データを変更できません');return;}
-  if(!isAdmin){
+  // recordPoolMoveと同じ理由で、既にプール内で待機中（currentPoolWait）と
+  // 確定している場合はGPSの瞬間値による再チェックを行わない
+  if(!isAdmin&&!currentPoolWait()){
     const loc=isInHanedaPool();
     if(loc===null){toast('⚠️ GPS未取得のため位置確認できません。出勤ボタンを押してGPSを起動してください');return;}
     if(!loc){toast('⚠️ 羽田プールエリア内のみ操作できます');return;}
