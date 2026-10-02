@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-159 -->
+<!-- v20260902-160 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -378,7 +378,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
        文字ラベルつきで丸ボタンより幅が広いため、右側より大きく余白を取る -->
   <div id="daily-bar" style="position:absolute;left:0;right:0;bottom:0;z-index:480;
    background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border);
-   padding:4px 62px 4px 132px;pointer-events:none">
+   padding:4px 62px 4px 108px;pointer-events:none">
    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px 6px;margin-bottom:2px">
     <div style="text-align:center">
      <div style="font-size:9px;color:var(--muted)">本日の出勤時間</div>
@@ -401,6 +401,16 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="text-align:center">
      <div style="font-size:10px;color:var(--muted)">目標まであと</div>
      <div id="daily-amount-left" style="font-size:16px;font-weight:800;color:var(--cyan)">-</div>
+    </div>
+   </div>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;margin-top:2px">
+    <div style="text-align:center">
+     <div style="font-size:9px;color:var(--muted)">目標単価</div>
+     <div id="daily-target-hourly-rate" style="font-size:13px;font-weight:800;color:var(--text)">-</div>
+    </div>
+    <div style="text-align:center">
+     <div style="font-size:9px;color:var(--muted)">現在の時間単価</div>
+     <div id="daily-hourly-rate" style="font-size:13px;font-weight:800;color:var(--gold)">-</div>
     </div>
    </div>
   </div>
@@ -443,7 +453,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
        イベント会場ボタン（🎪）と位置を入れ替え、🎪は「その他」パネルへ移動） -->
   <div class="map-btn-stack left">
     <button id="abure-row" onclick="recordAbure()"
-      style="padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;
+      style="padding:6px 10px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
         backdrop-filter:blur(6px)">😔 あぶれ</button>
     <button class="map-ctrl-btn" id="more-tools-btn" onclick="toggleMoreToolsPanel()" title="その他のツール">🧰</button>
@@ -1300,7 +1310,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-159';
+const APP_BUILD='20260902-160';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5850,6 +5860,8 @@ function updateDailyBar(){
  const workedEl=document.getElementById('daily-worked-time');
  const targetAmtEl=document.getElementById('daily-target-amount');
  const startEl=document.getElementById('daily-start-time');
+ const targetHourlyEl=document.getElementById('daily-target-hourly-rate');
+ const hourlyEl=document.getElementById('daily-hourly-rate');
  if(!timeEl||!amtEl)return;
  if(!isDuty||!dutyStart){
   timeEl.textContent='--:--:--';
@@ -5858,6 +5870,8 @@ function updateDailyBar(){
   if(workedEl)workedEl.textContent='--:--';
   if(targetAmtEl)targetAmtEl.textContent='-';
   if(startEl)startEl.textContent='--:--';
+  if(targetHourlyEl)targetHourlyEl.textContent='-';
+  if(hourlyEl)hourlyEl.textContent='-';
   return;
  }
  // 本日の出勤時間
@@ -5919,6 +5933,19 @@ function updateDailyBar(){
   }
  }else{
   amtEl.textContent='¥'+todaySales.toLocaleString();
+ }
+ // 目標単価 = 出勤時に設定した本日の予定労働時間で、本日の目標金額を割った金額
+ if(targetHourlyEl){
+  targetHourlyEl.textContent=(dailyTarget>0&&perDayHours>0)
+   ?`¥${Math.round(dailyTarget/perDayHours).toLocaleString()}`:'-';
+ }
+ // 現在の時間単価 = 出庫（出勤）からの経過時間で、売上が確定した送りのみの
+ // 合計額（todaySales）を割った金額。出勤直後は分母が小さすぎて金額が
+ // 跳ね上がるため、1分未満の間は表示しない
+ if(hourlyEl){
+  const elapsedHoursForRate=(Date.now()-dutyStart.getTime())/3600000;
+  hourlyEl.textContent=elapsedHoursForRate>=(1/60)
+   ?`¥${Math.round(todaySales/elapsedHoursForRate).toLocaleString()}`:'-';
  }
 }
 setInterval(updateDailyBar,1000);
