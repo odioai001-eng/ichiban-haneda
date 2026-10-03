@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-165 -->
+<!-- v20260902-166 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1308,7 +1308,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-165';
+const APP_BUILD='20260902-166';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4279,6 +4279,14 @@ setInterval(()=>{if(isDuty)pushMyPosition();},5000);
 // 固まって見える・号を選んだ直後もしばらく反映されないことがあったため、GPSの
 // 更新頻度に関係なく一定間隔で必ずマーカーを再描画し、常に最新の状態を保つ
 setInterval(()=>{if(isDuty&&myLat!==null)updateMyMarker(myDisplayLat??myLat,myDisplayLng??myLng);},20000);
+// 仲間のマーカー（「〇号 〇分」バッジ含む）は、Firebaseのchild_changedイベントが
+// 来た時にしか再描画されない。通常は5秒おきの位置送信のたびに発火するはずだが、
+// 通信の瞬断・イベントの取りこぼし等で1回分だけ更新が反映されない場合、次に
+// イベントが来るまでバッジの分数表示が古いまま固まって見える。自分のマーカーと
+// 同様、一定間隔でdriverDataのキャッシュから強制的に再描画し、常に最新の
+// 経過分数を保つ（alive判定・表示そのものの可否はupdatePeerMarker内の
+// 既存ロジックのまま変えない）
+setInterval(()=>{Object.keys(driverData).forEach(id=>updatePeerMarker(id,driverData[id]));},20000);
 // 仲間フォロー中の地図追従を、特定のイベント（Firebaseのchild_changed・自分のGPS更新）の
 // タイミングだけに頼らず、一定間隔で必ず最新位置に合わせ直すことで確実に効かせる
 // （非番中で自分のGPSが動いていない時にフォローしても、この仕組みだけで追従できる）
@@ -5584,15 +5592,22 @@ function selectSpot(spotName){
   const fullSpot='東京都大田区羽田空港'+currentSpotSelection+'乗り場';
   hCp.currentSpot=fullSpot;
   document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
-  if(db&&!testMode)db.ref('drivers/'+myId).update({waitSpot:fullSpot}).catch(err=>console.error('drivers waitSpot update failed',err));
   if(arrivalAutoTimer){clearTimeout(arrivalAutoTimer);arrivalAutoTimer=null;}
   if(!waitInterval){
     const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
     hCp.arrivalTimeStr=hCp.arrivalTimeStr||timeStr;
+    // waitSpotとwaitSinceは、startWaitAt内で必ず1回のupdate()にまとめて送る
+    // （この関数側でwaitSpotだけを先に送ってしまうと、仲間の端末には
+    // 「waitSpotは来ているがwaitSinceがまだ古い値のまま」という一瞬の
+    // 不整合状態が見え、その直後にwaitSinceが追いついて反映される間、
+    // バッジが一瞬だけ出て消えたように見えてしまうことがあったため）
     startWaitAt(hCp,fullSpot,0,hCp.arrivalTimeStr);
   } else {
     hCp.currentSpot=fullSpot;
     document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
+    // 既に待機中のまま号だけを切り替える場合はwaitSinceを変えないため、
+    // ここではwaitSpotだけを送る（この場合は不整合になる相手の値が無い）
+    if(db&&!testMode)db.ref('drivers/'+myId).update({waitSpot:fullSpot}).catch(err=>console.error('drivers waitSpot update failed',err));
   }
   recordSpotChange(spotName);
   saveAppState();
