@@ -4945,7 +4945,11 @@ function renderRankTodayGroup(){
   if(!el)return;
   if(!isTodayRankingOptedIn()){el.innerHTML=rankingLockHtml('today');return;}
   const bizStart=getBusinessDayStart();
-  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.todayBizStart===bizStart).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
+  // 自分の行は、Firebaseへの送信待ち等で古い値が残っていても売上管理と同じ金額が
+  // 出るよう、端末内の記録から計算した最新値で表示する（テスト出勤中は除く）
+  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid}))
+    .map(d=>(d.uid===myId&&!testMode)?{...d,todayFare:getMyTodayFareExTax(),todayBizStart:bizStart}:d)
+    .filter(d=>d.todayBizStart===bizStart).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
   // 出庫（出勤）・帰庫予定（上がり予定）時刻は、各自がdrivers/{uid}に共有している
   // dutyStartTs・planFinishTsから取得する（出勤中の人のみ分かるため、既に退勤済みの
   // 場合はdriverDataに無く表示されない）。
@@ -7354,31 +7358,12 @@ function getBusinessDayStart(refTs){
  const nineAm=new Date(d.getFullYear(),d.getMonth(),d.getDate(),9,0,0,0).getTime();
  return refTs>=nineAm?nineAm:nineAm-24*3600*1000;
 }
-// 「本日の売り上げランキング」用の売上記録一覧。getTodayShiftFareEntriesは
-// 出勤中なら「今回の出勤〜現在」だけに絞るため、同じ営業日（9:00〜翌9:00）の
-// 中で一旦退勤してすぐまた出勤し直した場合、直前のシフト分の売上がここから
-// 抜け落ちてランキングが0円に戻ってしまう不具合があった。ここでは、今の
-// 営業日に含まれる全てのシフト（進行中のものを含む）を対象に売上を合算する
-function getBusinessDayFareEntries(){
- const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
- const bizStart=getBusinessDayStart();
- const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
- const ranges=[];
- if(isDuty&&dutyStart)ranges.push({start:dutyStart.getTime(),end:Infinity});
- shiftLog.filter(s=>s.endTs&&s.startTs>=bizStart).forEach(s=>ranges.push({start:s.startTs,end:s.endTs}));
- if(!ranges.length){
-  // 今の営業日中にまだ乗務が無ければ、退勤直後の表示が消えないよう
-  // 直近に完了した乗務（前の営業日のものでも）を1件だけ拾う
-  const last=shiftLog.reduce((a,b)=>(!a||b.endTs>a.endTs)?b:a,null);
-  if(last)ranges.push({start:last.startTs,end:last.endTs});
- }
- return log.filter(e=>{
-  const ts=e.ts||0;
-  if(ranges.some(r=>ts>=r.start&&ts<=r.end))return true;
-  // どのシフトの時間帯にも属さない記録（「売上の手動記録」等）は、単発の
-  // 記録なので日をまたぐ分断の心配が無く、単純に営業日の開始時刻以降かで判定する
-  return ts>=bizStart;
- });
+// 「本日の売り上げランキング（グループ）」に出す自分の本日の売上（税抜）。
+// 以前はランキング専用の集計（getBusinessDayFareEntries：9:00以降の単発記録も
+// 合算する等）を使っていたため、設定の「💰 売上管理」の「本日の売上（税抜）」と
+// 金額が食い違うことがあった。売上管理と全く同じ記録・計算式に揃える
+function getMyTodayFareExTax(){
+ return getTodayShiftFareEntries().reduce((a,e)=>a+exTax(e.fare||0),0);
 }
 function pushTeamSales(){
  if(!db)return;
@@ -7394,12 +7379,9 @@ function pushTeamSales(){
  const monthStart=new Date(monthRef.getFullYear(),monthRef.getMonth(),1).getTime();
  const todayBizStart=getBusinessDayStart(now.getTime());
  // 運賃は税込みで入力されているため、ランキングに積み上げる際は1件ずつ税抜きに変換する。
- // 集計範囲は暦の0時区切りではなく、朝9:00〜翌9:00の営業日区切りに含まれる
- // シフト単位で合算する（getBusinessDayFareEntries）。それをまたぐ夜勤の売上が
- // 途中で分断されないよう、進行中のシフトはstartTs以降を丸ごと含める一方、
- // 同じ営業日内で完了した他のシフト（一旦退勤してすぐ出勤し直した場合等）分も
- // 漏らさず合算する
- const todayFare=getBusinessDayFareEntries().reduce((a,e)=>a+exTax(e.fare||0),0);
+ // 集計範囲・計算式は設定の「💰 売上管理」の「本日の売上（税抜）」と同じ
+ // （getMyTodayFareExTax）
+ const todayFare=getMyTodayFareExTax();
  const monthFareRaw=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+exTax(e.fare||0),0)+carry.fare;
  const monthDaysRaw=getMonthShifts().length+carry.days;
  // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
@@ -9655,7 +9637,6 @@ async function debugTodaySales(){
   const todayShiftLogEntries=shiftLog.filter(s=>s.endTs&&s.startTs>=bizStart);
   const logToday=log.filter(e=>(e.ts||0)>=bizStart);
   const todayEntries=getTodayShiftFareEntries();
-  const bizEntries=getBusinessDayFareEntries();
   const sumFare=arr=>arr.reduce((a,e)=>a+exTax(e.fare||0),0);
   let fbLine='(db未接続のため確認できません)';
   if(db){
@@ -9667,8 +9648,7 @@ async function debugTodaySales(){
   }
   out.textContent=[
     `【集計結果】`,
-    `個人の「本日」表示（getTodayShiftFareEntries）: ${todayEntries.length}件 / ¥${sumFare(todayEntries).toLocaleString()}`,
-    `ランキング用（getBusinessDayFareEntries）: ${bizEntries.length}件 / ¥${sumFare(bizEntries).toLocaleString()}`,
+    `売上管理・ランキング共通の「本日」（getTodayShiftFareEntries）: ${todayEntries.length}件 / ¥${sumFare(todayEntries).toLocaleString()}`,
     `Firebase（team_sales）に実際に送信されている値: ${fbLine}`,
     ``,
     `【元データ】`,
