@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-167 -->
+<!-- v20260902-171 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -734,7 +734,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <div class="sec">🗑 送り先データの月次リセット</div>
     <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">仲間全員分の待機/送り先データをCSVファイルとして保存してから、Firebase上のデータを削除してリセットします。毎月末の退勤時に自動でも実行されますが、ここから手動でも実行できます。</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">仲間全員分の待機/送り先データをCSVファイルとして保存してから、Firebase上のデータを削除してリセットします。毎月1日の朝9:00以降、全員が退勤している時に管理者の端末へ自動で案内が出ますが、ここから手動でも実行できます（1〜7日に実行すると前月分として保存されます）。</div>
       <button class="btn btn-d" onclick="exportAndResetTeamDests(true)" style="width:100%">📥 CSV保存してリセットする</button>
       <button class="btn btn-g" onclick="adminCheckTeamDestsRange()" style="width:100%;margin-top:8px">🔍 現在の記録範囲を確認する（削除しません）</button>
       <div style="font-size:12px;color:var(--muted);margin-top:10px;margin-bottom:8px;line-height:1.6">アプリの再インストール等で同じ人が複数の端末IDを持ってしまい、「現在の記録範囲を確認する」で同じ氏名が複数回出てくる場合、ここでまとめられます（最新の記録があるIDに他をまとめ、古いIDは削除します）。</div>
@@ -1305,7 +1305,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-170';
+const APP_BUILD='20260902-171';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1574,6 +1574,9 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   // 9時の区切りをまたいだ瞬間に「本日の売り上げランキング（グループ）」から
   // 一時的に自分が消えてしまっていたため、乗務中は定期的にも送信し直す
   setInterval(()=>{if(isDuty)pushTeamSales();},60000);
+  // 月初（1日の朝9:00以降）に管理者がアプリを開いたままでも、全員が退勤した時点で
+  // 送り先データの月次リセットを案内できるよう、定期的に確認する
+  setInterval(checkMonthStartDestsReset,5*60*1000);
   // 上のpushTeamSales()は「自分のデータを他人の端末にも最新に見せる」ためのものだが、
   // 既に退勤した仲間（isDutyでなくpushが走らない人）の分は、朝9時の営業日区切りを
   // またいだ瞬間には自動で消えず、誰かのデータ更新やタブの切り替えなど、何か
@@ -2959,7 +2962,7 @@ function confirmEndDuty(){
   }else{
     document.getElementById('duty-end-modal').style.display='flex';
   }
-  checkMonthEndDestsReset();
+  checkMonthStartDestsReset();
   checkMonthEndOwnRecordCsv();
 }
 
@@ -2971,26 +2974,51 @@ function isLastDayOfMonth(d){
 // 自分以外に、現在勤務中（出勤中）の仲間がいないかを確認する。1人でもいれば、
 // まだ記録中の送り先データが月末リセットに巻き込まれて画面から消えてしまう
 // （syncOwnDestinationsFromFirebase参照）ため、リセットを実行しない
-function anyoneElseOnDuty(){
+// driversを渡した場合はそれで判定する（driverDataはchild_addedで1人ずつ届くため、
+// 起動直後の読み込み途中だと「誰も勤務中でない」と誤判定しうる）
+function anyoneElseOnDuty(drivers){
   const now=Date.now();
-  return Object.entries(driverData).some(([id,d])=>{
+  return Object.entries(drivers||driverData).some(([id,d])=>{
     if(id===myId||!d)return false;
     return d.dutyActive===true&&(now-(d.ts||0))<PEER_ALIVE_MS;
   });
 }
-// 月末の退勤時に、まだ今月分のCSV保存・リセットが済んでいなければ自動で実行する。
-// 送り先データの削除は管理者の操作に限定するため、退勤したのが管理者でない場合は
-// 何もしない（その月、管理者が退勤するまでリセットは行われない。手動で管理者が
-// 実行することもできる）
-function checkMonthEndDestsReset(){
-  if(!db||!isAdmin||!isLastDayOfMonth(new Date()))return;
-  if(anyoneElseOnDuty())return; // 他に勤務中の仲間がいる間は実行しない。次に管理者が退勤した時に再度確認される
-  const monthKey=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'});
-  db.ref('team_config/last_dests_reset_month').once('value',snap=>{
-    if(snap.val()===monthKey)return; // 今月は他の誰かが既にリセット済み
-    db.ref('team_config/last_dests_reset_month').set(monthKey).catch(err=>console.error('last_dests_reset_month set failed',err));
-    exportAndResetTeamDests(false);
-  });
+// 送り先データの月次リセットは、月の最終日に出勤した人の夜勤（翌1日の朝まで）も
+// 前月分に含めるため、「1日の朝9:00以降、全員が退勤済み」のタイミングで行う。
+// 以前は月の最終日に管理者が退勤した時点で実行していたため、最終日の朝に夜勤明けで
+// 退勤すると、その日に出勤する人の分が前月のCSVに入らなかった。
+const MONTH_RESET_START_HOUR=9;   // 1日のこの時刻以降にリセットの案内を出す
+const MONTH_RESET_PROMPT_LAST_DAY=7; // 案内を自動で出すのは月の7日まで（それ以降は手動のみ）
+// リセットの対象月。月初（7日まで）に行う場合は前月分、月の最終日なら当月分。
+// それ以外の日（月の途中に手動で実行した場合）はnull（対象月なし）
+function getResetTargetMonth(now){
+  now=now||new Date();
+  if(now.getDate()<=MONTH_RESET_PROMPT_LAST_DAY)return new Date(now.getFullYear(),now.getMonth()-1,1);
+  if(isLastDayOfMonth(now))return new Date(now.getFullYear(),now.getMonth(),1);
+  return null;
+}
+// team_config/last_dests_reset_monthに保存する値（従来どおり"2026/10"形式）
+function resetMonthFlagKey(d){return d.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'});}
+let monthResetPromptedThisSession=false;
+// 管理者の端末で、前月分のリセットがまだなら案内（CSV保存・削除の画面）を出す。
+// アプリ起動時・定期的・管理者の退勤時に呼ばれる。案内はアプリを開いている間1回だけ
+async function checkMonthStartDestsReset(){
+  if(!db||monthResetPromptedThisSession)return;
+  if(!isAdmin&&localStorage.getItem('taxi_is_admin_device')!=='1')return;
+  if(isDuty)return;
+  const now=new Date();
+  if(now.getDate()>MONTH_RESET_PROMPT_LAST_DAY)return;
+  if(now.getDate()===1&&now.getHours()<MONTH_RESET_START_HOUR)return;
+  try{
+    const flagKey=resetMonthFlagKey(getResetTargetMonth(now));
+    const flagSnap=await db.ref('team_config/last_dests_reset_month').once('value');
+    if(flagSnap.val()===flagKey)return; // 前月分は既にリセット済み
+    const drvSnap=await db.ref('drivers').once('value');
+    if(anyoneElseOnDuty(drvSnap.val()||{}))return; // 勤務中の仲間がいる間は出さない（全員の退勤後に再確認）
+    if(monthResetPromptedThisSession||isDuty)return;
+    monthResetPromptedThisSession=true;
+    exportAndResetTeamDests(false,true);
+  }catch(e){console.error('月初リセットの確認に失敗しました',e);}
 }
 
 // 待機/送先タブの記録（仲間全員分）をCSVで保存し、Firebase上のデータを削除してリセットする。
@@ -2998,6 +3026,7 @@ function checkMonthEndDestsReset(){
 // 権限チェック・勤務中チェックはここに集約する
 let pendingCsvText=null,pendingCsvFilename=null;
 let pendingSalesCsvText=null,pendingSalesCsvFilename=null;
+let pendingResetFlagKey=null; // 削除を確定した時にteam_config/last_dests_reset_monthへ記録する値
 // CSVファイルの保存処理。Android版アプリ（WebViewで仲間アプリを表示する
 // ネイティブアプリ）は、Blob URL + <a download>によるファイル保存に
 // 対応しておらず、ボタンを押しても無言で何も起きない。
@@ -3024,10 +3053,13 @@ function saveCsvFile(filename,csvText){
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
-async function exportAndResetTeamDests(manual){
+// auto=true は月初の自動案内（checkMonthStartDestsReset）から。管理者モードに
+// ログインしていなくても、管理者として使われている端末なら案内を出す
+async function exportAndResetTeamDests(manual,auto){
   if(!db){toast('⚠️ Firebase未接続');return;}
-  if(!isAdmin){toast('⚠️ 管理者のみ実行できます');return;}
-  if(anyoneElseOnDuty()){
+  if(!isAdmin&&!(auto&&localStorage.getItem('taxi_is_admin_device')==='1')){toast('⚠️ 管理者のみ実行できます');return;}
+  const drvSnap=await db.ref('drivers').once('value').catch(()=>null);
+  if(anyoneElseOnDuty(drvSnap?(drvSnap.val()||{}):undefined)){
     toast('⚠️ まだ勤務中の仲間がいるため実行できません。全員の退勤後に行ってください');
     return;
   }
@@ -3048,12 +3080,17 @@ async function exportAndResetTeamDests(manual){
     toast('保存する送り先データがありません');
     if(!manual)return;
   }
-  const monthStr=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'}).replace(/\//g,'-');
+  // ファイル名・ランキングの月は、データの対象月（月初に行う場合は前月）にする。
+  // 以前は実行した日の月を使っていたため、1日に保存すると中身は前月分なのに
+  // 新しい月の名前のファイルになってしまっていた
+  const target=getResetTargetMonth();
+  const monthStr=monthKeyOf(target||new Date());
+  pendingResetFlagKey=target?resetMonthFlagKey(target):null;
   pendingCsvText=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
   pendingCsvFilename=`送り先記録_${monthStr}.csv`;
   // 送り先データのリセットと同じタイミングで、今月の売り上げランキング
   // （team_sales）も、月が変わって数値が上書きされる前にCSVで残しておく
-  pendingSalesCsvText=buildMonthSalesRankingCsv();
+  pendingSalesCsvText=buildMonthSalesRankingCsv(monthStr);
   pendingSalesCsvFilename=`今月の売り上げランキング_${monthStr}.csv`;
   document.getElementById('csv-export-overlay').classList.add('open');
 }
@@ -3166,9 +3203,20 @@ async function mergeDuplicateTeamDests(){
   alert(`統合が完了しました。\n統合した記録: ${mergedCount}件\n削除した重複ID: ${removedIdCount}件`);
 }
 // 今月の売り上げランキング（team_sales・グループ全員分）をCSV文字列にする
-function buildMonthSalesRankingCsv(){
-  const rows=[['氏名','今月の売上(円・税抜)','今月の出勤日数','1日平均(円)']];
-  Object.values(teamSales||{}).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0)).forEach(d=>{
+// targetMonthKey（例: "2026-10"）を指定すると、その月の値を出力する。月が変わって
+// 既に新しい月の値に切り替わっている人は、切り替え時に退避した前月分(prevMonth)を使う
+function buildMonthSalesRankingCsv(targetMonthKey){
+  const rows=[['氏名',`${targetMonthKey||'今月'}の売上(円・税抜)`,'出勤日数','1日平均(円)']];
+  const list=[];
+  Object.values(teamSales||{}).forEach(d=>{
+    if(!targetMonthKey||!d.monthKey||d.monthKey===targetMonthKey){
+      if(d.monthFare!=null)list.push({...d});
+    }else if(d.prevMonth&&d.prevMonth.monthKey===targetMonthKey){
+      list.push({...d.prevMonth,name:d.name});
+    }
+    // どちらにも該当しない人は、その月の記録が無いため出力しない
+  });
+  list.sort((a,b)=>(b.monthFare||0)-(a.monthFare||0)).forEach(d=>{
     const days=d.monthDays||0;
     const fareForAvg=d.monthFareForAvg!=null?d.monthFareForAvg:(d.monthFare||0);
     const avg=days>0?Math.round(fareForAvg/days):0;
@@ -3180,6 +3228,7 @@ function closeCsvExportModal(){
   document.getElementById('csv-export-overlay').classList.remove('open');
   pendingCsvText=null;pendingCsvFilename=null;
   pendingSalesCsvText=null;pendingSalesCsvFilename=null;
+  pendingResetFlagKey=null;
 }
 // 自分の今月分の乗務記録（出退勤・売上）をCSVで保存する。月が変わって
 // 「今月」の集計対象から外れる前に、ドライバー各自が個人の記録を
@@ -3261,12 +3310,16 @@ function closeHotelShuttleModal(){
 const POST_RESET_DOWNLOAD_WINDOW_MS=3*24*3600*1000;
 async function confirmCsvExportDelete(){
   if(!confirm('仲間全員分の送り先データを削除してリセットしますか？'))return;
+  const flagKey=pendingResetFlagKey;
   closeCsvExportModal();
   const snap=await db.ref('team_dests').once('value');
   await db.ref('team_dests_backup').set({ts:Date.now(),data:snap.val()||{}});
   await db.ref('team_dests').remove();
   destinations=[];
   saveDests();renderDests();
+  // 「その月のリセット済み」の記録は、実際に削除した時にだけ付ける（以前は案内を
+  // 出した時点で付けていたため、キャンセルするとその月は二度と案内されなかった）
+  if(flagKey)db.ref('team_config/last_dests_reset_month').set(flagKey).catch(err=>console.error('last_dests_reset_month set failed',err));
   toast('🗑 送り先データを全員分リセットしました');
 }
 // リセット直後から3日間、自分の送り先データ（リセット直前の内容）をCSVで
@@ -3988,6 +4041,7 @@ function connectFirebase(config){
         // 値のまま取り残されてしまっていた。接続確立のたびに一度同期しておく
         // ことで、開き直しただけでも最新の月に更新されるようにする
         pushTeamSales();
+        checkMonthStartDestsReset();
         // 出庫時刻（dutyStartTs）も同じ理由（planFinishTsの下のコメント参照）で、
         // この機能の追加前から出勤していた人は一度も送信されていなかった。
         // dutyStart自体はリロードをまたいでも保存・復元されるため、出勤し直さず
@@ -7351,7 +7405,7 @@ function leaveGroupRanking(kind){
    if(kind==='today'){
      db.ref('team_sales/'+myId).update({todayFare:null,todayBizStart:null}).catch(err=>console.error('team_sales today clear failed',err));
    }else{
-     db.ref('team_sales/'+myId).update({monthFare:null,monthFareForAvg:null,monthDays:null,monthFareRaw:null,monthDaysRaw:null,monthAdjust:null}).catch(err=>console.error('team_sales month clear failed',err));
+     db.ref('team_sales/'+myId).update({monthFare:null,monthFareForAvg:null,monthDays:null,monthFareRaw:null,monthDaysRaw:null,monthAdjust:null,monthKey:null,prevMonth:null}).catch(err=>console.error('team_sales month clear failed',err));
    }
    // 両方とも不参加になった場合は、記録自体を丸ごと削除する（従来の挙動を維持）
    if(!isMonthRankingOptedIn()&&!isTodayRankingOptedIn())db.ref('team_sales/'+myId).remove();
@@ -7403,39 +7457,57 @@ function pushTeamSales(){
  const todayFare=getMyTodayFareExTax();
  const monthFareRaw=getMonthFareExTax(0)+carry.fare;
  const monthDaysRaw=getMonthShifts().length+carry.days;
- // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
- // 自動集計が更新されるたびにその差分を足し続けることで、自動計算を止めずに
- // 「今のズレだけ直す」を実現する
- // 修正は「その月のズレ」を直すためのものなので、月が変わったら引き継がない
- // （以前は月をまたいでも差分が残り、翌月のランキングにも上乗せされていた）
- const storedAdjust=teamSales&&teamSales[myId]&&teamSales[myId].monthAdjust;
- const adjustIsCurrent=isMonthAdjustCurrent(storedAdjust);
- const adjust=adjustIsCurrent?storedAdjust:{days:0,fare:0};
- const monthFare=monthFareRaw+(adjust.fare||0);
- // monthAdjust.daysは「修正した時点の自動集計値との差分」を保持しているだけなので、
- // その後あまり乗務せず自動集計値(monthDaysRaw)が修正時より小さいまま月をまたぐ等すると、
- // 差分を足した結果がマイナスになってしまうことがあった。実際の出勤日数はマイナスに
- // ならないため、0未満にはしない
- const monthDays=Math.max(0,monthDaysRaw+(adjust.days||0));
  // 1日平均は「退勤して1日分として確定した」売上・日数だけで計算する。
  // まだ退勤していない当日分の売上は、日数の方はまだ+1されていないため、
  // 平均の分子からも除いておく（退勤した瞬間にその日の売上と日数が両方まとめて加わる）
  // monthFareは税抜きなので、差し引くongoingFareも同じ税抜き基準で計算する
  const ongoingFare=exTax(getOngoingShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0));
- const monthFareForAvg=Math.max(0,monthFare-ongoingFare);
- // ①月間・②本日は独立して参加を選択できるため、参加している方のフィールドのみ
- // 送信する（参加していない方は.update()で触れないため、既存の値があればそのまま
- // 残ってしまう点に注意。退出時はleaveGroupRanking側で該当フィールドを明示的に
- // nullにして非公開にしている）
- const payload={name,ts:Date.now()};
- if(isTodayRankingOptedIn())Object.assign(payload,{todayFare,todayBizStart});
- if(isMonthRankingOptedIn()){
-  Object.assign(payload,{monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw});
-  if(storedAdjust&&!adjustIsCurrent)payload.monthAdjust=null; // 前月以前の修正は削除する
- }
- // .set()だと手動修正(monthAdjust)が毎回消えてしまうため、.update()で他フィールドを保ったまま更新する
- db.ref('team_sales/'+myId).update(payload)
-   .catch(err=>console.error('team_sales update failed',err));
+ const monthKey=currentSalesMonthKey();
+ const ref=db.ref('team_sales/'+myId);
+ // 手動修正(monthAdjust)や前月分の退避には「Firebase上の自分の今の記録」が必要。
+ // アプリ起動直後はteamSalesの受信がまだ終わっていないことがあり、その状態で
+ // 書き込むと前月分を退避しないまま新しい月の値で上書きしてしまうため、
+ // 毎回Firebaseから直接読み直してから書き込む
+ ref.once('value').then(snap=>snap.val()||{},()=>(teamSales&&teamSales[myId])||{}).then(stored=>{
+  // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
+  // 自動集計が更新されるたびにその差分を足し続けることで、自動計算を止めずに
+  // 「今のズレだけ直す」を実現する
+  // 修正は「その月のズレ」を直すためのものなので、月が変わったら引き継がない
+  // （以前は月をまたいでも差分が残り、翌月のランキングにも上乗せされていた）
+  const storedAdjust=stored.monthAdjust;
+  const adjustIsCurrent=isMonthAdjustCurrent(storedAdjust);
+  const adjust=adjustIsCurrent?storedAdjust:{days:0,fare:0};
+  const monthFare=monthFareRaw+(adjust.fare||0);
+  // monthAdjust.daysは「修正した時点の自動集計値との差分」を保持しているだけなので、
+  // 差分を足した結果がマイナスになることがある。実際の出勤日数はマイナスに
+  // ならないため、0未満にはしない
+  const monthDays=Math.max(0,monthDaysRaw+(adjust.days||0));
+  const monthFareForAvg=Math.max(0,monthFare-ongoingFare);
+  // ①月間・②本日は独立して参加を選択できるため、参加している方のフィールドのみ
+  // 送信する（参加していない方は.update()で触れないため、既存の値があればそのまま
+  // 残ってしまう点に注意。退出時はleaveGroupRanking側で該当フィールドを明示的に
+  // nullにして非公開にしている）
+  const payload={name,ts:Date.now()};
+  if(isTodayRankingOptedIn())Object.assign(payload,{todayFare,todayBizStart});
+  if(isMonthRankingOptedIn()){
+   Object.assign(payload,{monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw,monthKey});
+   if(storedAdjust&&!adjustIsCurrent)payload.monthAdjust=null; // 前月以前の修正は削除する
+   // 月が変わって新しい月の値で上書きする前に、前月の確定値をprevMonthとして残す。
+   // 月初の送り先リセット時に保存する「月間ランキングCSV」は、誰かが先にアプリを
+   // 開いて新しい月（¥0）に切り替わっていても、ここから前月分を出力する
+   // （月が戻る方向の変化では退避しない＝正しい前月分を上書きしない）
+   if(stored.monthKey&&stored.monthKey<monthKey&&stored.monthFare!=null){
+    payload.prevMonth={
+     monthKey:stored.monthKey,
+     monthFare:stored.monthFare,
+     monthFareForAvg:stored.monthFareForAvg!=null?stored.monthFareForAvg:stored.monthFare,
+     monthDays:stored.monthDays||0
+    };
+   }
+  }
+  // .set()だと手動修正(monthAdjust)が毎回消えてしまうため、.update()で他フィールドを保ったまま更新する
+  return ref.update(payload);
+ }).catch(err=>console.error('team_sales update failed',err));
 }
 
 
@@ -8209,6 +8281,7 @@ function adminLogin(){
     document.getElementById('admin-name').value=localStorage.getItem('taxi_name')||'';
     document.getElementById('admin-car').value=localStorage.getItem('taxi_car')||'';
     renderCPs();renderRankingPage();toast('🔓 管理者モード');
+    checkMonthStartDestsReset();
   }else{toast('⚠️ PINが違います');document.getElementById('pin-input').value='';}
 }
 
