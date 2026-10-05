@@ -1305,7 +1305,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-169';
+const APP_BUILD='20260902-170';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5049,7 +5049,7 @@ async function editTeamMemberMonthSales(uid,name){
   const fare=Math.max(0,parseInt(fareStr)||0);
   const rawDays=cur.monthDaysRaw!=null?cur.monthDaysRaw:curDays;
   const rawFare=cur.monthFareRaw!=null?cur.monthFareRaw:curFare;
-  const monthAdjust={days:days-rawDays,fare:fare-rawFare,ts:Date.now()};
+  const monthAdjust={days:days-rawDays,fare:fare-rawFare,ts:Date.now(),monthKey:currentSalesMonthKey()};
   // 平均の分子(monthFareForAvg)も、今回の訂正額の分だけ一緒にずらしておく
   // （そうしないと次に自動集計が走るまで、平均だけ訂正前の値のままになってしまう）
   const curFareForAvg=cur.monthFareForAvg!=null?cur.monthFareForAvg:curFare;
@@ -5992,6 +5992,15 @@ function getEffectiveMonthRefDate(){
  const lastShift=shiftLog.length?shiftLog.reduce((a,b)=>(!a||b.endTs>a.endTs)?b:a,null):null;
  if(lastShift&&(Date.now()-lastShift.endTs)<12*3600*1000)return new Date(lastShift.startTs);
  return new Date();
+}
+// 月間ランキングの手動修正(monthAdjust)がどの月のものかを判別するためのキー（例: "2026-10"）
+function monthKeyOf(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
+function currentSalesMonthKey(){return monthKeyOf(getEffectiveMonthRefDate());}
+// 手動修正が今月のものか。monthKeyが無い古い修正は、修正した日時(ts)の月で判定する
+function isMonthAdjustCurrent(adj){
+ if(!adj)return false;
+ const key=adj.monthKey||(adj.ts?monthKeyOf(new Date(adj.ts)):null);
+ return key===currentSalesMonthKey();
 }
 // offsetを指定すると、その分だけ月をずらして取得できる（-1で先月分）。
 // 「今月」の基準は月をまたぐ夜勤で分断されないようgetEffectiveMonthRefDate()を
@@ -7397,7 +7406,11 @@ function pushTeamSales(){
  // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
  // 自動集計が更新されるたびにその差分を足し続けることで、自動計算を止めずに
  // 「今のズレだけ直す」を実現する
- const adjust=(teamSales&&teamSales[myId]&&teamSales[myId].monthAdjust)||{days:0,fare:0};
+ // 修正は「その月のズレ」を直すためのものなので、月が変わったら引き継がない
+ // （以前は月をまたいでも差分が残り、翌月のランキングにも上乗せされていた）
+ const storedAdjust=teamSales&&teamSales[myId]&&teamSales[myId].monthAdjust;
+ const adjustIsCurrent=isMonthAdjustCurrent(storedAdjust);
+ const adjust=adjustIsCurrent?storedAdjust:{days:0,fare:0};
  const monthFare=monthFareRaw+(adjust.fare||0);
  // monthAdjust.daysは「修正した時点の自動集計値との差分」を保持しているだけなので、
  // その後あまり乗務せず自動集計値(monthDaysRaw)が修正時より小さいまま月をまたぐ等すると、
@@ -7416,7 +7429,10 @@ function pushTeamSales(){
  // nullにして非公開にしている）
  const payload={name,ts:Date.now()};
  if(isTodayRankingOptedIn())Object.assign(payload,{todayFare,todayBizStart});
- if(isMonthRankingOptedIn())Object.assign(payload,{monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw});
+ if(isMonthRankingOptedIn()){
+  Object.assign(payload,{monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw});
+  if(storedAdjust&&!adjustIsCurrent)payload.monthAdjust=null; // 前月以前の修正は削除する
+ }
  // .set()だと手動修正(monthAdjust)が毎回消えてしまうため、.update()で他フィールドを保ったまま更新する
  db.ref('team_sales/'+myId).update(payload)
    .catch(err=>console.error('team_sales update failed',err));
