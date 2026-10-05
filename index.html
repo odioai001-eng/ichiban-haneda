@@ -1305,7 +1305,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-168';
+const APP_BUILD='20260902-169';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -7360,30 +7360,39 @@ function getBusinessDayStart(refTs){
  return refTs>=nineAm?nineAm:nineAm-24*3600*1000;
 }
 // 「本日の売り上げランキング（グループ）」に出す自分の本日の売上（税抜）。
-// 以前はランキング専用の集計（getBusinessDayFareEntries：9:00以降の単発記録も
-// 合算する等）を使っていたため、設定の「💰 売上管理」の「本日の売上（税抜）」と
-// 金額が食い違うことがあった。売上管理と全く同じ記録・計算式に揃える
+// 設定の「💰 売上管理（税抜）」の日別一覧と同じく、税込の合計をまとめて
+// 税抜換算する（1件ずつ税抜換算・10円丸めしてから足すと、丸め誤差が積み重なって
+// 一覧より数十円ずれてしまっていたため）
 function getMyTodayFareExTax(){
- return getTodayShiftFareEntries().reduce((a,e)=>a+exTax(e.fare||0),0);
+ return exTax(getTodayShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0));
+}
+// 出勤中でまだtaxi_shift_logに入っていない、今回のシフトの記録
+function getOngoingShiftFareEntries(){
+ if(!(isDuty&&dutyStart))return [];
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ return log.filter(e=>(e.ts||0)>=dutyStart.getTime());
+}
+// 月の売上（税抜・繰越は含まない）。「💰 売上管理（税抜）」の日別一覧の金額
+// （1日ごとに税込合計を税抜換算）をそのまま合計し、今月なら出勤中の今回の
+// シフト分も同じ計算で加える。月間ランキングと売上管理で同じ金額になるよう共通化
+function getMonthFareExTax(offset){
+ offset=offset||0;
+ let total=getMonthFareDays(offset).reduce((a,d)=>a+exTax(d.fare),0);
+ if(offset===0)total+=exTax(getOngoingShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0));
+ return total;
 }
 function pushTeamSales(){
  if(!db)return;
  if(!isRankingOptedIn())return;
  if(testMode)return; // テスト出勤中の売上は、仲間のグループランキング（team_sales）に反映しない
  const name=localStorage.getItem('taxi_name')||'自分';
- const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const carry=getCarryover();
  const now=new Date();
- // 月末に日をまたぐ夜勤の途中でも今月の集計から抜け落ちないよう、暦月ではなく
- // シフト単位の基準月を使う（getEffectiveMonthRefDate）
- const monthRef=getEffectiveMonthRefDate();
- const monthStart=new Date(monthRef.getFullYear(),monthRef.getMonth(),1).getTime();
  const todayBizStart=getBusinessDayStart(now.getTime());
- // 運賃は税込みで入力されているため、ランキングに積み上げる際は1件ずつ税抜きに変換する。
- // 集計範囲・計算式は設定の「💰 売上管理」の「本日の売上（税抜）」と同じ
- // （getMyTodayFareExTax）
+ // 本日・今月とも、設定の「💰 売上管理（税抜）」の日別一覧と同じ計算式
+ // （税込の合計をまとめて税抜換算）で集計する
  const todayFare=getMyTodayFareExTax();
- const monthFareRaw=log.filter(e=>e.ts>=monthStart).reduce((a,e)=>a+exTax(e.fare||0),0)+carry.fare;
+ const monthFareRaw=getMonthFareExTax(0)+carry.fare;
  const monthDaysRaw=getMonthShifts().length+carry.days;
  // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
  // 自動集計が更新されるたびにその差分を足し続けることで、自動計算を止めずに
@@ -7399,7 +7408,7 @@ function pushTeamSales(){
  // まだ退勤していない当日分の売上は、日数の方はまだ+1されていないため、
  // 平均の分子からも除いておく（退勤した瞬間にその日の売上と日数が両方まとめて加わる）
  // monthFareは税抜きなので、差し引くongoingFareも同じ税抜き基準で計算する
- const ongoingFare=(isDuty&&dutyStart)?log.filter(e=>(e.ts||0)>=dutyStart.getTime()).reduce((a,e)=>a+exTax(e.fare||0),0):0;
+ const ongoingFare=exTax(getOngoingShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0));
  const monthFareForAvg=Math.max(0,monthFare-ongoingFare);
  // ①月間・②本日は独立して参加を選択できるため、参加している方のフィールドのみ
  // 送信する（参加していない方は.update()で触れないため、既存の値があればそのまま
@@ -7417,31 +7426,22 @@ function pushTeamSales(){
 function renderSalesStats(){
  const out=document.getElementById('sales-stats-out');
  if(!out)return;
- const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  // 前月までの繰越額は、実際に使い始める前の実績を補うためのものなので、
  // 今月を見ている時だけ合算する（過去の月を遡って見る時には含めない）
  const carry=salesStatsMonthOffset===0?getCarryover():{fare:0,days:0};
  const todayEntries=getTodayShiftFareEntries();
  const sum=(arr,key)=>arr.reduce((a,e)=>a+(e[key]||0),0);
- // 運賃(fare)は税込み入力なので税抜きに変換して合計する。高速代(toll)・繰越(carry.fare、
- // 既に税抜きで入力済み)はそのまま
- const sumFareExTax=(arr)=>arr.reduce((a,e)=>a+exTax(e.fare||0),0);
- // 「今月の売上」は、以前は暦のtsの範囲(monthStart〜monthEnd)でtaxi_fare_logを
- // 直接絞り込んでいたが、これだと月をまたぐシフト（例: 8/31の夜勤）の日付変更後の
- // 記録が漏れて実際より少なく表示されてしまっていた。日ごとの売上一覧
- // （getMonthFareDays、シフト単位で正しく集計済み）の合計を使うようにし、
- // 出勤中でまだgetMonthFareDaysに含まれていない今回のシフトの分はtodayEntriesを
- // 別途足し合わせる（今月表示中のみ。前月以前を見ている時は含めない）
+ // 「今月の売上」は日ごとの売上一覧（getMonthFareDays、シフト単位で集計済み）の
+ // 合計を使う（暦のtsで絞ると月をまたぐ夜勤の日付変更後の記録が漏れるため）。金額は月間ランキングと共通の計算（getMonthFareExTax）。出勤中の分は、同じ
+ // 営業日に完了済みのシフト（既にmonthDaysに含まれる）を二重に足さないよう、
+ // 今回のシフトの記録だけを加える
  const monthDays=getMonthFareDays(salesStatsMonthOffset);
- let monthFareExTax=monthDays.reduce((a,d)=>a+exTax(d.fare),0);
+ const monthFareExTax=getMonthFareExTax(salesStatsMonthOffset);
  let monthToll=monthDays.reduce((a,d)=>a+(d.toll||0),0);
- if(salesStatsMonthOffset===0&&isDuty&&dutyStart){
-  monthFareExTax+=sumFareExTax(todayEntries);
-  monthToll+=sum(todayEntries,'toll');
- }
+ if(salesStatsMonthOffset===0)monthToll+=sum(getOngoingShiftFareEntries(),'toll');
  const monthLabel=salesStatsMonthLabel(salesStatsMonthOffset);
  out.innerHTML=`
-  <div class="row2"><span class="rl">本日の売上（税抜）</span><span class="rv" style="color:var(--green)">¥${sumFareExTax(todayEntries).toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">本日の売上（税抜）</span><span class="rv" style="color:var(--green)">¥${getMyTodayFareExTax().toLocaleString()}</span></div>
   <div class="row2"><span class="rl">本日の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(todayEntries,'toll').toLocaleString()}</span></div>
   <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px">
    <button class="btn btn-g" onclick="changeSalesStatsMonth(-1)" style="font-size:11px;padding:5px 10px">◀ 前月</button>
@@ -9638,7 +9638,7 @@ async function debugTodaySales(){
   const todayShiftLogEntries=shiftLog.filter(s=>s.endTs&&s.startTs>=bizStart);
   const logToday=log.filter(e=>(e.ts||0)>=bizStart);
   const todayEntries=getTodayShiftFareEntries();
-  const sumFare=arr=>arr.reduce((a,e)=>a+exTax(e.fare||0),0);
+  const sumFare=arr=>exTax(arr.reduce((a,e)=>a+(e.fare||0),0));
   let fbLine='(db未接続のため確認できません)';
   if(db){
     try{
