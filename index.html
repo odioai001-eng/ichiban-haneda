@@ -5022,6 +5022,7 @@ function renderRankMonthGroup(){
 function syncMySalesNow(){
   if(!isRankingOptedIn()){toast('⚠️ グループランキングに未参加です');return;}
   pushTeamSales();
+  renderRankingPage();
   toast('🔄 自分の記録を同期しました');
 }
 // 自動計算が実態と合わない場合に、今月の出勤日数・売上を手動で訂正する。
