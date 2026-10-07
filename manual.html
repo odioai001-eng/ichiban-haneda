@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>イチバン羽田 使い方ガイド</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0d1a; --surface:#161628; --surface2:#1e1e35; --border:#2a2a4a;
+  --fg:#e8e8f4; --muted:#9191b4; --accent:#4f8ef7;
+  --green:#22c55e; --amber:#f59e0b; --red:#ef4444; --cyan:#06b6d4; --gold:#fbbf24;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f3f3f8; --surface:#ffffff; --surface2:#eceef5; --border:#dadce8;
+    --fg:#1b1b2e; --muted:#5c5c7a; --accent:#2f6fe0;
+    --green:#16a34a; --amber:#b45309; --red:#dc2626; --cyan:#0891b2; --gold:#b7791f;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f3f3f8; --surface:#ffffff; --surface2:#eceef5; --border:#dadce8;
+  --fg:#1b1b2e; --muted:#5c5c7a; --accent:#2f6fe0;
+  --green:#16a34a; --amber:#b45309; --red:#dc2626; --cyan:#0891b2; --gold:#b7791f;
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif;
+  padding-inline:18px; padding-block:28px 60px;
+  max-width:560px; margin:0 auto;
+  line-height:1.75; font-size:15px;
+}
+h1,h2,h3{font-family:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN',sans-serif; text-wrap:balance; margin:0}
+a{color:var(--accent)}
+
+/* ---------- hero ---------- */
+.hero{padding-block:8px 20px}
+.hero .eyebrow{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:11px; font-weight:700; letter-spacing:.08em;
+  color:var(--accent); background:color-mix(in srgb, var(--accent) 14%, transparent);
+  border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  padding:5px 11px; border-radius:999px; margin-bottom:14px;
+}
+.hero h1{font-size:28px; font-weight:900; letter-spacing:.01em; margin-bottom:10px}
+.hero p{color:var(--muted); font-size:14.5px; max-width:46ch}
+.chipline{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+.chip{
+  font-size:12px; font-weight:600; color:var(--fg);
+  background:var(--surface2); border:1px solid var(--border);
+  padding:6px 12px; border-radius:999px; display:inline-flex; align-items:center; gap:6px;
+}
+
+/* ---------- table of contents ---------- */
+.toc{
+  background:var(--surface); border:1px solid var(--border); border-radius:16px;
+  padding:16px 18px; margin:26px 0 32px;
+}
+.toc h2{font-size:13px; letter-spacing:.06em; color:var(--muted); font-weight:700; margin-bottom:10px}
+.toc ol{margin:0; padding:0; list-style:none; display:grid; gap:2px}
+.toc li a{
+  display:flex; align-items:baseline; gap:10px; text-decoration:none; color:var(--fg);
+  padding:7px 4px; border-radius:8px; font-size:14px;
+}
+.toc li a:hover{background:var(--surface2)}
+.toc .n{
+  font-family:'Zen Kaku Gothic New',sans-serif; font-weight:900; font-size:12px;
+  color:var(--accent); flex-shrink:0; width:1.6em;
+}
+
+/* ---------- section ---------- */
+section.op{margin-block:40px; scroll-margin-top:16px}
+section.op + section.op{padding-top:36px; border-top:1px solid var(--border)}
+.op-head{display:flex; align-items:flex-start; gap:14px; margin-bottom:16px}
+.op-num{
+  font-family:'Zen Kaku Gothic New',sans-serif; font-weight:900; font-size:15px;
+  color:var(--bg); background:var(--accent);
+  width:34px; height:34px; border-radius:10px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.op-head h2{font-size:20px; font-weight:700}
+.op-head .sub{color:var(--muted); font-size:13px; margin-top:3px}
+
+.steps{margin:0 0 18px; padding:0; list-style:none; display:grid; gap:10px}
+.steps li{display:flex; gap:11px; align-items:flex-start}
+.steps li::before{
+  content:""; width:7px; height:7px; border-radius:50%; background:var(--accent);
+  margin-top:8px; flex-shrink:0;
+}
+.steps b{font-weight:700}
+
+.note{
+  display:flex; gap:10px; align-items:flex-start;
+  background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--cyan);
+  border-radius:0 12px 12px 0; padding:12px 14px; margin-top:14px; font-size:13.5px; color:var(--muted);
+}
+.note.warn{border-left-color:var(--amber)}
+.note b{color:var(--fg)}
+
+/* ---------- phone mockups (built from the app's own css tokens) ---------- */
+.mock{
+  background:var(--bg); border:1px solid var(--border); border-radius:18px;
+  padding:14px; max-width:300px; margin:0 auto 18px;
+  box-shadow:0 1px 0 color-mix(in srgb, var(--fg) 6%, transparent) inset;
+}
+.m-hdr{
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:8px 10px; margin-bottom:10px;
+}
+.m-title{font-size:10.5px; font-weight:700}
+.m-duty{font-size:10px; font-weight:700; color:#fff; padding:4px 10px; border-radius:999px}
+.m-duty.off{background:var(--red)}
+.m-duty.on{background:var(--green)}
+
+.m-row{display:flex; gap:6px; margin-bottom:6px}
+.m-pill{
+  flex:1; text-align:center; font-size:10.5px; font-weight:700; padding:8px 4px; border-radius:9px;
+  border:1.5px solid transparent;
+}
+.m-pill.kuusha{background:color-mix(in srgb, var(--red) 20%, var(--surface)); color:var(--red); border-color:var(--red)}
+.m-pill.jitsusha{background:var(--surface2); color:var(--muted)}
+.m-pill.kaisou{background:var(--surface2); color:var(--muted)}
+
+.m-chips{display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin-bottom:8px}
+.m-chip{
+  background:var(--surface2); color:var(--muted); font-size:9px; font-weight:700;
+  text-align:center; padding:6px 2px; border-radius:7px; border:1px solid var(--border);
+}
+.m-chip.sel{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+.m-card{
+  background:var(--surface); border:1.5px solid var(--border); border-radius:9px;
+  padding:9px 10px; margin-bottom:7px; font-size:10.5px;
+}
+.m-card .t1{color:var(--accent); font-weight:800; font-size:11px; margin-bottom:3px}
+.m-card .t2{color:var(--cyan); font-weight:700}
+.m-card .t3{color:var(--amber); font-weight:700}
+.m-card .fare{color:var(--green); font-weight:800; margin-top:4px}
+
+.m-nav{
+  display:flex; justify-content:space-around; background:var(--surface);
+  border:1px solid var(--border); border-radius:10px; padding:7px 2px; margin-top:4px;
+}
+.m-navitem{display:flex; flex-direction:column; align-items:center; gap:2px; font-size:8px; color:var(--muted)}
+.m-navitem.sel{color:var(--accent)}
+.m-navitem .ic{font-size:14px}
+
+.m-badge{
+  display:inline-flex; align-items:center; gap:4px; background:var(--surface2);
+  border:1px solid var(--border); border-radius:999px; padding:4px 10px; font-size:10px; font-weight:700;
+}
+.m-badge .dot{width:28px; height:28px; border-radius:50%; background:var(--accent); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800}
+.m-badge .ko{color:var(--gold)}
+
+.m-bubble{
+  background:var(--surface2); border-radius:10px; padding:8px 11px; font-size:10.5px;
+  max-width:88%; margin-bottom:6px; color:var(--muted);
+}
+.m-bubble.auto{color:var(--cyan); font-style:normal; border:1px dashed var(--cyan); background:transparent}
+
+.m-rank{display:flex; align-items:center; gap:8px; padding:6px 0; font-size:11px; border-bottom:1px solid var(--border)}
+.m-rank:last-child{border-bottom:none}
+.m-rank .pos{font-family:'Zen Kaku Gothic New',sans-serif; font-weight:900; color:var(--gold); width:16px}
+.m-rank .name-wrap{display:flex; flex-direction:column; flex:1; min-width:0; gap:1px}
+.m-rank .name{font-weight:600}
+.m-rank .sub{font-size:9px; color:var(--muted); font-weight:400}
+.m-rank .amt{color:var(--green); font-weight:800; white-space:nowrap}
+
+/* ---------- flow diagram (duty cycle) ---------- */
+.flow{display:flex; align-items:center; gap:4px; overflow-x:auto; padding:6px 2px 14px; margin-bottom:8px}
+.flow-step{
+  flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:6px; width:72px;
+}
+.flow-step .ic{
+  width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+  font-size:19px; background:var(--surface); border:1.5px solid var(--border);
+}
+.flow-step span{font-size:10.5px; text-align:center; color:var(--muted); font-weight:600; line-height:1.3}
+.flow-arrow{flex-shrink:0; color:var(--border); font-size:16px}
+
+/* ---------- footer ---------- */
+footer{margin-top:50px; padding-top:22px; border-top:1px solid var(--border); color:var(--muted); font-size:12.5px}
+
+@media (max-width:420px){
+  .hero h1{font-size:24px}
+  .op-head h2{font-size:18px}
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="eyebrow">✈️ ICHIBAN HANEDA</div>
+  <h1>イチバン羽田チームアプリ<br>使い方ガイド</h1>
+  <p>羽田空港で働くイチバン流通のドライバーだけが使用できる完全オリジナルのアプリです。GPSで自動的に乗車・降車を記録し、仲間の位置・待機列・売上をリアルタイムで共有します。この1枚で、日々の操作をひと通り確認できます。</p>
+  <div class="chipline">
+    <span class="chip">📍 GPS自動記録</span>
+    <span class="chip">👥 仲間とリアルタイム共有</span>
+    <span class="chip">💰 売上・ランキング</span>
+    <span class="chip">💬 チーム内チャット</span>
+  </div>
+</div>
+
+<div class="note warn" style="margin-top:4px">
+  <span>🗓️</span>
+  <div><b>毎月はじめに必ず行うこと</b><br>「設定」タブの「勤務時間管理」で、<b>今月の出勤予定日数</b>と<b>今月の目標金額</b>を入力してください。ここで入力した内容をもとに、残り日数に応じた1日あたりの目安や、ランキングの出勤日数が計算されます。</div>
+</div>
+
+<nav class="toc">
+  <h2>目次</h2>
+  <ol>
+    <li><a href="#s1"><span class="n">01</span>出勤する・退勤する</a></li>
+    <li><a href="#s2"><span class="n">02</span>空車・実車・回送を切り替える</a></li>
+    <li><a href="#s3"><span class="n">03</span>地図画面のボタンを使う</a></li>
+    <li><a href="#s4"><span class="n">04</span>プールで待機する（号選択・列移動）</a></li>
+    <li><a href="#s5"><span class="n">05</span>送り先の記録を確認・修正する</a></li>
+    <li><a href="#s6"><span class="n">06</span>チャットで仲間とやり取りする</a></li>
+    <li><a href="#s7"><span class="n">07</span>ランキングで売上を確認する</a></li>
+    <li><a href="#s8"><span class="n">08</span>乗り場別情報を見る</a></li>
+    <li><a href="#s9"><span class="n">09</span>設定でできること</a></li>
+    <li><a href="#s10"><span class="n">10</span>困ったときは</a></li>
+  </ol>
+</nav>
+
+<section class="op" id="s1">
+  <div class="op-head">
+    <div class="op-num">01</div>
+    <div>
+      <h2>出勤する・退勤する</h2>
+      <div class="sub">ヘッダー右端のボタンから</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="m-hdr">
+      <span class="m-title">✈️ イチバン羽田</span>
+      <span class="m-duty off">出勤する</span>
+    </div>
+    <div style="text-align:center; color:var(--muted); font-size:10px; padding:10px 0">▲ ここをタップして出勤手続きを始める</div>
+  </div>
+
+  <h3 style="font-size:14.5px; margin-bottom:10px">出勤する</h3>
+  <ul class="steps">
+    <li><b>①決済端末の持参を確認</b> — チェックを入れないと先に進めません</li>
+    <li><b>②本日の勤務時間プラン</b>を選択（固定時間・自由入力から選べます）</li>
+    <li><b>③営業開始メーター</b>の数値を入力</li>
+    <li><b>④車番・ナンバー</b>を確認・入力して確定</li>
+  </ul>
+
+  <p>確定すると位置情報の送信（GPS）が始まり、仲間の地図にあなたのアイコンが表示されます。以後は自動で乗車・降車を記録します。</p>
+
+  <div class="note">
+    <span>📍</span>
+    <div>初回は「位置情報を常に許可」の確認画面が出ます。許可しないと、スマホをロックした時に仲間の地図からアイコンが止まって見えてしまうので、必ず「常に許可」にしてください。</div>
+  </div>
+
+  <h3 style="font-size:14.5px; margin:26px 0 10px">退勤する</h3>
+  <div class="mock">
+    <div class="m-hdr">
+      <span class="m-title">✈️ イチバン羽田</span>
+      <span class="m-duty on">退勤する</span>
+    </div>
+    <div style="text-align:center; color:var(--muted); font-size:10px; padding:10px 0">▲ 同じ場所のボタンが「退勤する」に変わっています</div>
+  </div>
+
+  <ul class="steps">
+    <li><b>①「退勤する」をタップ</b> — この瞬間に、仲間の地図からアイコンが消えます</li>
+    <li><b>②退勤時刻</b>と<b>営業終了メーター</b>を確認・入力して確定</li>
+    <li>確定すると、<b>本日の営業の精算レポート</b>がポップアップで表示されます</li>
+  </ul>
+
+  <p>精算レポートには、支払い方法ごとの売上内訳（現金・クレジット・電子マネー・チケット・福祉券・QRコード）、燃料代・自腹高速代・無料高速代、差引合計、走行距離が自動でまとまって表示されます。過去の精算レポートは「設定」タブからいつでも見返せます。</p>
+
+  <div class="note">
+    <span>🧾</span>
+    <div>月の最終日に退勤すると、精算レポートに続けて「今月の乗務記録のCSV保存」の画面も表示されます。詳しくは「<a href="#s9">09 設定でできること</a>」をご覧ください。</div>
+  </div>
+</section>
+
+<section class="op" id="s2">
+  <div class="op-head">
+    <div class="op-num">02</div>
+    <div>
+      <h2>空車・実車・回送を切り替える</h2>
+      <div class="sub">地図画面いちばん上の3つのボタン</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="m-hdr"><span class="m-title">地図画面</span><span class="m-duty on">退勤する</span></div>
+    <div class="m-row">
+      <div class="m-pill kuusha">🔴 空車</div>
+      <div class="m-pill jitsusha">🟢 実車</div>
+      <div class="m-pill kaisou">🟡 回送</div>
+    </div>
+    <div style="text-align:center; color:var(--muted); font-size:10px">現在の状態がオレンジ枠で強調表示されます</div>
+  </div>
+
+  <ul class="steps">
+    <li><b>🔴 空車</b> — お客様待ちの状態。ここが基本の状態です</li>
+    <li><b>🟢 実車</b> — お客様を乗せたらタップ。乗車地点が記録されます</li>
+    <li><b>🟡 回送</b> — 回送中・営業区域外などで客扱いしない時</li>
+  </ul>
+
+  <p>お客様を降ろして空車に戻すと、<b>乗車地〜降車地・待機時間が自動で「送り先」タブに記録</b>されます。続けて運賃の入力画面が開くので、金額を入力し、<b>💴現金・💳クレジット・📱電子マネー・🎫チケット・🔲QRコード・🎫福祉券</b>から支払い方法をタップして選びます。高速代（ETC）が運賃と別の支払い方法だった場合も、ここで個別に指定できます。</p>
+
+  <div class="note">
+    <span>🙆</span>
+    <div>ボタン操作を忘れても、GPSが乗り場の出入りを検知して自動で判定することがあります（押し忘れ検知）。心配な時は「その他」ツールの「✍️ 手動で記録」で後から入力できます。</div>
+  </div>
+</section>
+
+<section class="op" id="s3">
+  <div class="op-head">
+    <div class="op-num">03</div>
+    <div>
+      <h2>地図画面のボタンを使う</h2>
+      <div class="sub">地図の左右に並ぶ丸ボタン</div>
+    </div>
+  </div>
+
+  <ul class="steps">
+    <li>
+      <div>
+        <b>👥 仲間の状況</b> — 右側の人型アイコン。今出勤中の仲間の一覧と、それぞれの状態（空車/実車/待機中か等）、現在地の住所を確認できます
+        <ul style="margin:8px 0 0; padding:0; list-style:none; display:grid; gap:5px; font-size:12px; color:var(--muted)">
+          <li>🎯 — その仲間の位置に地図を移動し、自動で追従します</li>
+          <li>📋 — その仲間が本日記録した送り先の一覧を、その場で開いて確認できます</li>
+        </ul>
+      </div>
+    </li>
+    <li><b>🎯 オートフォロー</b> — ONにしておくと、地図が常に自分の現在地を中心に自動で動きます。仲間のアイコンをタップして見ていた時も、これを押せば自分の位置に戻れます</li>
+    <li><b>GAS</b> — 給油した量（リットル）を記録します。精算レポートには反映されず、確認用の記録です</li>
+    <li><b>無料高速</b> — 実質無料になる高速料金（会社負担・経費精算等）を記録します</li>
+    <li><b>自腹高速</b> — 自分で立て替えて戻ってこない高速料金を記録します。こちらは精算レポートの差引合計に反映されます</li>
+    <li><b>😔 あぶれ</b> — 乗り場などで待機したもののお客様を乗せられずに終わった場合に記録します。送り先の記録には「あぶれ」として残りますが、運賃としては計上されません</li>
+    <li><b>🎤 イベント終演ハブ</b> — 23区・三鷹市・武蔵野市内で本日開催中のイベント会場と終演時間の目安をまとめた外部ページを開きます。終演直後の乗車チャンスを先読みしたいときに使います</li>
+    <li>🎤ボタンの右にある数字（例：0人）は、<b>今アプリを開いて位置情報を送信している仲間の人数</b>です</li>
+    <li>
+      <div>
+        <b>🧰 その他</b> — 左下の🧰ボタンを開くと、以下のツールをまとめて使えます
+        <ul style="margin:8px 0 0; padding:0; list-style:none; display:grid; gap:5px; font-size:12px; color:var(--muted)">
+          <li>🏨 ホテル — 羽田・成田行きが見込める主要ホテルを地図にハイライト</li>
+          <li>🚉 駅 — 地下鉄以外の主要駅を地図にハイライト（終電後の営業用）</li>
+          <li>🌉 終電 — 終電後は神奈川・埼玉・千葉方面へタクシーでしか行けなくなる駅をハイライト</li>
+          <li>🎪 イベント — 本日開催中のイベント会場を地図に表示（送り先探しの参考に）</li>
+          <li>🚨 事故 — 人身事故・故障等の運行情報ハブ（外部ページ）を開きます</li>
+          <li>🗺 地図 — 地図の表示を切り替えます</li>
+          <li>💴 料金計算 — タクシー料金検索ページ（外部）を開きます</li>
+          <li>🚦 通行止め — 首都高の工事・規制情報ページ（外部）を開きます</li>
+        </ul>
+      </div>
+    </li>
+  </ul>
+
+  <div class="note">
+    <span>💡</span>
+    <div>GAS・無料高速・自腹高速は、出勤してから退勤するまでの1回のシフト単位で記録されます。退勤時の精算レポートに、このシフト中の合計が表示されます。</div>
+  </div>
+</section>
+
+<section class="op" id="s4">
+  <div class="op-head">
+    <div class="op-num">04</div>
+    <div>
+      <h2>プールで待機する</h2>
+      <div class="sub">号選択・列移動の共有</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="m-chips">
+      <div class="m-chip">1号</div>
+      <div class="m-chip sel">2号</div>
+      <div class="m-chip">3号</div>
+      <div class="m-chip">4号</div>
+      <div class="m-chip">国際線</div>
+    </div>
+    <div style="text-align:center; margin:10px 0">
+      <span class="m-badge"><span class="dot">高</span>高橋 <span class="ko">2号 14分</span></span>
+    </div>
+    <div style="text-align:center; color:var(--muted); font-size:10px">地図上のアイコンにも同じバッジが表示され、仲間から見えます</div>
+  </div>
+
+  <ul class="steps">
+    <li>プールに入ったら、並んでいる<b>号（1号〜4号・国際線）をタップ</b>して選択</li>
+    <li>選んだ瞬間から待機タイマーが動き、地図上の自分のアイコンに<b>「◯号 ◯分」のバッジ</b>が表示されます</li>
+    <li>列が動いたら、右下の<b>🚗ボタン</b>から列移動（+1・+2）を記録。仲間全員の地図にリアルタイムで反映されます</li>
+    <li>実車ボタンを押すと、待機は自動的に終了します</li>
+  </ul>
+
+  <div class="note">
+    <span>👥</span>
+    <div>列移動の記録は、プール内で待機中と認識されている人なら誰でも操作できます。GPSが多少ズレていても、号を選んでいれば弾かれません。</div>
+  </div>
+</section>
+
+<section class="op" id="s5">
+  <div class="op-head">
+    <div class="op-num">05</div>
+    <div>
+      <h2>送り先の記録を確認・修正する</h2>
+      <div class="sub">下部ナビ「待機/送先」タブ</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="m-card">
+      <div class="t1">#142</div>
+      <div><span class="t2">03:10</span> 東京都新宿区大久保2丁目</div>
+      <div><span class="t3">03:45</span> 埼玉県川口市朝日2丁目</div>
+      <div class="fare">💰 ¥9,090（現金）</div>
+    </div>
+    <div style="text-align:center; color:var(--muted); font-size:10px">1回の乗車が1枚のカードになります</div>
+  </div>
+
+  <ul class="steps">
+    <li>乗車・降車のたびに、自動で1枚のカードが追加されます（通し番号つき）</li>
+    <li>時刻・住所・運賃は、カード内の「編集」からいつでも修正できます</li>
+    <li>操作が反映されなかった時は「<b>✍️ 手動で記録</b>」から、日付を指定して後からでも追加できます</li>
+    <li>直近の記録は「本日分」、それより前は「過去の記録」に自動で分かれます</li>
+  </ul>
+
+  <div class="note warn">
+    <span>⚠️</span>
+    <div>運賃を記録し忘れたカードは、月間の売上集計から漏れてしまいます。退勤前に、金額の抜けがないか一度確認する習慣をおすすめします。</div>
+  </div>
+</section>
+
+<section class="op" id="s6">
+  <div class="op-head">
+    <div class="op-num">06</div>
+    <div>
+      <h2>チャットで仲間とやり取りする</h2>
+      <div class="sub">下部ナビ「チャット」タブ</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="m-bubble auto">🚖【自動】高橋さんが出勤しました。</div>
+    <div class="m-bubble auto">🚕【自動】高橋さんが4号乗り場を出発しました。（待機時間18分）</div>
+    <div class="m-bubble">了解です、よろしくお願いします</div>
+  </div>
+
+  <ul class="steps">
+    <li>文字・画像をチームの全員に送れます</li>
+    <li><b>🎤マイクボタン</b>をタップすれば、<b>音声でも入力</b>できます。話した内容がそのまま文字になります</li>
+    <li><b>出勤・退勤・乗り場出発</b>は自動でチャットに投稿されます</li>
+    <li>新しいメッセージが届くと、スマホの通知（ポップアップ）でも知らされます</li>
+    <li>メッセージには絵文字でリアクションを付けられます</li>
+  </ul>
+</section>
+
+<section class="op" id="s7">
+  <div class="op-head">
+    <div class="op-num">07</div>
+    <div>
+      <h2>ランキングで売上を確認する</h2>
+      <div class="sub">下部ナビ「ランキング」タブ</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div style="font-size:11px; font-weight:700; color:var(--gold); margin-bottom:6px">🏆 今月の売り上げランキング</div>
+    <div class="m-rank"><span class="pos">1</span><span class="name-wrap"><span class="name">茂木</span><span class="sub">1日平均 ¥38,558（5日出勤）</span></span><span class="amt">¥192,790</span></div>
+    <div class="m-rank"><span class="pos">2</span><span class="name-wrap"><span class="name">高橋</span><span class="sub">1日平均 ¥29,654（5日出勤）</span></span><span class="amt">¥148,270</span></div>
+    <div class="m-rank"><span class="pos">3</span><span class="name-wrap"><span class="name">オミガワ</span><span class="sub">1日平均 ¥17,600（4日出勤）</span></span><span class="amt">¥70,400</span></div>
+  </div>
+
+  <ul class="steps">
+    <li><b>本日</b>と<b>今月</b>、2つの独立したランキングがあります（どちらか片方だけの参加も可能）</li>
+    <li>参加には合言葉（管理者に確認）の入力が必要です。公開範囲を自分で選べます</li>
+    <li>金額は常に<b>税抜</b>で表示されます</li>
+    <li>自分の行にある「🔄 今すぐ同期」で、最新の記録を強制的に反映できます</li>
+  </ul>
+
+  <div class="note">
+    <span>✏️</span>
+    <div>自分の行の「修正」ボタンは、自動集計が実態とズレてしまった時の最終手段です。先に元の記録（送り先・運賃）を直せる場合は、そちらを優先してください。</div>
+  </div>
+</section>
+
+<section class="op" id="s8">
+  <div class="op-head">
+    <div class="op-num">08</div>
+    <div>
+      <h2>乗り場別情報を見る</h2>
+      <div class="sub">下部ナビ「乗り場別」タブ</div>
+    </div>
+  </div>
+  <ul class="steps">
+    <li>各乗り場（1号〜4号・国際線）ごとに、よく出る送り先の傾向を見られます</li>
+    <li>曜日・時間帯別の平均待機時間も確認でき、どの乗り場に並ぶか判断する参考になります</li>
+  </ul>
+</section>
+
+<section class="op" id="s9">
+  <div class="op-head">
+    <div class="op-num">09</div>
+    <div>
+      <h2>設定でできること</h2>
+      <div class="sub">下部ナビ「設定」タブ</div>
+    </div>
+  </div>
+
+  <ul class="steps">
+    <li><b>氏名・車番の登録</b> — 仲間の画面にはここで登録した氏名が表示されます</li>
+    <li><b>今月の目標設定</b> — 月のはじめに、出勤予定日数・目標金額を入れると、残り日数に応じた1日あたりの目安が自動計算されます</li>
+    <li><b>出退勤・運賃記録の手動修正</b> — 押し忘れや入力漏れを、過去にさかのぼって直せます</li>
+    <li><b>自分の乗務記録のCSV保存</b> — 月の最終日に退勤すると自動で保存画面が出ますが、「乗務記録CSVモーダルをテスト表示」からいつでも自分で開いて、今月分をファイルとして端末に保存できます</li>
+  </ul>
+
+  <div class="note">
+    <span>📥</span>
+    <div>月が変わると今月分の表示は新しい月の記録に切り替わります。先月分の売上・乗務記録を手元に残しておきたい場合は、月末のうちにCSV保存を済ませておくことをおすすめします。</div>
+  </div>
+</section>
+
+<section class="op" id="s10">
+  <div class="op-head">
+    <div class="op-num">10</div>
+    <div>
+      <h2>困ったときは</h2>
+      <div class="sub">よくある質問</div>
+    </div>
+  </div>
+
+  <ul class="steps">
+    <li><b>保存に失敗しましたという通知が出た</b> — 端末の空き容量が少なくなっている可能性があります。不要な写真・アプリを整理してください</li>
+    <li><b>仲間の地図で自分が動いているように見えない</b> — スマホの設定アプリ →「アプリ」→ 本アプリ →「権限」→「位置情報」が「常に許可」になっているか確認してください</li>
+    <li><b>プールの「◯号 ◯分」バッジが消えた</b> — 設定タブの「マーカー表示の状態を確認」で、今の判定状況を直接見られます</li>
+    <li><b>送り先の記録が急に見当たらない</b> — 設定タブの「氏名から過去のデータを復元する」で、クラウド上の記録から復元を試せます</li>
+  </ul>
+
+  <div class="note">
+    <span>💬</span>
+    <div>ここに無い症状や、操作で分からないことがあれば、遠慮なく管理者まで聞いてください。</div>
+  </div>
+</section>
+
+<footer>
+  イチバン羽田チームアプリ・使い方ガイド
+</footer>
+
+</body>
+</html>
