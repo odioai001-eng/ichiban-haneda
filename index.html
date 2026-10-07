@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-173 -->
+<!-- v20260902-174 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1305,7 +1305,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-173';
+const APP_BUILD='20260902-174';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -8830,7 +8830,35 @@ function rmDest(i){
   }
 }
 function markDone(i){destinations[i].done=!destinations[i].done;saveDests();renderDests();}
-function saveDests(){localStorage.setItem('taxi_dests',JSON.stringify(destinations));}
+// localStorageへの書き込みは、保存容量の上限超過等で失敗することがあるが、
+// 以前はエラー処理が一切無く、失敗しても何も知らせず静かに失敗していた。
+// その結果、Firebase（team_dests）への送信は正常に続いているのに、この端末の
+// ローカル保存（送り先タブの表示のもと）だけが古いまま止まり、長期間気づけない
+// という深刻な不具合が実際に発生した。失敗した場合は必ずトーストで知らせ、
+// 保存容量超過が疑われる場合は90日より古い記録を間引いて再保存を試みる
+// （間引かれた記録自体は、グループランキングに参加していればFirebase側に残る）
+function saveDests(){
+  try{
+    localStorage.setItem('taxi_dests',JSON.stringify(destinations));
+  }catch(e){
+    console.error('saveDests failed',e);
+    const isQuota=e&&(e.name==='QuotaExceededError'||e.code===22||e.code===1014);
+    if(isQuota){
+      const cutoff=Date.now()-90*24*3600*1000;
+      const before=destinations.length;
+      const pruned=destinations.filter(d=>!d.ts||d.ts>=cutoff);
+      if(pruned.length<before){
+        try{
+          localStorage.setItem('taxi_dests',JSON.stringify(pruned));
+          destinations=pruned;
+          toast(`⚠️ 保存容量が上限に達したため、送り先データの90日より古い記録${before-pruned.length}件を端末内から間引きました（仲間に共有済みのデータはFirebase側に残っています）`);
+          return;
+        }catch(e2){console.error('saveDests retry failed',e2);}
+      }
+    }
+    toast('⚠️ 送り先データの保存に失敗しました。端末の空き容量をご確認ください');
+  }
+}
 
 
 function initLocalChat(){
