@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-178 -->
+<!-- v20260902-179 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1309,7 +1309,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-178';
+const APP_BUILD='20260902-179';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2960,6 +2960,13 @@ function confirmEndDuty(){
   if(wasTestMode)toast('🧪 テストモードを終了しました');
   localStorage.removeItem('taxi_runtime_state');
   const name=localStorage.getItem('taxi_name')||'自分';
+  // 退勤したことを仲間にもチャット経由で知らせる（出勤時と同様、管理者の
+  // テスト出勤からの終了は送らない）
+  if(db&&!wasTestMode){
+    db.ref('chat').push({uid:myId,name,text:`🏠【自動】${name}さんが退勤しました。`,
+      time:new Date(endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:endTs,isAuto:true})
+      .catch(err=>console.error('chat auto push (duty end) failed',err));
+  }
   document.getElementById('duty-end-msg').textContent=`${name}さん、お疲れさまでした。`;
   if(settlementRecord){
     showSettlementReport(settlementRecord,()=>{document.getElementById('duty-end-modal').style.display='flex';});
@@ -3571,6 +3578,15 @@ function _startDuty(){
   setStatus('kuusha');
   saveAppState();
   toast('✅ 乗務開始');
+  // 出勤したことを仲間にもチャット経由で知らせる（isAuto:trueの自動投稿は
+  // 他の仲間の端末では通常のチャットメッセージと同じくOS通知にもなる。
+  // 管理者のテスト出勤は仲間に無関係なため送らない）
+  if(db&&!testMode){
+    const chatName=localStorage.getItem('taxi_name')||'自分';
+    db.ref('chat').push({uid:myId,name:chatName,text:`🚖【自動】${chatName}さんが出勤しました。`,
+      time:dutyStart.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:dutyStart.getTime(),isAuto:true})
+      .catch(err=>console.error('chat auto push (duty start) failed',err));
+  }
 }
 
 let jitsushaStart=null;
