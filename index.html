@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-182 -->
+<!-- v20260902-183 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1319,7 +1319,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-182';
+const APP_BUILD='20260902-183';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -8839,7 +8839,13 @@ function saveManualTrip(){
   // 後から正しい日付で入力し直せるようにするため
   const timeForTs=alightTime||boardTime||'12:00';
   const [th,tm]=timeForTs.split(':').map(Number);
-  const tripDate=new Date(y,mo-1,da,th||0,tm||0,0);
+  // 日付は「乗車した日」を選ぶのが自然だが、乗車・降車が日をまたぐ夜勤
+  // （例: 乗車23:24→降車00:09）では、降車時刻をそのまま選んだ日付に当てはめると
+  // 実際より1日早い日時になってしまう（シフトの範囲外になり、通し番号が
+  // 別扱いになる原因になっていた）。降車時刻が乗車時刻より前なら、日をまたいだ
+  // とみなして選んだ日付の翌日として扱う
+  const crossesMidnight=boardTime&&alightTime&&alightTime<boardTime;
+  const tripDate=new Date(y,mo-1,da+(crossesMidnight?1:0),th||0,tm||0,0);
   const dateStr=tripDate.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
   const tripTs=tripDate.getTime();
   const entry={
