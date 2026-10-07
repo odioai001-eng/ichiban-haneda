@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-177 -->
+<!-- v20260902-178 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -77,7 +77,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   border:1px solid var(--border);border-radius:14px;flex-shrink:0;
   padding:10px 8px;font-size:11px;font-weight:700;color:var(--text);
   display:flex;flex-direction:column;align-items:center;gap:6px}
-.map-zoom-ctrl{position:absolute;top:8px;right:8px;z-index:500;
+.map-zoom-ctrl{position:absolute;top:80px;right:8px;z-index:500;
   display:flex;flex-direction:column;gap:2px}
 .map-zoom-ctrl button{width:34px;height:34px;background:rgba(13,13,26,.82);
   backdrop-filter:blur(6px);border:1px solid var(--border);border-radius:8px;
@@ -1309,7 +1309,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-177';
+const APP_BUILD='20260902-178';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
