@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-174 -->
+<!-- v20260902-175 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1305,7 +1305,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-174';
+const APP_BUILD='20260902-175';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -2862,7 +2862,7 @@ function endDutyImmediate(){
         startTs:dutyStart.getTime(),endTs:provEndTs,
         durationSec:Math.floor((provEndTs-dutyStart.getTime())/1000)+1800
       });
-      localStorage.setItem('taxi_shift_log',JSON.stringify(shiftLog));
+      safeSaveLocalArray('taxi_shift_log',shiftLog,'出退勤記録');
     }catch(e){console.error('退勤時の暫定シフト記録に失敗しました',e);}
   }
 }
@@ -2912,7 +2912,7 @@ function confirmEndDuty(){
    durationSec:Math.floor((endTs-dutyStart.getTime())/1000)+1800
   };
   if(idx>=0)shiftLog[idx]=entry;else shiftLog.push(entry);
-  localStorage.setItem('taxi_shift_log',JSON.stringify(shiftLog));
+  safeSaveLocalArray('taxi_shift_log',shiftLog,'出退勤記録');
   // 退勤時点で出勤日数・売上をグループランキングにも反映する
   // （これまでは運賃を記録し直すまで古い日数のまま残ってしまっていた）
   pushTeamSales();
@@ -6133,7 +6133,7 @@ function saveManualShift(){
   const dateStr=startDate.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
   const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
   log.push({dateStr,startTs,endTs,durationSec});
-  localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+  safeSaveLocalArray('taxi_shift_log',log,'出退勤記録');
   renderShiftEntries();
   renderWorkStats();
   toast('✅ 出勤・退勤記録を保存しました');
@@ -6188,7 +6188,7 @@ function editShiftEntry(startTs){
  // 通常の退勤処理・手動記録と同じ+30分ボーナスを適用
  log[idx].durationSec=Math.floor((newEndTs-newStartTs)/1000)+1800;
  log[idx].dateStr=new Date(newStartTs).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
- localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_shift_log',log,'出退勤記録');
  toast('✅ 記録を更新しました');
  renderWorkStats();
  // 売上管理側の一覧もこのシフトの時刻範囲を元に組み立てているため、
@@ -6200,7 +6200,7 @@ function deleteShiftEntry(startTs){
  if(!confirm('この勤務記録を削除しますか？'))return;
  let log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
  log=log.filter(s=>s.startTs!==startTs);
- localStorage.setItem('taxi_shift_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_shift_log',log,'出退勤記録');
  toast('🗑 記録を削除しました');
  renderWorkStats();
  renderSalesStats();
@@ -6318,7 +6318,7 @@ async function editFareDayEntry(ts){
   :log.filter(e=>e.dateStr!==g.dateStr);
  const newFare=Math.round((parseInt(newFareExTax)||0)*1.1);
  log.push({dateStr:g.dateStr,fare:newFare,toll:parseInt(newToll)||0,ts:g.ts,tripTs:null,manual:true});
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast('✅ 記録を更新しました');
  renderSalesStats();
  updateDailyBar();
@@ -6332,7 +6332,7 @@ function deleteFareDayEntry(ts){
  log=g.tsRange
   ?log.filter(e=>!((e.ts||0)>=g.tsRange.start&&(e.ts||0)<=g.tsRange.end))
   :log.filter(e=>e.dateStr!==g.dateStr);
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast('🗑 記録を削除しました');
  renderSalesStats();
  updateDailyBar();
@@ -6381,7 +6381,7 @@ function saveManualFareEntry(){
   dateStr:entryDate.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}),
   fare,toll:0,ts:entryDate.getTime(),tripTs:null,manual:true
  });
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast(`✅ ${dateVal} の売上 ¥${fareExTax.toLocaleString()}（税抜）を記録しました`);
  document.getElementById('sf-date').value='';
  document.getElementById('sf-fare').value='';
@@ -6414,7 +6414,7 @@ async function editManualFareEntry(ts){
  const newFareExTax=await promptNumber('その日の合計売上（円・税抜）',exTax(log[idx].fare));
  if(newFareExTax===null)return;
  log[idx].fare=Math.round((parseInt(newFareExTax)||0)*1.1);
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast('✅ 記録を更新しました');
  renderSalesStats();
  updateDailyBar();
@@ -6425,7 +6425,7 @@ function deleteManualFareEntry(ts){
  if(!confirm('この記録を削除しますか？'))return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  log=log.filter(e=>e.ts!==ts);
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast('🗑 記録を削除しました');
  renderSalesStats();
  updateDailyBar();
@@ -6795,7 +6795,7 @@ function deleteAllFareLogByTripTs(tripTs){
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  const filtered=log.filter(e=>e.tripTs!==tripTs);
  if(filtered.length!==log.length){
-  localStorage.setItem('taxi_fare_log',JSON.stringify(filtered));
+  safeSaveLocalArray('taxi_fare_log',filtered,'運賃記録');
   renderSalesStats();updateDailyBar();pushTeamSales();
  }
 }
@@ -6883,7 +6883,7 @@ function syncFareLogByTripTs(trip,fareOrNull){
   });
   toast('✅ 運賃記録を更新しました');
  }
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  renderSalesStats();
  updateDailyBar();
  pushTeamSales();
@@ -6907,7 +6907,7 @@ function syncFareLogEtcByTripTs(trip,etc,etcPaymentMethod){
   const dateStr=new Date(tripTs).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
   log.push({dateStr,fare:0,toll:0,ts:tripTs,tripTs,paymentMethod:null,discount:0,etc:etc||0,etcPaymentMethod:etcPaymentMethod||null});
  }
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast('✅ 高速代を更新しました');
  renderSalesStats();
  updateDailyBar();
@@ -6938,7 +6938,7 @@ function saveFareEntry(fare,toll,tripTs,paymentMethod,discount,etc,welfareSheets
  }
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  log.push(entry);
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast(`💰 運賃 ¥${fare.toLocaleString()} を記録しました`);
  renderSalesStats();
  updateDailyBar();
@@ -7161,7 +7161,7 @@ function resyncFareLogFromDestinations(shiftStartTs,shiftEndTs){
       changed=true;createdCount++;
     }
   });
-  if(changed)localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+  if(changed)safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
   return {changed,inRangeCount,updatedCount,createdCount};
 }
 // 保存済みの精算記録は退勤時点のtaxi_fare_logの内容を1回だけ集計して保存
@@ -7573,7 +7573,7 @@ async function editFareEntry(ts){
  if(newToll===null)return;
  log[idx].fare=parseInt(newFare)||0;
  log[idx].toll=parseInt(newToll)||0;
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast('✅ 記録を更新しました');
  renderSalesStats();
  pushTeamSales();
@@ -7583,7 +7583,7 @@ function deleteFareEntry(ts){
  if(!confirm('この記録を削除しますか？'))return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  log=log.filter(e=>e.ts!==ts);
- localStorage.setItem('taxi_fare_log',JSON.stringify(log));
+ safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
  toast('🗑 記録を削除しました');
  renderSalesStats();
  pushTeamSales();
@@ -8832,34 +8832,35 @@ function rmDest(i){
 function markDone(i){destinations[i].done=!destinations[i].done;saveDests();renderDests();}
 // localStorageへの書き込みは、保存容量の上限超過等で失敗することがあるが、
 // 以前はエラー処理が一切無く、失敗しても何も知らせず静かに失敗していた。
-// その結果、Firebase（team_dests）への送信は正常に続いているのに、この端末の
-// ローカル保存（送り先タブの表示のもと）だけが古いまま止まり、長期間気づけない
-// という深刻な不具合が実際に発生した。失敗した場合は必ずトーストで知らせ、
-// 保存容量超過が疑われる場合は90日より古い記録を間引いて再保存を試みる
-// （間引かれた記録自体は、グループランキングに参加していればFirebase側に残る）
-function saveDests(){
+// その結果、Firebase（team_dests等）への送信は正常に続いているのに、この端末の
+// ローカル保存だけが古いまま止まり、長期間気づけないという深刻な不具合が
+// 実際に発生した。送り先・運賃記録・出退勤記録など、保存に失敗してはならない
+// データはすべてこの関数を通して保存する。失敗時は必ずトーストで知らせ、
+// 保存容量超過が疑われる場合は90日より古い記録（ts基準）を間引いて再保存を
+// 試みる（間引かれた記録自体は、グループランキングに参加していればFirebase側に残る）
+function safeSaveLocalArray(key,arr,label){
   try{
-    localStorage.setItem('taxi_dests',JSON.stringify(destinations));
+    localStorage.setItem(key,JSON.stringify(arr));
+    return arr;
   }catch(e){
-    console.error('saveDests failed',e);
+    console.error('localStorage保存失敗: '+key,e);
     const isQuota=e&&(e.name==='QuotaExceededError'||e.code===22||e.code===1014);
-    if(isQuota){
+    if(isQuota&&Array.isArray(arr)&&arr.length>0){
       const cutoff=Date.now()-90*24*3600*1000;
-      const before=destinations.length;
-      const pruned=destinations.filter(d=>!d.ts||d.ts>=cutoff);
-      if(pruned.length<before){
+      const pruned=arr.filter(d=>!d||!d.ts||d.ts>=cutoff);
+      if(pruned.length<arr.length){
         try{
-          localStorage.setItem('taxi_dests',JSON.stringify(pruned));
-          destinations=pruned;
-          toast(`⚠️ 保存容量が上限に達したため、送り先データの90日より古い記録${before-pruned.length}件を端末内から間引きました（仲間に共有済みのデータはFirebase側に残っています）`);
-          return;
-        }catch(e2){console.error('saveDests retry failed',e2);}
+          localStorage.setItem(key,JSON.stringify(pruned));
+          toast(`⚠️ 保存容量が上限に達したため、${label}の90日より古い記録${arr.length-pruned.length}件を端末内から間引きました（仲間に共有済みのデータはFirebase側に残っています）`);
+          return pruned;
+        }catch(e2){console.error('localStorage保存リトライ失敗: '+key,e2);}
       }
     }
-    toast('⚠️ 送り先データの保存に失敗しました。端末の空き容量をご確認ください');
+    toast(`⚠️ ${label}の保存に失敗しました。端末の空き容量をご確認ください`);
+    return arr;
   }
 }
-
+function saveDests(){destinations=safeSaveLocalArray('taxi_dests',destinations,'送り先データ');}
 
 function initLocalChat(){
   broadcastCh=new BroadcastChannel('taxi_chat_v2');
