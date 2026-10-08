@@ -91,6 +91,12 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
   text-align:center;font-size:22px;font-weight:700;cursor:pointer;
   padding:16px 14px calc(16px + env(safe-area-inset-top,0px))}
 .sync-status{font-size:19px;color:var(--muted);margin-top:10px;line-height:1.6}
+.time-in{cursor:pointer;font-variant-numeric:tabular-nums}
+.tk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.tk-grid .btn{padding:20px 0;font-size:32px}
+#time-keypad-display{text-align:center;font-size:48px;font-weight:800;font-variant-numeric:tabular-nums;
+  letter-spacing:3px;color:var(--cyan);background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:8px}
+#time-keypad-hint{text-align:center;font-size:19px;color:var(--muted);margin-bottom:12px}
 .setup-screen{display:none;position:fixed;inset:0;background:var(--bg);z-index:5000;
   align-items:center;justify-content:center;padding:20px;overflow-y:auto}
 .setup-screen.open{display:flex}
@@ -157,9 +163,9 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
       <label>日付</label>
       <input type="date" id="ml-date">
       <label>出勤時刻</label>
-      <input type="time" id="ml-start-time">
+      <input type="text" inputmode="none" readonly class="time-in" id="ml-start-time" placeholder="--:--" onclick="openTimeKeypad('ml-start-time')">
       <label>退勤時刻</label>
-      <input type="time" id="ml-end-time">
+      <input type="text" inputmode="none" readonly class="time-in" id="ml-end-time" placeholder="--:--" onclick="openTimeKeypad('ml-end-time')">
       <div style="font-size:19px;color:var(--muted);margin:-8px 0 14px">※日をまたぐ勤務（夜勤）の場合、退勤時刻は翌日として自動計算されます</div>
       <label>その日の税抜き売上（円）</label>
       <input type="number" id="ml-fare" inputmode="numeric" placeholder="例: 45000">
@@ -228,7 +234,7 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
   <div class="modal">
     <h3>出勤<button class="mc" onclick="closeClockIn()">✕</button></h3>
     <label>出勤時刻</label>
-    <input type="time" id="ci-start-time">
+    <input type="text" inputmode="none" readonly class="time-in" id="ci-start-time" placeholder="--:--" onclick="openTimeKeypad('ci-start-time')">
     <label>本日の予定時間</label>
     <div class="row2"><span class="rl">予定</span><span class="rv" id="ci-plan-disp" style="color:var(--gold)">未設定</span></div>
     <div class="btn-row">
@@ -237,7 +243,7 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
     </div>
     <div id="ci-endtime-picker" style="display:none;margin-top:12px">
       <label>上がり予定時刻</label>
-      <input type="time" id="ci-end-time-input" onchange="onManualEndTimeChange()">
+      <input type="text" inputmode="none" readonly class="time-in" id="ci-end-time-input" placeholder="--:--" onclick="openTimeKeypad('ci-end-time-input')" onchange="onManualEndTimeChange()">
     </div>
     <label class="check-row">
       <input type="checkbox" id="ci-terminal-check" onchange="updateConfirmEnabled()">
@@ -251,7 +257,7 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
   <div class="modal">
     <h3>退勤<button class="mc" onclick="closeClockOut()">✕</button></h3>
     <label>退勤時刻</label>
-    <input type="time" id="co-end-time">
+    <input type="text" inputmode="none" readonly class="time-in" id="co-end-time" placeholder="--:--" onclick="openTimeKeypad('co-end-time')">
     <label>勤務時間</label>
     <input type="text" id="co-hours" placeholder="例: 12時間30分">
     <label>本日の税抜き売上（円）</label>
@@ -259,6 +265,30 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
     <label>自腹高速代（円）</label>
     <input type="number" id="co-toll" inputmode="numeric" placeholder="0">
     <button class="btn btn-p btn-full" onclick="confirmClockOut()">✅ 退勤する</button>
+  </div>
+</div>
+
+<!-- 時刻入力用の専用テンキー（type="time"では機種によって入力できないため、代わりに表示する） -->
+<div class="overlay" id="time-keypad-overlay" style="z-index:9500" onclick="if(event.target===this)cancelTimeKeypad()">
+  <div class="modal">
+    <h3><span id="time-keypad-title">時刻を入力</span><button class="mc" onclick="cancelTimeKeypad()">✕</button></h3>
+    <div id="time-keypad-display">--:--</div>
+    <div id="time-keypad-hint">数字4ケタで入力（例: 0930 → 09:30）</div>
+    <div class="tk-grid">
+      <button type="button" class="btn btn-g" onclick="keypadPress('1')">1</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('2')">2</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('3')">3</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('4')">4</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('5')">5</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('6')">6</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('7')">7</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('8')">8</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('9')">9</button>
+      <button type="button" class="btn btn-g" onclick="keypadClear()" style="font-size:24px">C</button>
+      <button type="button" class="btn btn-g" onclick="keypadPress('0')">0</button>
+      <button type="button" class="btn btn-g" onclick="keypadBackspace()">⌫</button>
+    </div>
+    <button type="button" class="btn btn-p btn-full" onclick="confirmTimeKeypad()">✅ 決定</button>
   </div>
 </div>
 
@@ -556,6 +586,50 @@ function updateDutyCountdown(){
   const h=Math.floor(totalMin/60),m=totalMin%60;
   if(diffMs>=0){el.textContent=`あと ${h}時間${pad(m)}分`;el.style.color='var(--gold)';}
   else{el.textContent=`定時超過 ${h}時間${pad(m)}分`;el.style.color='var(--red)';}
+}
+
+// 時刻入力用の専用テンキー。数字を押すと右から詰めて HH:MM になる
+// （例: 9→3→0 で 09:30）。開いた直後は現在の値を表示し、最初の数字で入力し直しになる
+let timeKeypadTargetId=null,timeKeypadDigits='',timeKeypadFresh=true;
+function renderTimeKeypad(){
+  const disp=document.getElementById('time-keypad-display');
+  if(!timeKeypadDigits){disp.textContent='--:--';return;}
+  const d=timeKeypadDigits.padStart(4,'0');
+  disp.textContent=d.slice(0,2)+':'+d.slice(2);
+}
+function openTimeKeypad(inputId){
+  timeKeypadTargetId=inputId;
+  const el=document.getElementById(inputId);
+  const lbl=el.previousElementSibling;
+  document.getElementById('time-keypad-title').textContent=(lbl&&lbl.tagName==='LABEL')?lbl.textContent:'時刻を入力';
+  timeKeypadDigits=(el.value||'').replace(/\D/g,'');
+  timeKeypadFresh=true;
+  renderTimeKeypad();
+  document.getElementById('time-keypad-overlay').classList.add('open');
+}
+function keypadPress(ch){
+  if(timeKeypadFresh){timeKeypadDigits='';timeKeypadFresh=false;}
+  if(timeKeypadDigits.length>=4)return;
+  timeKeypadDigits+=ch;
+  renderTimeKeypad();
+}
+function keypadBackspace(){timeKeypadFresh=false;timeKeypadDigits=timeKeypadDigits.slice(0,-1);renderTimeKeypad();}
+function keypadClear(){timeKeypadFresh=false;timeKeypadDigits='';renderTimeKeypad();}
+function cancelTimeKeypad(){
+  document.getElementById('time-keypad-overlay').classList.remove('open');
+  timeKeypadTargetId=null;
+}
+function confirmTimeKeypad(){
+  let val='';
+  if(timeKeypadDigits){
+    const d=timeKeypadDigits.padStart(4,'0');
+    const h=parseInt(d.slice(0,2),10),m=parseInt(d.slice(2),10);
+    if(h>23||m>59){toast('⚠️ 正しい時刻を入力してください（00:00〜23:59）');return;}
+    val=d.slice(0,2)+':'+d.slice(2);
+  }
+  const el=timeKeypadTargetId&&document.getElementById(timeKeypadTargetId);
+  cancelTimeKeypad();
+  if(el){el.value=val;el.dispatchEvent(new Event('change'));}
 }
 
 function openClockInModal(){
