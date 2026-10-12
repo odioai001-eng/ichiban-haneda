@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-185 -->
+<!-- v20260902-186 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1319,7 +1319,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-185';
+const APP_BUILD='20260902-186';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1351,11 +1351,16 @@ let dutyStart=null,dutyInterval=null,myLat=null,myLng=null,myAccuracy=null;
 // ブレで地図上のアイコンが小刻みに飛ぶ／震える見た目を抑えるためだけのもの
 let myDisplayLat=null,myDisplayLng=null;
 const GPS_DISPLAY_SMOOTH_ALPHA=0.4; // 1に近いほど最新フィックスに追従、小さいほど滑らか（遅れとのバランスを見てこの値にした）
-function updateDisplayPosition(lat,lng){
+// ネイティブの高精度な位置（誤差数m）で走行中（時速約5km以上）の時は、平滑化による
+// 遅れ（実際の位置より数十m後ろを表示してしまう）の方が問題になるため、
+// 最新の位置への追従を強める。停車中は従来通りの強さで、細かいブレだけを抑える
+const GPS_DISPLAY_SMOOTH_ALPHA_MOVING=0.75;
+function updateDisplayPosition(lat,lng,alpha){
+  const a=alpha===undefined?GPS_DISPLAY_SMOOTH_ALPHA:alpha;
   if(myDisplayLat===null){myDisplayLat=lat;myDisplayLng=lng;}
   else{
-    myDisplayLat+=(lat-myDisplayLat)*GPS_DISPLAY_SMOOTH_ALPHA;
-    myDisplayLng+=(lng-myDisplayLng)*GPS_DISPLAY_SMOOTH_ALPHA;
+    myDisplayLat+=(lat-myDisplayLat)*a;
+    myDisplayLng+=(lng-myDisplayLng)*a;
   }
 }
 let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
@@ -2390,7 +2395,51 @@ function currentPoolWait(){
 function myActiveWaitInfo(){
   return currentPoolWait()||((waitInterval&&waitStart)?{spot:null,waitStart,mins:Math.max(0,Math.floor((Date.now()-waitStart)/60000))}:null);
 }
-function updateMyMarker(lat,lng){
+// マーカーを今の位置から新しい位置まで、指定した時間をかけて直線的に動かす。
+// 位置情報は1〜数秒おきにしか届かないため、そのままsetLatLngすると、地図上の
+// アイコンが「瞬間移動」を繰り返す飛び飛びの動きに見えていた。更新の間隔に
+// あわせて補間することで、連続して走っているように見せる。
+// 長距離の移動（バックグラウンド復帰後・電波が途切れた後の再接続等）は補間せず
+// 即座に切り替え、ページが非表示の間（requestAnimationFrameが止まる）も
+// 即座に切り替える
+function animateMarkerTo(marker,lat,lng,durationMs){
+  if(marker._anim&&marker._animTo&&marker._animTo[0]===lat&&marker._animTo[1]===lng)return;
+  if(marker._anim){cancelAnimationFrame(marker._anim.raf);marker._anim=null;}
+  marker._animTo=[lat,lng];
+  const from=marker.getLatLng();
+  const dist=leafletMap?leafletMap.distance(from,[lat,lng]):0;
+  if(!durationMs||dist<1||dist>800||document.hidden||!window.requestAnimationFrame){
+    marker.setLatLng([lat,lng]);
+    return;
+  }
+  const t0=performance.now();
+  const dLat=lat-from.lat,dLng=lng-from.lng;
+  const anim={raf:0};
+  marker._anim=anim;
+  const step=now=>{
+    const k=Math.min(1,(now-t0)/durationMs);
+    marker.setLatLng([from.lat+dLat*k,from.lng+dLng*k]);
+    if(k<1)anim.raf=requestAnimationFrame(step);
+    else marker._anim=null;
+  };
+  anim.raf=requestAnimationFrame(step);
+}
+// 自分をフォロー中の地図の中心を、マーカーの動きにあわせて滑らかに動かす。
+// LeafletのsetView（初期値は0.25秒・減速しながら止まる動き）を1〜数秒おきに
+// 呼ぶと、地図が「少し動いて止まる」を繰り返す動きになってしまうため、
+// 次の位置が届くまでの時間をかけて一定の速さで動かす。長距離（600m超）の
+// 移動は、補間せず即座に切り替える
+function followCameraTo(lat,lng,durationMs){
+  if(!leafletMap)return;
+  const dist=leafletMap.distance(leafletMap.getCenter(),[lat,lng]);
+  if(dist<1)return;
+  if(!durationMs||dist>600||document.hidden){
+    leafletMap.setView([lat,lng],leafletMap.getZoom(),{animate:false});
+    return;
+  }
+  leafletMap.panTo([lat,lng],{animate:true,duration:durationMs/1000,easeLinearity:1,noMoveStart:true});
+}
+function updateMyMarker(lat,lng,animMs){
   const name=localStorage.getItem('taxi_name')||'自分';
   const car=localStorage.getItem('taxi_car')||'';
   const plate=localStorage.getItem('taxi_number')||'';
@@ -2399,7 +2448,25 @@ function updateMyMarker(lat,lng){
   const poolLabel=currentPoolWait();
   const icon=makeDriverIcon(currentStatus,name,true,car,ageSec,plate,isWeak,poolLabel);
   if(!myMarker){myMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(leafletMap);}
-  else{myMarker.setLatLng([lat,lng]).setIcon(icon);}
+  else{
+    // GPSの新しい位置が届いた時（animMsあり）だけ位置を動かす。ステータス変更・
+    // 定期的な再描画（animMsなし）は、アイコンの見た目だけを更新し、補間中の
+    // 位置を途中で上書きして飛ばしてしまわないようにする
+    if(animMs!==undefined)animateMarkerTo(myMarker,lat,lng,animMs);
+    else if(!myMarker._anim)myMarker.setLatLng([lat,lng]);
+    myMarker.setIcon(icon);
+  }
+}
+// 仲間のマーカーを、前回の位置更新から今回までの間隔をかけて滑らかに動かす
+// （位置が変わっていない再描画では何もしない）
+function movePeerMarker(pm,lat,lng){
+  const last=pm._lastPos;
+  if(last&&last[0]===lat&&last[1]===lng)return;
+  const nowMs=Date.now();
+  const dt=pm._lastMoveAt?nowMs-pm._lastMoveAt:0;
+  pm._lastMoveAt=nowMs;
+  pm._lastPos=[lat,lng];
+  animateMarkerTo(pm,lat,lng,dt?Math.min(Math.max(dt,800),4500):0);
 }
 function updatePeerMarker(id,d){
   if(id===myId)return;
@@ -2424,9 +2491,14 @@ function updatePeerMarker(id,d){
   const poolLabel=domesticPoolLabel(d.waitSpot,d.waitSince);
   const icon=makeDriverIcon(status,d.name||'不明',false,d.car||'',ageSec,d.plate||'',!!d.gpsWeak,poolLabel);
   if(followPeerId===id&&d.lat&&d.lng&&leafletMap)panMapTo(()=>leafletMap.panTo([Number(d.lat),Number(d.lng)],{animate:true,duration:0.5}));
-  if(peerMarkers[id]){peerMarkers[id].setLatLng([d.lat,d.lng]).setIcon(icon);}
+  if(peerMarkers[id]){
+    const pm=peerMarkers[id];
+    if(d.lat&&d.lng)movePeerMarker(pm,Number(d.lat),Number(d.lng));
+    pm.setIcon(icon);
+  }
   else if(d.lat&&d.lng){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
+    m._lastPos=[Number(d.lat),Number(d.lng)];m._lastMoveAt=Date.now();
     m.bindPopup(`<b>${esc(d.name||'不明')}</b><br>${statusCfg[status].label}<br>${d.car||''}`);
     m.on('click',()=>{
       followPeerId=id;autoFollow=false;
@@ -2656,9 +2728,40 @@ function startGPS(){
   },10000);
 }
 
-function _attachGPSWatch(){
-  if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
-  gpsWatch=navigator.geolocation.watchPosition(pos=>{
+// ===== Android版アプリのネイティブ位置情報サービスからの高精度な位置の受信 =====
+// WebView標準のwatchPositionは、更新間隔・精度が端末・WebViewの実装に左右されやすく、
+// アプリを閉じている間は止まってしまう。Android版アプリでは、位置情報の送信を
+// 担うネイティブのフォアグラウンドサービス（FusedLocationProvider・高精度・1〜2秒間隔）が
+// 取得した位置を、アプリが画面に出ている間だけwindow.onNativeLocationへ渡してくる。
+// 受け取った位置は、ブラウザ標準のGPSと全く同じ処理（handleGpsFix）に通す。
+// ネイティブから位置が届かない端末・状況（古いAndroid版・iPhone・通常のブラウザ等）では、
+// これまで通りブラウザ標準のGPSをそのまま使う
+let lastNativeFixTs=0,lastNativeWriterOkTs=0;
+function nativeFeedActive(){return Date.now()-lastNativeFixTs<8000;}
+// ネイティブ側が実際にFirebaseへ位置を書き込めている間は、Web側は位置（lat/lng/ts）を
+// 書かない（同じdrivers/{id}へ別々の位置を交互に書いて、仲間の画面でアイコンが飛ぶのを防ぐ）
+function nativeWriterActive(){return nativeFeedActive()&&Date.now()-lastNativeWriterOkTs<20000;}
+window.onNativeLocation=function(lat,lng,acc,spd,brg,ts,writerOk){
+  if(!isDuty||!leafletMap)return;
+  if(typeof lat!=='number'||typeof lng!=='number'||isNaN(lat)||isNaN(lng))return;
+  const now=Date.now();
+  lastNativeFixTs=now;
+  if(writerOk)lastNativeWriterOkTs=now;
+  handleGpsFix({coords:{
+    latitude:lat,longitude:lng,
+    accuracy:(typeof acc==='number'&&acc>=0)?acc:null,
+    speed:(typeof spd==='number'&&spd>=0)?spd:null,
+    heading:(typeof brg==='number'&&brg>=0)?brg:null
+  },timestamp:ts||now},'native');
+};
+
+// GPSの位置（pos）1件を処理する共通の入口。ブラウザ標準のwatchPositionと、
+// 上のwindow.onNativeLocation（ネイティブ）のどちらからの位置も、同じ処理
+// （精度フィルター・出発/到着判定・地図表示・仲間への共有）に通す
+function handleGpsFix(pos,source){
+    // ネイティブから高精度な位置が届いている間は、ブラウザ標準のGPSは使わない
+    // （2系統の位置が交互に反映されて、地図上のアイコンが飛ぶのを防ぐ）
+    if(source==='browser'&&nativeFeedActive())return;
     gpsLastUpdate=Date.now();
     if(gpsRetryTimer){clearTimeout(gpsRetryTimer);gpsRetryTimer=null;}
     if(gpsWeakHeartbeat){clearInterval(gpsWeakHeartbeat);gpsWeakHeartbeat=null;}
@@ -2676,18 +2779,24 @@ function _attachGPSWatch(){
     pendingCatchUpCheck=false;
     myLat=fixLat; myLng=fixLng;
     myAccuracy=typeof pos.coords.accuracy==='number'?pos.coords.accuracy:null;
+    // 直前に採用した位置から今回までの間隔。マーカー・カメラをこの時間をかけて
+    // 滑らかに動かすために使う（位置が1〜数秒おきにしか届かないため、そのまま
+    // 切り替えると、地図上のアイコンが「瞬間移動」を繰り返すように見えていた）
+    const prevFixTs=lastAcceptedFix?lastAcceptedFix.ts:0;
+    const fixDtMs=prevFixTs?Math.min(Math.max(gpsLastUpdate-prevFixTs,400),2500):0;
     lastAcceptedFix={lat:myLat,lng:myLng,ts:gpsLastUpdate};
     // checkGeofences（出発・到着判定）は上のmyLat/myLng（生の値）をそのまま使う。
     // 地図の表示・自分のカメラ追従・仲間への位置共有には、平滑化した
     // myDisplayLat/myDisplayLngを使い、細かいブレを見た目上だけ抑える
-    updateDisplayPosition(myLat,myLng);
-    updateMyMarker(myDisplayLat,myDisplayLng);
+    const movingFast=source==='native'&&typeof pos.coords.speed==='number'&&pos.coords.speed>1.5;
+    updateDisplayPosition(myLat,myLng,movingFast?GPS_DISPLAY_SMOOTH_ALPHA_MOVING:undefined);
+    updateMyMarker(myDisplayLat,myDisplayLng,fixDtMs);
     hideGpsPermissionBanner();
     hideGpsUnavailableBanner();
     document.getElementById('gps-dot').style.background='';
     document.getElementById('gps-dot').classList.add('on');
     document.getElementById('gps-txt').textContent=`${myLat.toFixed(4)}, ${myLng.toFixed(4)}`;
-    if(autoFollow&&!followPeerId&&leafletMap)panMapTo(()=>leafletMap.setView([myDisplayLat,myDisplayLng]));
+    if(autoFollow&&!followPeerId&&leafletMap)panMapTo(()=>followCameraTo(myDisplayLat,myDisplayLng,fixDtMs));
     // 仲間フォロー中は、自分のGPS更新と同じタイミングで、仲間の最新位置に合わせて
     // 画面を追従させる（相手側のFirebase更新頻度だけに頼らず、自分のフォローと
     // 同じ「動き」になるようにするため）
@@ -2712,7 +2821,14 @@ function _attachGPSWatch(){
       }
     }
     updatePosHistory(myLat,myLng,pos.coords.speed);
-  },err=>{
+}
+
+function _attachGPSWatch(){
+  if(gpsWatch!==null){navigator.geolocation.clearWatch(gpsWatch);gpsWatch=null;}
+  gpsWatch=navigator.geolocation.watchPosition(pos=>handleGpsFix(pos,'browser'),err=>{
+    // ネイティブから高精度な位置が届いている間は、ブラウザ標準のGPSの失敗
+    // （取得不可・タイムアウト等）は問題にならないため、警告・再起動は行わない
+    if(nativeFeedActive())return;
     // 位置情報の利用が拒否されている場合、watchPositionは何度再試行しても
     // 成功せずmyLatが一度もセットされないため、pushMyPosition自体が一度も
     // 呼ばれず、出勤ボタンを押しても仲間に自分のアイコンが全く表示されない。
@@ -2815,11 +2931,53 @@ function toggleDuty(){
 // AndroidBridge.setDutyStatus(bool)が実装されている場合のみ呼び出す
 // （通常のブラウザで開いている場合はwindow.AndroidBridgeが存在しないため無害）
 function notifyAndroidDutyStatus(isDutyNow){
+  // 管理者のテスト出勤は仲間に一切表示しない（共有データへ書き込まない）ことが
+  // 前提。ネイティブの位置送信サービスは仲間の地図に出るデータを書き込むため、
+  // テスト出勤では開始しない
+  if(isDutyNow&&testMode)isDutyNow=false;
   try{
+    // サービスは開始された直後からFirebaseへ書き込むため、書き込む内容
+    // （ID・氏名・状態・車番・出勤時刻）を先に渡しておく
+    if(isDutyNow)syncPresenceToAndroid();
     if(window.AndroidBridge&&typeof window.AndroidBridge.setDutyStatus==='function'){
       window.AndroidBridge.setDutyStatus(isDutyNow);
     }
   }catch(e){console.error('AndroidBridgeへの出退勤通知に失敗しました',e);}
+}
+// Android版アプリでは、バックグラウンドや閉じている間もネイティブのサービスが位置を
+// 送り続ける。その間はWebViewのJavaScriptが止まっているため、サービスが自分で
+// 「乗務中」であることを示す情報（dutyActive）と、氏名・状態・車番・出勤時刻を
+// Firebase上の自分のレコードへ一緒に書き込めるよう、その内容をネイティブへ渡しておく。
+// 内容が変わった時だけ送る（pushMyPositionから毎回呼ばれても、通信は発生しない）
+let lastAndroidPresenceSig='';
+function syncPresenceToAndroid(){
+  if(!window.AndroidBridge||typeof window.AndroidBridge.setPresence!=='function')return;
+  const args=[
+    myId,
+    localStorage.getItem('taxi_name')||'',
+    currentStatus||'kuusha',
+    localStorage.getItem('taxi_car')||'',
+    localStorage.getItem('taxi_number')||'',
+    dutyStart?String(dutyStart.getTime()):'0'
+  ];
+  const sig=args.join('|');
+  if(sig===lastAndroidPresenceSig)return;
+  try{
+    window.AndroidBridge.setPresence(...args);
+    lastAndroidPresenceSig=sig;
+  }catch(e){console.error('AndroidBridge.setPresenceに失敗しました',e);}
+}
+// 出勤中、サーバーが切断を検知した時点で自分のレコード（drivers/{myId}）を自動的に
+// 消すよう予約する。Android版アプリでは予約しない。アプリをバックグラウンドに回す・
+// 閉じるとWebView側のFirebase接続は切れるが、ネイティブのサービスは別の接続で位置を
+// 送り続けている。その状態でこの予約が実行されると、dutyActive・状態・出勤時刻
+// などレコード全体が消され、サービスが位置だけを書き直しても（dutyActiveが無いため）
+// 仲間の画面からは「乗務中でない」とみなされて消えてしまっていた。Android版では
+// 退勤時の明示的な削除と、位置更新が1分途絶えた場合の自動非表示（PEER_ALIVE_MS）に任せる
+function registerDriverOnDisconnect(){
+  if(!db||testMode)return;
+  if(window.AndroidBridge)return;
+  db.ref('drivers/'+myId).onDisconnect().remove();
 }
 function endDutyImmediate(){
   if(!isDuty)return;
@@ -3569,7 +3727,7 @@ function _startDuty(){
     db.ref('drivers/'+myId).update({dutyStartTs:dutyStart.getTime()}).catch(err=>console.error('drivers dutyStartTs update failed',err));
     // 接続確立時（.info/connected）にも登録しているが、既に接続済みの状態で
     // 出勤した場合はそのイベントが再発火しないため、ここでも登録しておく
-    db.ref('drivers/'+myId).onDisconnect().remove();
+    registerDriverOnDisconnect();
     // team_salesは1分ごとの自動送信（isDuty中）や運賃記録時にしか更新して
     // いなかったため、まだ一度も運賃を記録していない出勤直後は「本日の売り上げ
     // ランキング（グループ）」に自分の行自体がまだ現れず、出庫・帰庫予定も
@@ -3848,6 +4006,9 @@ function restoreAppState(){
   // GPS再開・Firebase更新
   startGPS();
   requestNotificationPermission();
+  // アプリを開き直した時点でも、ネイティブの位置送信サービス（アプリを閉じている間も
+  // 動いていた場合はそのまま動き続けている）へ、今の状態・車番等を伝えておく
+  if(!testMode)syncPresenceToAndroid();
   toast('🔄 乗務状態を復元しました');
 }
 
@@ -4095,7 +4256,7 @@ function connectFirebase(config){
         // 予約しておくことで、クライアント側の後始末が実行できなくても
         // 確実に消えるようにする。再接続のたびに予約し直す必要があるため、
         // 接続確立のたびにここで登録する
-        if(isDuty&&!testMode)db.ref('drivers/'+myId).onDisconnect().remove();
+        if(isDuty)registerDriverOnDisconnect();
       }else{dot.style.background='var(--red)';txt.textContent='切断中...';}
     });
     db.ref('drivers').on('child_added',snap=>{
@@ -4334,6 +4495,9 @@ function connectFirebase(config){
 }
 
 function pushMyPosition(gpsWeak=false){
+  // Android版アプリのネイティブ位置送信サービスへ、状態・車番等の変更を伝える
+  // （前回から変わっていなければ何もしない）。Firebaseに繋がっていなくても渡す
+  if(isDuty&&!testMode)syncPresenceToAndroid();
   if(!db||!isDuty||myLat===null||testMode)return;
   // モバイルブラウザは、バックグラウンドに回ったタブ・PWAのインスタンスを完全に
   // 終了させず一時停止するだけのことがある。その状態で別のタブ・起動から退勤する
@@ -4344,18 +4508,39 @@ function pushMyPosition(gpsWeak=false){
   // （taxi_runtime_state）も毎回確認し、実際には既に退勤済みであれば送信しない
   if(!localStorage.getItem('taxi_runtime_state'))return;
   const name=localStorage.getItem('taxi_name')||'自分';
-  // dutyActive:trueは、この関数（出勤中のWeb側の通常の位置送信）からしか
-  // 送らない。Android版アプリ内蔵の位置送信サービス等、この関数を経由しない
-  // 別経路からの書き込みでtsだけが更新され続けた場合でも、dutyActiveが
-  // 伴わなければ「乗務中」とはみなさないようにするための印
-  db.ref('drivers/'+myId).update({
-    name,lat:myDisplayLat??myLat,lng:myDisplayLng??myLng,status:currentStatus,
+  // dutyActive:trueは、出勤中であることを示す印。ネイティブ側が書く場合も、
+  // 同じく出勤中（is_duty）の間だけ付ける。tsだけが何らかの理由で更新され続けても、
+  // dutyActiveが伴わなければ「乗務中」とはみなさないための二重チェック
+  const base={
+    name,status:currentStatus,
     car:localStorage.getItem('taxi_car')||'',
     plate:localStorage.getItem('taxi_number')||'',
-    ts:Date.now(),gpsWeak:gpsWeak||null,
     dutyActive:true
+  };
+  // Android版アプリのネイティブ位置情報サービスが実際にFirebaseへ位置を書けている間は、
+  // Web側は位置（lat/lng/ts）を書かない。同じdrivers/{id}へ、別々の経路で取得した
+  // 微妙に違う位置を交互に書き込むと、仲間の画面でアイコンが行ったり来たりして
+  // 飛び飛びに見える。状態（空車/実車、車番等）だけ、変化があった時と60秒おきに送る
+  if(nativeWriterActive()){
+    const sig=JSON.stringify(base);
+    const nowMs=Date.now();
+    if(sig===lastPresenceSig&&nowMs-lastPresenceWriteTs<60000)return;
+    lastPresenceSig=sig;lastPresenceWriteTs=nowMs;
+    db.ref('drivers/'+myId).update({...base,gpsWeak:null}).catch(err=>console.error('drivers presence update failed',err));
+    return;
+  }
+  lastPresenceSig='';
+  // 最後に位置を取得してから長く経っている（バックグラウンドから復帰した直後で、
+  // まだ新しい位置が届いていない等）間は、古い位置を新しい時刻（ts）つきで
+  // 書き込まない。GPSが途切れた場合は、別途gpsWeakのハートビートが送り続ける
+  if(!gpsWeak&&gpsLastUpdate>0&&Date.now()-gpsLastUpdate>12000)return;
+  db.ref('drivers/'+myId).update({
+    ...base,
+    lat:myDisplayLat??myLat,lng:myDisplayLng??myLng,
+    ts:Date.now(),gpsWeak:gpsWeak||null
   }).catch(err=>console.error('drivers position update failed',err));
 }
+let lastPresenceSig='',lastPresenceWriteTs=0;
 setInterval(()=>{if(isDuty)pushMyPosition();},5000);
 // 自分のマーカーの「〇号 〇分」バッジ（poolLabel）は、GPSの位置更新（updateMyMarker）が
 // 呼ばれた時にしか再描画されない。プール内で長時間停止していると、その間GPSの
