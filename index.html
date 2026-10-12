@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-190 -->
+<!-- v20260902-191 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -685,6 +685,12 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="card">
    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">退勤のたびに自動で作成される精算表（燃料・メーター・運賃の内訳等）の一覧です。タップすると内容を再表示できます。</div>
    <div id="settlement-log-list"></div>
+  </div>
+  <div class="sec">🛰 バックグラウンドのGPS診断</div>
+  <div class="card" id="bg-diag-card">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">他のアプリを使っている間や、画面を消している間も、仲間の地図への位置の送信と、プール・乗り場の出入りの判定（待機時間の計測）が止まらないための設定を確認します（Androidアプリ版のみ）。</div>
+    <button class="btn btn-g" onclick="runBackgroundDiagnosis()" style="width:100%">🔍 診断する</button>
+    <div id="bg-diag-out" style="display:none;margin-top:10px;font-size:12px;line-height:1.7"></div>
   </div>
   <div class="sec">📤 仲間との送り先の再同期</div>
   <div class="card">
@@ -1366,7 +1372,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-190';
+const APP_BUILD='20260902-191';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1622,16 +1628,25 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   setTimeout(checkForUpdate,4000);
   setInterval(checkForUpdate,5*60*1000);
   document.addEventListener('visibilitychange',()=>{
-    if(document.hidden){pageHiddenAt=Date.now();return;}
+    if(document.hidden){pageHiddenAt=Date.now();nativeGapWhileHidden=false;startHiddenFeedStat();return;}
+    finishHiddenFeedStat();
     checkForUpdate();
+    // 設定を変えるためにアプリの設定画面へ移動して戻ってきた時に、バックグラウンド診断の
+    // 表示を最新の状態に更新し直す
+    const diagOut=document.getElementById('bg-diag-out');
+    if(diagOut&&diagOut.style.display==='block')runBackgroundDiagnosis();
     // 他のアプリ・サイトに切り替えていた間はGPS取得やタイマーがOS側で一時停止されている
     // ことが多く、復帰直後は位置情報が古いまま固まって見える。ある程度の時間
     // 離れていた場合だけGPS取得を取り直し、その間に見逃した可能性のある乗り場の
     // 出発（実車ボタンの押し忘れ検知を含む）も捕捉し直す。ごく短時間の切り替え
     // （通知を一瞬確認した等）まで毎回GPSを再取得すると、かえって不安定な
     // 読み取り値で誤検知しやすくなるため対象外にする
+    // ただし、ネイティブの位置情報サービスから、画面が非表示の間も途切れずに位置が
+    // 届き続けていた場合は、乗り場の出入りの判定もその間ずっと動いていたため、この
+    // 取り直しは不要。かえって、復帰直後の一定時間は出発の確定を保留してしまうため、行わない
     const hiddenMs=pageHiddenAt?Date.now()-pageHiddenAt:0;
-    if(isDuty&&hiddenMs>8000){
+    const nativeContinuous=nativeFeedActive()&&!nativeGapWhileHidden;
+    if(isDuty&&hiddenMs>8000&&!nativeContinuous){
       pendingCatchUpCheck=true;
       gpsCatchUpUntil=Date.now()+GPS_SETTLE_GRACE_MS;
       gpsCatchUpStartTs=Date.now();
@@ -2882,11 +2897,44 @@ function startGPS(){
 // WebView標準のwatchPositionは、更新間隔・精度が端末・WebViewの実装に左右されやすく、
 // アプリを閉じている間は止まってしまう。Android版アプリでは、位置情報の送信を
 // 担うネイティブのフォアグラウンドサービス（FusedLocationProvider・高精度・1〜2秒間隔）が
-// 取得した位置を、アプリが画面に出ている間だけwindow.onNativeLocationへ渡してくる。
+// 取得した位置を、アプリが画面に出ていない間（他のアプリを使っている間・画面を消している間）も
+// 含めて、window.onNativeLocationへ渡してくる（最新版のアプリ。古いバージョンのアプリは、
+// 画面に出ている間だけ渡す）。そのため、バックグラウンドでも乗り場の出入りの判定が動き続ける。
 // 受け取った位置は、ブラウザ標準のGPSと全く同じ処理（handleGpsFix）に通す。
 // ネイティブから位置が届かない端末・状況（古いAndroid版・iPhone・通常のブラウザ等）では、
 // これまで通りブラウザ標準のGPSをそのまま使う
 let lastNativeFixTs=0,lastNativeWriterOkTs=0;
+// 画面が非表示の間に、ネイティブからの位置がこの時間より長く途切れた場合は、OSがページの
+// 動作を止めていた可能性があるため、復帰時に見逃した出入りを捕捉し直す（visibilitychange参照）
+const NATIVE_GAP_HIDDEN_MS=15000;
+let nativeGapWhileHidden=false;
+// 画面が非表示になっていた間の、ネイティブからの位置の受信状況（hideで開始し、showで確定する）。
+// 診断カードで「他のアプリを使っていた間も、位置が途切れず届いていたか」を確認できるようにする
+let hiddenFeedStat=null;
+const HIDDEN_REPORT_KEY='taxi_bg_last_report';
+const HIDDEN_REPORT_MIN_MS=20000; // これより短い切り替えは記録しない
+function startHiddenFeedStat(){
+  hiddenFeedStat=isDuty?{since:Date.now(),fixes:0,maxGapMs:0,lastTs:Date.now()}:null;
+}
+function finishHiddenFeedStat(){
+  const st=hiddenFeedStat;
+  hiddenFeedStat=null;
+  if(!st)return;
+  const now=Date.now();
+  const hiddenMs=now-st.since;
+  if(hiddenMs<HIDDEN_REPORT_MIN_MS)return;
+  const maxGapMs=Math.max(st.maxGapMs,now-st.lastTs);
+  const rep={at:now,hiddenMs,fixes:st.fixes,maxGapMs};
+  try{localStorage.setItem(HIDDEN_REPORT_KEY,JSON.stringify(rep));}catch(e){}
+}
+function loadHiddenReport(){
+  try{
+    const raw=localStorage.getItem(HIDDEN_REPORT_KEY);
+    if(!raw)return null;
+    const r=JSON.parse(raw);
+    return (r&&typeof r.hiddenMs==='number')?r:null;
+  }catch(e){return null;}
+}
 function nativeFeedActive(){return Date.now()-lastNativeFixTs<8000;}
 // ネイティブ側が実際にFirebaseへ位置を書き込めている間は、Web側は位置（lat/lng/ts）を
 // 書かない（同じdrivers/{id}へ別々の位置を交互に書いて、仲間の画面でアイコンが飛ぶのを防ぐ）
@@ -2895,6 +2943,12 @@ window.onNativeLocation=function(lat,lng,acc,spd,brg,ts,writerOk){
   if(!isDuty||!leafletMap)return;
   if(typeof lat!=='number'||typeof lng!=='number'||isNaN(lat)||isNaN(lng))return;
   const now=Date.now();
+  if(document.hidden&&lastNativeFixTs&&now-lastNativeFixTs>NATIVE_GAP_HIDDEN_MS)nativeGapWhileHidden=true;
+  if(document.hidden&&hiddenFeedStat){
+    hiddenFeedStat.maxGapMs=Math.max(hiddenFeedStat.maxGapMs,now-hiddenFeedStat.lastTs);
+    hiddenFeedStat.lastTs=now;
+    hiddenFeedStat.fixes++;
+  }
   lastNativeFixTs=now;
   if(writerOk)lastNativeWriterOkTs=now;
   handleGpsFix({coords:{
@@ -2904,6 +2958,113 @@ window.onNativeLocation=function(lat,lng,acc,spd,brg,ts,writerOk){
     heading:(typeof brg==='number'&&brg>=0)?brg:null
   },timestamp:ts||now},'native');
 };
+
+// ===== バックグラウンドでも位置の送信・乗り場の出入りの判定が止まらないための診断 =====
+// （Androidアプリ版のみ）他のアプリを使っている間や画面を消している間も動き続けるには、
+// アプリ側の設定（位置情報を「常に許可」にする・電池の最適化から除外する等）が必要になる。
+// 足りない設定を調べて知らせる。ブラウザ・ホーム画面に追加したアプリでは、これらの
+// 情報を取得できない（OSが背景での位置取得を止めるため、常時の計測自体ができない）
+function getNativeBackgroundStatus(){
+  try{
+    if(window.AndroidBridge&&typeof window.AndroidBridge.getBackgroundStatus==='function'){
+      const st=JSON.parse(window.AndroidBridge.getBackgroundStatus());
+      return (st&&typeof st==='object')?st:null;
+    }
+  }catch(e){console.error('バックグラウンドの設定状況の取得に失敗しました',e);}
+  return null;
+}
+// 位置情報・電池の設定で、背景の動作を止めてしまうものがあるか（出勤時の警告に使う）
+function backgroundSettingsProblem(st){
+  if(!st)return false;
+  return st.fine===false||st.background===false||st.batteryIgnored===false;
+}
+function requestBatteryOptimizationExemption(){
+  if(window.AndroidBridge&&typeof window.AndroidBridge.requestBatteryOptimization==='function'){
+    window.AndroidBridge.requestBatteryOptimization();
+  }else{
+    toast('⚠️ この操作はAndroidアプリ版の最新版でのみ使えます');
+  }
+}
+// 診断カードの1行: 前回、アプリの画面を離れていた間（他のアプリを使う・画面を消す）も、位置が
+// 途切れず届いていたか。実際の端末でバックグラウンドの動作を確かめる手がかりになる
+function hiddenReportRow(){
+  const title='前回、画面を離れていた間の動き';
+  const r=loadHiddenReport();
+  if(!r)return ['❔',title,'まだ記録がありません。出勤中に、他のアプリを使う・画面を消す、を20秒以上行ってから戻ると、ここに表示されます'];
+  const dur=r.hiddenMs<60000?Math.round(r.hiddenMs/1000)+'秒':Math.round(r.hiddenMs/60000)+'分';
+  const at=new Date(r.at).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  if(!r.fixes)return ['⚠️',title,at+'に戻るまでの'+dur+'の間、位置が一度も届きませんでした（その間、OSにアプリを止められていた可能性があります）'];
+  const gap=Math.round(r.maxGapMs/1000);
+  if(r.maxGapMs>30000)return ['⚠️',title,at+'に戻るまでの'+dur+'の間、最長'+gap+'秒、位置が届かない時間がありました（その間、OSに止められていた可能性があります）'];
+  return ['✅',title,at+'に戻るまでの'+dur+'の間、位置は途切れず届いていました（届く間隔は最長'+gap+'秒）'];
+}
+function runBackgroundDiagnosis(){
+  const out=document.getElementById('bg-diag-out');
+  if(!out)return;
+  out.style.display='block';
+  const st=getNativeBackgroundStatus();
+  if(!st){
+    out.innerHTML='<div style="color:var(--amber)">⚠️ この診断は、Androidアプリ版（最新版）でのみ使えます。ブラウザやホーム画面に追加したアプリでは、他のアプリを使っている間や画面を消している間は、OSが位置情報の取得を止めてしまうため、常に動かしたい場合はAndroidアプリ版をお使いください。</div>';
+    return;
+  }
+  const mark=v=>v===true?'✅':(v===false?'⚠️':'❔');
+  const ago=ms=>(ms===null||ms===undefined||ms<0)?'まだありません':(ms<60000?Math.round(ms/1000)+'秒前':Math.round(ms/60000)+'分前');
+  const feedAge=lastNativeFixTs?Date.now()-lastNativeFixTs:null;
+  const rows=[
+    [mark(st.fine),'位置情報の許可',st.fine===false?'許可されていません':'許可されています'],
+    [mark(st.background),'位置情報の「常に許可」',st.background===false?'「常に許可」になっていません（OSがアプリを止めた後の自動復帰が効かず、他のアプリを使っている間や画面を消している間に、位置が止まりやすくなります）':'「常に許可」になっています'],
+    [mark(st.batteryIgnored),'電池の最適化の除外',st.batteryIgnored===false?'最適化の対象です（他のアプリを使っている間や画面を消している間に、OSがアプリを止めることがあります）':'除外されています（止められにくい設定です）'],
+    [mark(st.notifications),'通知の許可',st.notifications===false?'許可されていません（位置情報サービスの表示が出ず、止められやすくなります）':'許可されています'],
+    [isDuty?mark(st.serviceRunning):'❔','位置情報の送信サービス',isDuty?(st.serviceRunning===false?'動いていません（一度退勤して出勤し直してください）':'動いています'):'出勤中だけ動きます'],
+    [isDuty?mark(feedAge!==null&&feedAge<8000):'❔','アプリへの位置の受け渡し',isDuty?('最後に受け取ったのは '+ago(feedAge)):'出勤中だけ確認できます'],
+    [isDuty?mark(st.lastWriteOkAgeMs!==null&&st.lastWriteOkAgeMs!==undefined&&st.lastWriteOkAgeMs<30000):'❔','仲間への位置の送信',isDuty?('最後に送れたのは '+ago(st.lastWriteOkAgeMs)):'出勤中だけ確認できます'],
+    hiddenReportRow()
+  ];
+  let html=rows.map(r=>`<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)"><div style="flex-shrink:0">${r[0]}</div><div><b>${esc(r[1])}</b><div style="color:var(--muted)">${esc(r[2])}</div></div></div>`).join('');
+  const needLoc=st.fine===false||st.background===false||st.notifications===false;
+  const needBat=st.batteryIgnored===false;
+  if(needLoc)html+='<button class="btn btn-p" onclick="openLocationSettings()" style="width:100%;margin-top:10px">📍 アプリの設定を開く（「権限」→「位置情報」→「常に許可」）</button>';
+  if(needBat)html+='<button class="btn btn-p" onclick="requestBatteryOptimizationExemption()" style="width:100%;margin-top:8px">🔋 電池の最適化を除外する</button>';
+  html+='<div style="color:var(--muted);margin-top:10px">機種によっては、スマホ本体の「電池」「バッテリー」の設定で、このアプリを「制限なし」にする、「スリープ状態のアプリ」「バックグラウンド使用の制限」の対象から外す、といった設定も必要です。設定を変えて戻ってくると、この表示は自動で更新されます。</div>';
+  out.innerHTML=html;
+}
+// 出勤した時（アプリを開き直して乗務状態を復元した時を含む）に、背景で止まる設定になっていたら
+// 知らせる。毎回出すと煩わしいため、同じ日には1回だけにする
+function checkBackgroundReadiness(){
+  if(!isDuty)return;
+  const st=getNativeBackgroundStatus();
+  if(!backgroundSettingsProblem(st))return;
+  const today=new Date().toLocaleDateString('ja-JP');
+  try{
+    if(localStorage.getItem('taxi_bg_warn_day')===today)return;
+    localStorage.setItem('taxi_bg_warn_day',today);
+  }catch(e){}
+  showBackgroundWarnBanner();
+}
+function scheduleBackgroundReadinessCheck(){
+  setTimeout(checkBackgroundReadiness,5000);
+}
+function showBackgroundWarnBanner(){
+  if(document.getElementById('bg-warn-banner'))return;
+  const b=document.createElement('div');
+  b.id='bg-warn-banner';
+  b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99997;background:var(--gold);color:#1a1200;'
+    +'text-align:center;font-size:13px;font-weight:700;cursor:pointer;'
+    +'padding:10px 14px calc(10px + var(--sat));';
+  b.textContent='🛰 他のアプリを使っている間や画面を消している間に、位置が止まりやすい設定になっています。タップして確認してください';
+  b.onclick=()=>{
+    b.remove();
+    const btn=Array.from(document.querySelectorAll('.nb')).find(x=>(x.getAttribute('onclick')||'').includes("'settings'"));
+    if(btn)showPage('settings',btn);
+    setTimeout(()=>{
+      const c=document.getElementById('bg-diag-card');
+      if(c)c.scrollIntoView({block:'center'});
+      runBackgroundDiagnosis();
+    },150);
+  };
+  document.body.appendChild(b);
+  setTimeout(()=>{if(b.parentNode)b.remove();},30000);
+}
 
 // GPSの位置（pos）1件を処理する共通の入口。ブラウザ標準のwatchPositionと、
 // 上のwindow.onNativeLocation（ネイティブ）のどちらからの位置も、同じ処理
@@ -3134,6 +3295,8 @@ function endDutyImmediate(){
   if(!isDuty)return;
   isDuty=false;
   pendingWaitFinalize=null;clearBoardDep();
+  const bgWarn=document.getElementById('bg-warn-banner');
+  if(bgWarn)bgWarn.remove();
   notifyAndroidDutyStatus(false);
   if(db&&!testMode){
     const myRef=db.ref('drivers/'+myId);
@@ -3890,6 +4053,7 @@ function _startDuty(){
   renderDests();
   requestNotificationPermission();
   startGPS();
+  scheduleBackgroundReadinessCheck();
   if(dutyInterval)clearInterval(dutyInterval);
   dutyInterval=setInterval(()=>{
     if(!dutyStart)return;
@@ -4199,6 +4363,7 @@ function restoreAppState(){
   }
   // GPS再開・Firebase更新
   startGPS();
+  scheduleBackgroundReadinessCheck();
   requestNotificationPermission();
   // アプリを開き直した時点でも、ネイティブの位置送信サービス（アプリを閉じている間も
   // 動いていた場合はそのまま動き続けている）へ、今の状態・車番等を伝えておく
@@ -5705,6 +5870,9 @@ function maxAcceptableAccuracyM(cp){
   return (cp&&spotLabelFromCheckpointName(cp.name))?SPOT_CP_MAX_ACCURACY_M:120;
 }
 let pendingDepartureTimer={};
+// 退場の確定を予定している時刻（ms）。タイマーが間引かれても、位置が更新されるたびに
+// この時刻を過ぎていないか確認するために使う
+let pendingDepartureDue={};
 // チェックポイントに「実際に何時何分から」いるかを時刻(ms)で記録し、localStorageにも
 // 書き残しておく。国内線プール出発後にアプリを開き直すことが多く、その際は
 // checkGeofencesの初回フィックスがそのエリアに既に入っている状態から始まるため、
@@ -5849,6 +6017,7 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
           clearTimeout(pendingDepartureTimer[cp.id]);
           delete pendingDepartureTimer[cp.id];
         }
+        delete pendingDepartureDue[cp.id];
         delete cpExitDetectedTs[cp.id]; // 圏外への変化候補はGPSのブレだったので取り消す
       }
       return;
@@ -5857,6 +6026,15 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
     // 退場確定待ちの影響を受けない）。cpDwellMs／cpHasStayed1Minはこれを基準に
     // 実際の滞在時間を計算する
     if(!nowInside&&wasInside&&!cpExitDetectedTs[cp.id])cpExitDetectedTs[cp.id]=now;
+    // タイマー（setTimeout）は、画面を消している間・他のアプリを使っている間などのバック
+    // グラウンドでは、OSやブラウザに間引かれて予定より大きく遅れることがある（最大1分程度）。
+    // その間も位置はネイティブの位置情報サービスから届き続けるため、退場確定の予定時刻を
+    // 過ぎているのにタイマーが動いていなければ、位置が更新されたこのタイミングで確定の
+    // 最終確認を行う（実際に圏外へ出た時刻は別に控えてあるため、確定が遅れても記録はずれない）
+    if(!nowInside&&pendingDepartureTimer[cp.id]&&pendingDepartureDue[cp.id]&&now>=pendingDepartureDue[cp.id]){
+      confirmDeparture(cp);
+      return;
+    }
     // GPSのジャンプ・ジッターで直前に反転したばかりの場合は、次の反転まで一定時間待つ
     const lastT=cpLastTransitionTs[cp.id]||0;
     if(now-lastT<CP_TRANSITION_DEBOUNCE_MS)return;
@@ -5903,50 +6081,57 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
       const settledSinceTs=Math.max(gpsStartTs,gpsCatchUpStartTs);
       if((now-settledSinceTs)<SPOT_DEPARTURE_MIN_GPS_AGE_MS)return;
       if(pendingDepartureTimer[cp.id])return;
-      pendingDepartureTimer[cp.id]=setTimeout(()=>{
-        delete pendingDepartureTimer[cp.id];
-        if(myLat===null||myLng===null)return;
-        if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M)){delete cpExitDetectedTs[cp.id];return;} // 境界付近だった（誤検知）
-        // 最終確定の時点でもGPSの精度が十分でない場合は確定させない（精度自体は
-        // 良さそうに見えても実際の位置とずれる時間帯があり、SPOT_DEPARTURE_MIN_GPS_AGE_MSの
-        // 猶予時間だけでは足りないケースがあったため、時間だけでなく精度そのものも見る。
-        // 上のガードと同じ理由で、乗り場に限らず全チェックポイントに適用する）。
-        // ここでは何もリセットせず、cpInsideもtrueのままにしておくことで、次に精度の良い
-        // フィックスが得られた時、checkGeofences側から改めて退場確定のやり直しが自然に働く
-        if(typeof myAccuracy==='number'&&myAccuracy>maxAcceptableAccuracyM(cp)){delete cpExitDetectedTs[cp.id];return;}
-        // 1〜4号・国際線乗り場は互いに近接しているため、実際にはお客様を乗せずに
-        // 列が進んで隣の号のエリアへ移動しただけでも、このチェックポイントからの
-        // 「退場」自体は正しく検知されてしまう。押し忘れ検知はそれを「実車で
-        // 出発した」と誤認し、実際には乗せていないのに実車化・自動チャット通知
-        // （誤作動通知）を出してしまっていた。退場確定の瞬間に別の乗り場エリアの
-        // 中にいる場合は、実際の出発とはみなさず、待機開始時刻（cpArriveTs）だけ
-        // そちらの乗り場へ引き継ぐ（実車化・チャット通知は行わない）
-        if(spotLabelFromCheckpointName(cp.name)){
-          const movedToCp=checkpoints.find(o=>o!==cp&&o.enabled&&o.lat!==null&&spotLabelFromCheckpointName(o.name)&&isInsideCP(myLat,myLng,o));
-          if(movedToCp){
-            cpLastTransitionTs[cp.id]=Date.now();
-            cpInside[cp.id]=false;
-            if(cpArriveTs[cp.id]&&(!cpArriveTs[movedToCp.id]||cpArriveTs[cp.id]<cpArriveTs[movedToCp.id])){
-              cpArriveTs[movedToCp.id]=cpArriveTs[cp.id];
-              cpInside[movedToCp.id]=true;
-            }
-            delete cpArriveTs[cp.id];saveCpArriveTs();
-            delete cpExitDetectedTs[cp.id];
-            return;
-          }
-        }
-        cpLastTransitionTs[cp.id]=Date.now();
-        cpInside[cp.id]=false;
-        // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
-        cpLastDepartureSnapshot[cp.id]={arriveTs:cpArriveTs[cp.id],poolModalHandled:!!cp.poolModalHandled,ts:Date.now(),tripSeqAtDeparture:tripCompletedSeq};
-        // onDeparture内で「1分以上滞在したか」の判定にcpArriveTsを使うため、
-        // 消去はonDepartureの呼び出しが終わった後に行う
-        onDeparture(cp);
-        delete cpArriveTs[cp.id];saveCpArriveTs();
-        delete cpExitDetectedTs[cp.id];
-      },getDepartureConfirmMs(cp));
+      const confirmMs=getDepartureConfirmMs(cp);
+      pendingDepartureDue[cp.id]=now+confirmMs;
+      pendingDepartureTimer[cp.id]=setTimeout(()=>confirmDeparture(cp),confirmMs);
     }
   });
+}
+// 乗り場・プール等の退場を最終確認して確定する。確定までの待ち時間（getDepartureConfirmMs）が
+// 経った後にタイマーから呼ばれるほか、タイマーがバックグラウンドで間引かれて遅れている場合は、
+// 位置が更新されたタイミングでも呼ばれる（checkGeofences内の説明を参照）
+function confirmDeparture(cp){
+  if(pendingDepartureTimer[cp.id]){clearTimeout(pendingDepartureTimer[cp.id]);delete pendingDepartureTimer[cp.id];}
+  delete pendingDepartureDue[cp.id];
+  if(myLat===null||myLng===null)return;
+  if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M)){delete cpExitDetectedTs[cp.id];return;} // 境界付近だった（誤検知）
+  // 最終確定の時点でもGPSの精度が十分でない場合は確定させない（精度自体は
+  // 良さそうに見えても実際の位置とずれる時間帯があり、SPOT_DEPARTURE_MIN_GPS_AGE_MSの
+  // 猶予時間だけでは足りないケースがあったため、時間だけでなく精度そのものも見る。
+  // 上のガードと同じ理由で、乗り場に限らず全チェックポイントに適用する）。
+  // ここでは何もリセットせず、cpInsideもtrueのままにしておくことで、次に精度の良い
+  // フィックスが得られた時、checkGeofences側から改めて退場確定のやり直しが自然に働く
+  if(typeof myAccuracy==='number'&&myAccuracy>maxAcceptableAccuracyM(cp)){delete cpExitDetectedTs[cp.id];return;}
+  // 1〜4号・国際線乗り場は互いに近接しているため、実際にはお客様を乗せずに
+  // 列が進んで隣の号のエリアへ移動しただけでも、このチェックポイントからの
+  // 「退場」自体は正しく検知されてしまう。押し忘れ検知はそれを「実車で
+  // 出発した」と誤認し、実際には乗せていないのに実車化・自動チャット通知
+  // （誤作動通知）を出してしまっていた。退場確定の瞬間に別の乗り場エリアの
+  // 中にいる場合は、実際の出発とはみなさず、待機開始時刻（cpArriveTs）だけ
+  // そちらの乗り場へ引き継ぐ（実車化・チャット通知は行わない）
+  if(spotLabelFromCheckpointName(cp.name)){
+    const movedToCp=checkpoints.find(o=>o!==cp&&o.enabled&&o.lat!==null&&spotLabelFromCheckpointName(o.name)&&isInsideCP(myLat,myLng,o));
+    if(movedToCp){
+      cpLastTransitionTs[cp.id]=Date.now();
+      cpInside[cp.id]=false;
+      if(cpArriveTs[cp.id]&&(!cpArriveTs[movedToCp.id]||cpArriveTs[cp.id]<cpArriveTs[movedToCp.id])){
+        cpArriveTs[movedToCp.id]=cpArriveTs[cp.id];
+        cpInside[movedToCp.id]=true;
+      }
+      delete cpArriveTs[cp.id];saveCpArriveTs();
+      delete cpExitDetectedTs[cp.id];
+      return;
+    }
+  }
+  cpLastTransitionTs[cp.id]=Date.now();
+  cpInside[cp.id]=false;
+  // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
+  cpLastDepartureSnapshot[cp.id]={arriveTs:cpArriveTs[cp.id],poolModalHandled:!!cp.poolModalHandled,ts:Date.now(),tripSeqAtDeparture:tripCompletedSeq};
+  // onDeparture内で「1分以上滞在したか」の判定にcpArriveTsを使うため、
+  // 消去はonDepartureの呼び出しが終わった後に行う
+  onDeparture(cp);
+  delete cpArriveTs[cp.id];saveCpArriveTs();
+  delete cpExitDetectedTs[cp.id];
 }
 
 // チェックポイント名から、押し忘れ検知で使う乗り場ラベル（1号〜4号／国際線）を判定する
@@ -5998,9 +6183,12 @@ function handleBoardAreaDeparture(cp){
   const label=spotLabelFromCheckpointName(cp.name); // '1号'〜'4号'／'国際線'／null
   const isPool=!!(cp.spots&&cp.spots.length>0);
   if(!label&&!isPool)return;
-  // 退場の確定は、実際に圏外へ出てから一定時間（getDepartureConfirmMs）経った後に行われる
-  // ため、実際に出た時刻は、その分さかのぼった時刻になる
-  const departTs=Date.now()-getDepartureConfirmMs(cp);
+  // 実際に圏外へ出た時刻。退場の確定は、圏外へ出てから一定時間（getDepartureConfirmMs）経った
+  // 後に行われるため、圏外への変化を最初に観測した時刻（cpExitDetectedTs）を使う。
+  // 控えていない場合だけ、確定の時刻からその分さかのぼる。確定の処理がバックグラウンドで
+  // 遅れても、出発した時刻がずれないようにするため
+  const exitSeenTs=cpExitDetectedTs[cp.id];
+  const departTs=(exitSeenTs&&exitSeenTs<=Date.now())?exitSeenTs:Date.now()-getDepartureConfirmMs(cp);
   const startTs=waitOriginTsForDeparture(cp);
   if(!boardDep)boardDep={};
   if(startTs&&(!boardDep.startTs||startTs<boardDep.startTs))boardDep.startTs=startTs;
