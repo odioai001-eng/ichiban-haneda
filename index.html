@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-189 -->
+<!-- v20260902-190 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1366,7 +1366,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-189';
+const APP_BUILD='20260902-190';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1529,6 +1529,11 @@ let cpInside={};
 let cpLastTransitionTs={}; // 出勤直後などGPSが不安定な時に入退場が連続で反転するのを防ぐ
 let pendingArrivalCP=null;
 let currentSpotSelection=null;
+// 今の号の選択が、いつ選ばれたものか（その時点のtripCompletedSeq）。-1は「再読み込みで復元
+// された等、古さが分からない」状態。選択の後に降車（実車→空車）が済んでいるのに選択が
+// 残っているかの判定に使う（healStalePoolWait参照）
+let poolSelStamp=0;
+let stalePoolWaitFarFixes=0;
 
 function loadCPs(){
   const s=localStorage.getItem('taxi_checkpoints');
@@ -2471,6 +2476,56 @@ function currentPoolWait(){
 function myActiveWaitInfo(){
   return currentPoolWait()||((waitInterval&&waitStart)?{spot:null,waitStart,mins:Math.max(0,Math.floor((Date.now()-waitStart)/60000))}:null);
 }
+// 羽田プールでの待機が終わった（お客様を乗せてプールを出た）ことが確かな時に、待機中の
+// 表示・状態（号の選択・待機の起点・待機場所の表示・仲間への待機の共有）を片付ける。
+// 実車ボタンを押した時点でプールの中にいた場合は、続けてお客様を乗せる場合に備えて号の
+// 選択と待機の起点を残している（押し間違えて空車に戻した時に、待機が消えないようにする
+// ためにも必要）。しかし、そのままプールを出て降車まで進んでも残り続けると、空車に戻した
+// 時に、判定（currentPoolWait）が「号の選択がある・実車中ではない・待機の起点がある」を
+// 満たしてしまい、古い待機の起点のまま「◯分 待機中」の表示が復活して、待機が続いている
+// ように見えていた（仲間の状況の自分の行・地図のアイコンのバッジ）。再読み込みすると、保存
+// されたその状態から待機タイマーまで動き出してしまう
+function clearPoolWaitState(){
+  const hadSelection=!!currentSpotSelection;
+  currentSpotSelection=null;
+  waitStart=null;
+  spotChangeHistory=[];
+  if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
+  waitSec=0;
+  const wt=document.getElementById('wait-timer');if(wt)wt.textContent='00:00:00';
+  const mt=document.getElementById('map-wait-timer');if(mt)mt.textContent='00:00:00';
+  const lbl=document.getElementById('wait-spot-lbl');if(lbl)lbl.textContent='待機場所: ';
+  const hCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
+  if(hCp){hCp.currentSpot=null;hCp.arrivalTimeStr=null;hCp.poolModalHandled=false;}
+  // 仲間の画面の「◯号 ◯分」の表示も消す（実車ボタンの時点で消している場合は、重ねて送らない）
+  if(hadSelection&&db&&isDuty&&!testMode){
+    db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null}).catch(err=>console.error('drivers waitSince/waitSpot clear failed',err));
+  }
+  renderSpotRow();
+  syncPoolPanel();
+  if(myLat!==null)updateMyMarker(myDisplayLat??myLat,myDisplayLng??myLng);
+  saveAppState();
+}
+// 以前の版で上の状態が残ったまま保存されている端末（アプリを更新した後に復元された状態）や、
+// 何らかの理由で片付かなかった場合のために、プールからはっきり離れていて、かつ「号を選んだ後に
+// 降車が済んでいる（または古さが分からない）」場合は、残った待機の状態を自動で片付ける。
+// 次のような場合は対象にしない：号を選んだ後にまだ降車していない（プールへ向かう途中で早めに
+// 選んでおいた場合）／プール・乗り場の中にいる／国際線／テストモード／GPSの精度が悪い。
+// 一時的なGPSのずれで誤って片付けないよう、離れている位置を続けて受け取った場合だけにする
+const STALE_POOL_WAIT_FAR_M=300;   // プール本体の半径に、この距離を足した外側
+const STALE_POOL_WAIT_FIXES=8;     // 離れている位置を、この回数続けて受け取った場合に片付ける
+function healStalePoolWait(){
+  const sel=currentSpotSelection;
+  if(testMode||!sel||!/^[1-4]号$/.test(sel)||currentStatus==='jitsusha'||isInBoardArea()){stalePoolWaitFarFixes=0;return;}
+  if(poolSelStamp>=0&&tripCompletedSeq<=poolSelStamp){stalePoolWaitFarFixes=0;return;}
+  const pool=checkpoints.find(c=>c.spots&&c.spots.length>0);
+  if(!pool||pool.lat===null||myLat===null)return;
+  if(typeof myAccuracy==='number'&&myAccuracy>50)return;
+  if(haversine(myLat,myLng,pool.lat,pool.lng)<=pool.radius+STALE_POOL_WAIT_FAR_M){stalePoolWaitFarFixes=0;return;}
+  if(++stalePoolWaitFarFixes<STALE_POOL_WAIT_FIXES)return;
+  stalePoolWaitFarFixes=0;
+  clearPoolWaitState();
+}
 // マーカーを今の位置から新しい位置まで、指定した時間をかけて直線的に動かす。
 // 位置情報は1〜数秒おきにしか届かないため、そのままsetLatLngすると、地図上の
 // アイコンが「瞬間移動」を繰り返す飛び飛びの動きに見えていた。更新の間隔に
@@ -2908,6 +2963,7 @@ function handleGpsFix(pos,source){
     // 不具合があった。捕捉モードの読み取りは、既存の精度フィルター・デバウンス・
     // 退場確定の待ち時間で十分に誤検知を防げるため、通常の判定ロジックに乗せる
     checkGeofences(myLat,myLng,isColdStart,myAccuracy);
+    healStalePoolWait();
     // GPS初回フィックス時：プール内なら列選択モーダルを表示（表示可否はshowPoolLaneModal内で判定）
     if(isFirstFix){
       const cp=checkpoints.find(c=>c.id==='haneda');
@@ -4092,7 +4148,7 @@ function restoreAppState(){
     const mt=document.getElementById('map-wait-timer');if(mt)mt.textContent=t;
   }
   // その他の状態を復元
-  if(st.currentSpotSelection)currentSpotSelection=st.currentSpotSelection;
+  if(st.currentSpotSelection){currentSpotSelection=st.currentSpotSelection;poolSelStamp=-1;}
   if(st.boardInfo)boardInfo=st.boardInfo;
   if(st.manualWaitStartTime)manualWaitStartTime=st.manualWaitStartTime;
   if(st.manualWaitAddr)manualWaitAddr=st.manualWaitAddr;
@@ -4137,7 +4193,7 @@ function restoreAppState(){
         // 表示テキストは「…国際線乗り場」のままでもcurrentSpotSelectionだけがnullに
         // 戻ってしまい、号チップの選択表示や次の実車記録の乗り場情報がずれていた）
         const mSpot=d.waitSpot.match(/([1-4]号|国際線)/);
-        if(mSpot){currentSpotSelection=mSpot[1];renderSpotRow();}
+        if(mSpot){currentSpotSelection=mSpot[1];poolSelStamp=-1;renderSpotRow();}
       }
     });
   }
@@ -4340,6 +4396,10 @@ function setStatus(s){
     // （GPSが取れない等）は、乗り場を出た時刻の候補があればそれで確定し、無ければ実車ボタンを
     // 押した時点の暫定値のままにする。確定待ちは次の乗車に持ち越さない
     flushPendingWait();
+    // お客様を乗せてプールを出た後に降車まで進んだ場合（プール・乗り場の外にいる）は、実車ボタンを
+    // 押した時点でプール内にいたために残していた待機の状態を片付ける。プールの中にいる場合
+    // （押し間違えて空車に戻した等）は、待機がまだ続いているため残す
+    if(!isInBoardArea()&&(currentSpotSelection||waitStart))clearPoolWaitState();
     const fallbackBoardTs=jitsushaStart; // 実車開始時刻を、乗車時刻の保険として保持
     jitsushaStart=null;
     longJitsushaNotified=false;
@@ -6021,6 +6081,9 @@ function onDeparture(cp){
     toast(cp.icon+' '+cp.name+' を出発しました');
   }
   cp.stopConfirmed=false;
+  // お客様を乗せた状態（実車）で羽田プール本体を出た＝プールでの待機は終わったため、実車ボタンを
+  // 押した時点でプール内にいたために残していた号の選択・待機の起点を片付ける（clearPoolWaitState参照）
+  if(cp.id==='haneda'&&currentStatus==='jitsusha')clearPoolWaitState();
   // 国際線第4プール（予備）を出る時点で、今回1分以上そこに停止していたかを確定させる。
   // 停止していればその到着時刻を国際線の待機開始として引き継ぎ、素通りしただけなら
   // null のままにして（第3プールの到着時刻を使う）、setStatus側で判定する。
@@ -6115,6 +6178,7 @@ function selectSpot(spotName){
   // 目安にできるよう、号を選んだ時刻を常に別枠で記録しておく
   localStorage.setItem('taxi_last_spot_select_ts',String(Date.now()));
   currentSpotSelection=spotName;
+  poolSelStamp=tripCompletedSeq;
   const fullSpot='東京都大田区羽田空港'+currentSpotSelection+'乗り場';
   hCp.currentSpot=fullSpot;
   document.getElementById('wait-spot-lbl').textContent='待機場所: '+fullSpot;
