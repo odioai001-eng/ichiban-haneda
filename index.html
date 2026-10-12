@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-184 -->
+<!-- v20260902-185 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1319,7 +1319,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-184';
+const APP_BUILD='20260902-185';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4294,9 +4294,11 @@ function connectFirebase(config){
     });
     // team_destsに誰の記録も1件も無い（child_addedが一度も発火しない）場合でも
     // 「読み込み中」表示のままにならないよう、初回の読み込み完了を別途確定させる
-    db.ref('team_dests').once('value',()=>{
+    db.ref('team_dests').once('value',snap=>{
       teamDestsLoaded=true;
       try{renderTeamDests();}catch(e){console.error('renderTeamDests error',e);}
+      // 起動直後にも、Firebaseに届いていない自分の送り先が残っていれば共有し直す
+      autoResendUnsyncedOwnDests((snap.val()||{})[myId]);
     });
     // 上のドライバーごとのリアルタイムリスナーは、通常であれば誰かが記録を
     // 追加・再送した瞬間に即座に反映されるはずだが、特定の端末・回線状況では
@@ -4325,6 +4327,7 @@ function connectFirebase(config){
         if(myId in all)syncOwnDestinationsFromFirebase();
         try{renderDests();}catch(e){console.error('renderDests error',e);}
         try{renderTeamDests();}catch(e){console.error('renderTeamDests error',e);}
+        autoResendUnsyncedOwnDests(all[myId]);
       }).catch(err=>console.error('team_dests full resync failed',err));
     },30000);
   }catch(e){toast('⚠️ Firebase: '+e.message);console.error(e);}
@@ -4649,7 +4652,7 @@ async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs,skip
     waitMins:saved?saved.waitMins:null,
     waitAddr:saved?saved.waitAddr:null,
     dateStr,ts:presetTs||now.getTime(),
-    test:testMode||undefined
+    ...(testMode?{test:true}:{})
   };
   destinations.push(entry);
   saveDests();renderDests();
@@ -5768,7 +5771,7 @@ async function recordAbure(){
     waitMins:null,
     waitMinsStr,
     dateStr,ts:now.getTime(),
-    test:testMode||undefined
+    ...(testMode?{test:true}:{})
   };
   destinations.push(entry);
   saveDests();renderDests();
@@ -7801,7 +7804,7 @@ async function autoRegisterDest(lat,lng,reason,tripMins=null){
   }catch(e){}
   const now=new Date();
   const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-  const entry={name,addr,done:false,auto:true,reason,timeStr,dateStr,ts:now.getTime(),tripMins,test:testMode||undefined};
+  const entry={name,addr,done:false,auto:true,reason,timeStr,dateStr,ts:now.getTime(),tripMins,...(testMode?{test:true}:{})};
   destinations.push(entry);
   saveDests();renderDests();
   pushDestToFirebase(entry);
@@ -7816,11 +7819,31 @@ async function autoRegisterDest(lat,lng,reason,tripMins=null){
 // 方が大きかった。db（Firebase接続）さえあれば送信を試みるようにする。
 // また、通信が一時的に不安定なだけで失敗するケースに備え、数回まで自動で
 // 再送し、それでも失敗した場合だけ本人に通知する
+// Firebase Realtime Databaseは、書き込む値の中に1つでもundefinedが含まれていると
+// （set/push/updateのいずれも）通信を始める前に同期的に例外を投げる。以前は
+// テスト出勤の印（test:testMode||undefined）が通常時にはundefinedになっていたため、
+// 送り先を1件記録するたびにこの例外が起き、Firebaseへの書き込みが一度も実行されず、
+// 下の.catchによる再送にも到達しないまま、仲間に一切共有されなくなっていた
+// （2026/9/16以降）。JSONを一度通してundefinedのキーを取り除き、同様の事故を防ぐ
+function cleanForFirebase(obj){return JSON.parse(JSON.stringify(obj));}
+// 送信中（push開始〜結果確定まで）の送り先のts。下の自動再送が、通常の送信と
+// 同じ記録を二重に送ってしまわないよう、送信中の記録を対象から外すために使う
+const destPushInFlight=new Set();
 function pushDestToFirebase(entry,retryCount){
   if(!db||testMode)return;
   retryCount=retryCount||0;
   const driverName=localStorage.getItem('taxi_name')||'自分';
-  db.ref('team_dests/'+myId).push({...entry,driverName,driverId:myId}).then(()=>{
+  if(entry&&entry.ts)destPushInFlight.add(entry.ts);
+  const finishInFlight=()=>{if(entry&&entry.ts)destPushInFlight.delete(entry.ts);};
+  let pushPromise;
+  try{
+    pushPromise=db.ref('team_dests/'+myId).push(cleanForFirebase({...entry,driverName,driverId:myId}));
+  }catch(syncErr){
+    // 同期的に投げられた例外も、通信失敗と同じ再送・通知の経路に乗せる
+    pushPromise=Promise.reject(syncErr);
+  }
+  pushPromise.then(()=>{
+    finishInFlight();
     if(retryCount>0)console.log('team_dests push succeeded after retry '+retryCount);
   }).catch(err=>{
     console.error('team_dests push failed (retry '+retryCount+')',err);
@@ -7828,6 +7851,7 @@ function pushDestToFirebase(entry,retryCount){
       const delayMs=[3000,8000,20000,45000][retryCount];
       setTimeout(()=>pushDestToFirebase(entry,retryCount+1),delayMs);
     }else{
+      finishInFlight();
       toast('⚠️ 仲間への送り先の共有に失敗しました（この端末には残っています）: '+err.message);
     }
   });
@@ -7880,7 +7904,7 @@ async function resendUnsyncedDestsToFirebase(){
         continue;
       }
       const {synced,...payload}=d;
-      await db.ref('team_dests/'+myId).push({...payload,driverName,driverId:myId});
+      await db.ref('team_dests/'+myId).push(cleanForFirebase({...payload,driverName,driverId:myId}));
       d.synced=true;
       sentCount++;
     }catch(e){
@@ -7891,6 +7915,59 @@ async function resendUnsyncedDestsToFirebase(){
   saveDests();
   alert(`再送結果\n\n新たに送信: ${sentCount}件\n既に届いていた: ${skippedCount}件\n失敗: ${failCount}件`+
     (tooOldCount>0?`\n対象外（先月より古い）: ${tooOldCount}件`:''));
+}
+
+// 上のcleanForFirebaseのコメントにある送信不具合で、この端末には記録されているのに
+// Firebase側へ一度も届いていない自分の送り先を、アプリを開いているだけで自動的に
+// 共有し直す。手動の「未送信の送り先を再送する」と違い、確認ダイアログは出さない。
+// ・syncedフラグ（Firebase側に一度でも存在を確認できた記録に付く）が無い記録だけが対象。
+//   管理者の削除・月次リセットでFirebase側から消された記録（synced済み）は再送しない
+// ・作成から2分以内の記録と送信中の記録は対象外（通常の送信と二重にならないように）
+// ・前月1日より古い記録は、共有しても表示・保持されない仕様のため対象外
+// 送信前に、呼び出し元が既に持っているFirebase上の自分の記録（ownFbObj）と
+// 突き合わせ、既に届いている記録は送らずsyncedを付けるだけにする。複数件は
+// 1回のupdate（まとめて1つの書き込み）で送り、1件ずつ問い合わせて通信量が
+// 膨らむことを避ける
+let autoResendRunning=false;
+async function autoResendUnsyncedOwnDests(ownFbObj){
+  if(!db||testMode||autoResendRunning)return;
+  autoResendRunning=true;
+  try{
+    const fbTsSet=new Set(Object.values(ownFbObj||{}).map(e=>e&&e.ts).filter(Boolean));
+    const _n=new Date();
+    const cutoff=new Date(_n.getFullYear(),_n.getMonth()-1,1).getTime();
+    const now=Date.now();
+    let markedSynced=false;
+    const targets=[];
+    destinations.forEach(d=>{
+      if(d.type!=='trip'||d.test||d.synced||!d.ts)return;
+      if(fbTsSet.has(d.ts)){d.synced=true;markedSynced=true;return;}
+      if(d.ts<cutoff||now-d.ts<120000||destPushInFlight.has(d.ts))return;
+      targets.push(d);
+    });
+    if(markedSynced)saveDests();
+    if(!targets.length)return;
+    const driverName=localStorage.getItem('taxi_name')||'自分';
+    const base=db.ref('team_dests/'+myId);
+    let sentCount=0;
+    for(let i=0;i<targets.length;i+=50){
+      const chunk=targets.slice(i,i+50);
+      const updates={};
+      chunk.forEach(d=>{
+        const {synced,...payload}=d;
+        updates[base.push().key]=cleanForFirebase({...payload,driverName,driverId:myId});
+      });
+      await base.update(updates);
+      chunk.forEach(d=>{d.synced=true;});
+      sentCount+=chunk.length;
+    }
+    saveDests();
+    toast(`🔄 共有できていなかった送り先${sentCount}件を、仲間に共有しました`);
+  }catch(err){
+    console.error('autoResendUnsyncedOwnDests failed',err);
+  }finally{
+    autoResendRunning=false;
+  }
 }
 
 // 「未送信の送り先を再送する」は、ローカルのsyncedフラグ（一度でもFirebase側に
@@ -8858,7 +8935,7 @@ function saveManualTrip(){
     alightAddr,
     waitMins:null,
     dateStr,ts:tripTs,
-    test:testMode||undefined
+    ...(testMode?{test:true}:{})
   };
   if(fare>0)entry.fare=fare;
   destinations.push(entry);
