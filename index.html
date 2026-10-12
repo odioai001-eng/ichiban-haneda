@@ -2,11 +2,31 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta id="viewport-meta" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<script>
+// 端末によって画面の幅（dp）は360〜430等と違い、基準にしている端末（幅412）より
+// 幅の狭い端末では、ヘッダー・下部メニュー・下部の集計バーの文字が折り返したり
+// 重なったりして、地図画面のレイアウトが大きく変わってしまっていた。
+// そうした端末では、レイアウトの幅を412に固定して縮小表示し、どの端末でも同じ配置・
+// 同じ見た目に揃える（幅400以上の端末と横向きは、従来どおり端末の幅いっぱいに表示）。
+// 縮小のため、この場合だけinitial-scaleは指定しない（指定すると横にはみ出してしまう）。
+// 縦横どちらの向きでも同じ判断になるよう、画面の短い方の辺で判定する。
+// 幅400〜411の端末（基準の412とほぼ同じ幅）は、縮小しても見た目が変わらないため対象外
+(function(){
+  var MIN_LAYOUT_WIDTH=412,SCALE_DOWN_BELOW=400;
+  try{
+    var shortSide=Math.min(screen.width,screen.height);
+    if(shortSide>0&&shortSide<SCALE_DOWN_BELOW){
+      document.getElementById('viewport-meta').setAttribute('content',
+        'width='+MIN_LAYOUT_WIDTH+', maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+    }
+  }catch(e){}
+})();
+</script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-186 -->
+<!-- v20260902-187 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -32,6 +52,10 @@
    ボタン類がブラウザのツールバーの下に隠れて押せなくなることがあった。動的な
    ビューポート高さ（100dvh）に対応したブラウザではそちらを優先して使う */
 html,body{height:100%;height:100dvh;overflow:hidden}
+/* レイアウト幅を412に固定して縮小表示する端末（上のviewportの設定を参照）では、
+   ブラウザの文字の自動拡大（テキスト自動サイズ調整）が働くと、縮小した分だけ文字が
+   大きくなり、ボタン・ヘッダー内で折り返してしまうため、無効にしておく */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
   background:var(--bg);color:var(--text);max-width:480px;margin:0 auto;position:relative}
 .hdr{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
@@ -1319,7 +1343,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-186';
+const APP_BUILD='20260902-187';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1766,23 +1790,27 @@ const MIN_BTN_SCALE=0.62;
 // しまっていた。要素ごとに測定結果をキャッシュし、ボタンの数（表示/非表示の
 // 切り替えを含む）が変わった時だけ測り直すようにする
 const mapBtnStackNaturalHeightCache=new WeakMap();
+// 「フルサイズ・1列」の高さ（height）と、縮小の下限（MIN_BTN_SCALE）まで縮めた
+// 1列の高さ（minHeight）を測って返す。どちらも画面サイズ・向きには依存しない
+// （ボタン自体の大きさだけで決まる）ため、縦横を切り替えても測り直す必要はない
 function getStackNaturalHeight(stack){
   // display:noneのボタン（プール移動記録ボタン等）も含めて数える。表示状態が
   // 切り替わった時だけキャッシュを作り直すための簡易的な変化検知に使う
   const sig=stack.children.length+':'+Array.from(stack.children).filter(el=>el.style.display!=='none').length;
   const cached=mapBtnStackNaturalHeightCache.get(stack);
-  if(cached&&cached.sig===sig)return cached.height;
+  if(cached&&cached.sig===sig)return cached;
   const prevScale=stack.style.getPropertyValue('--btn-scale');
   const prevWrap=stack.classList.contains('wrap-fit');
   const prevMaxHeight=stack.style.maxHeight;
   const prevTransition=stack.style.transition;
-  // 測定中の一瞬だけ見た目がフルサイズに戻るのを隠すため、測定の間だけ
-  // transitionを止める
+  // 測定中の一瞬だけ見た目が変わるのを隠すため、測定の間だけtransitionを止める
   stack.style.transition='none';
   stack.classList.remove('wrap-fit');
   stack.style.maxHeight='';
   stack.style.removeProperty('--btn-scale');
   const height=stack.scrollHeight;
+  stack.style.setProperty('--btn-scale',String(MIN_BTN_SCALE));
+  const minHeight=stack.scrollHeight;
   // 直前の縮小・折り返し状態にいったん戻す（呼び出し元が改めて必要な値を適用する）
   if(prevScale)stack.style.setProperty('--btn-scale',prevScale);else stack.style.removeProperty('--btn-scale');
   if(prevWrap)stack.classList.add('wrap-fit');
@@ -1790,8 +1818,9 @@ function getStackNaturalHeight(stack){
   // 次のフレームでtransitionを元に戻す（今フレーム内での戻し操作にtransitionが
   // 適用されて動いて見えることがないようにする）
   requestAnimationFrame(()=>{stack.style.transition=prevTransition;});
-  mapBtnStackNaturalHeightCache.set(stack,{sig,height});
-  return height;
+  const result={sig,height,minHeight};
+  mapBtnStackNaturalHeightCache.set(stack,result);
+  return result;
 }
 function syncMapButtonStackLayout(){
   const mapEl=document.getElementById('map');
@@ -1809,20 +1838,34 @@ function syncMapButtonStackLayout(){
   // スタックが1列では収まらず、下端がはみ出して押せなくなることがあった
   const availableHeight=Math.max(0,mapRect.height-8-minTop);
   stacks.forEach(stack=>{
-    const naturalHeight=getStackNaturalHeight(stack);
+    const nat=getStackNaturalHeight(stack);
+    const naturalHeight=nat.height;
     if(naturalHeight>availableHeight&&availableHeight>0&&naturalHeight>0){
       // 画面が小さい端末ほど列を増やすと地図がボタンだらけで見えなくなって
       // しまうため、まずはボタン・隙間のサイズを縮めて1列のまま収めることを
       // 優先する（widthとgapが同じ比率で縮むため、必要な縮小率をそのまま
       // 高さの比率から計算できる）
       const scale=Math.max(MIN_BTN_SCALE,availableHeight/naturalHeight);
-      stack.style.setProperty('--btn-scale',scale.toFixed(3));
+      const scaleStr=scale.toFixed(3);
+      if(stack.style.getPropertyValue('--btn-scale')!==scaleStr)stack.style.setProperty('--btn-scale',scaleStr);
       // 縮小の下限まで縮めても、ボタンの数が多すぎてまだ1列に収まらない
       // 場合だけ、隣の列へ自動で折り返す
-      if(scale<=MIN_BTN_SCALE&&stack.scrollHeight>availableHeight){
-        stack.classList.add('wrap-fit');
-        stack.style.maxHeight=availableHeight+'px';
+      if(scale<=MIN_BTN_SCALE&&nat.minHeight>availableHeight){
+        if(!stack.classList.contains('wrap-fit'))stack.classList.add('wrap-fit');
+        const mh=availableHeight+'px';
+        if(stack.style.maxHeight!==mh)stack.style.maxHeight=mh;
+      }else{
+        if(stack.classList.contains('wrap-fit'))stack.classList.remove('wrap-fit');
+        if(stack.style.maxHeight)stack.style.maxHeight='';
       }
+    }else{
+      // 元の大きさのままで収まる（縦向きに戻した時・画面が高くなった時等）。
+      // 以前、画面が低かった間に付けた縮小・折り返しが残っていると、余裕が
+      // できても小さく折り返されたままになり、縦→横→縦と回転した後に
+      // レイアウトが崩れて戻らなかったため、必ず元の状態に戻す
+      if(stack.style.getPropertyValue('--btn-scale'))stack.style.removeProperty('--btn-scale');
+      if(stack.classList.contains('wrap-fit'))stack.classList.remove('wrap-fit');
+      if(stack.style.maxHeight)stack.style.maxHeight='';
     }
     const stackHeight=stack.getBoundingClientRect().height;
     const naturalTop=mapRect.height-8-stackHeight; // 通常のbottom:8pxが実現する位置に相当
@@ -1834,6 +1877,9 @@ function syncMapButtonStackLayout(){
       stack.style.bottom='';
     }
   });
+  // 「その他」パネルを開いたまま画面の大きさ・向きが変わった場合、パネルは
+  // 開いた時の座標のまま残ってしまうため、ボタンの新しい位置に合わせ直す
+  positionMoreToolsPanel();
 }
 // 画面回転（向きの変更）をすると、Leafletの地図はコンテナのサイズ変化を自動では
 // 検知せず、内部のピクセル座標計算が古いサイズのままになってしまう。これにより、
@@ -1853,8 +1899,15 @@ window.addEventListener('resize',invalidateMapSizeOnRotate);
 window.addEventListener('orientationchange',()=>setTimeout(syncMapButtonStackLayout,300));
 window.addEventListener('orientationchange',invalidateMapSizeOnRotate);
 // ステータスバーの内容（列移動情報の表示/非表示など）はJS側で動的に変わるため、
-// リサイズ以外のタイミングでも定期的に再計算して追従させる
-setInterval(syncMapButtonStackLayout,1500);
+// リサイズ以外のタイミングでも定期的に再計算して追従させる。画面の回転後に
+// resize・orientationchangeのイベントが（端末・WebViewによって）届かなかった、または
+// 実際のサイズが確定する前に届いてしまった場合でも、遅くともこの間隔内に、
+// ボタン群の配置と地図のサイズ（Leaflet）が現在の画面に合った状態へ戻るようにする
+// （invalidateSizeはサイズが変わっていなければ何もしない）
+setInterval(()=>{
+  syncMapButtonStackLayout();
+  if(leafletMap)leafletMap.invalidateSize();
+},1500);
 
 // event_hub.html（イベント終演ハブ）に載っている会場名→座標の対応表。
 // event_hub.html自体には緯度経度が無いため、地図にハイライト表示するための
@@ -2598,11 +2651,30 @@ function toggleMoreToolsPanel(){
   const btn=document.getElementById('more-tools-btn');
   const visible=panel.style.display!=='none'&&panel.style.display!=='';
   if(visible){panel.style.display='none';btn.classList.remove('on');return;}
-  const r=btn.getBoundingClientRect();
-  panel.style.left=(r.right+8)+'px';
-  panel.style.bottom=(window.innerHeight-r.bottom)+'px';
-  panel.style.display='grid';
+  positionMoreToolsPanel(true);
   btn.classList.add('on');
+}
+// 「その他」パネルを🧰ボタンの現在位置に合わせて置く。forceOpenがfalseの時は、
+// 既に開いている場合だけ位置を合わせ直す（画面の大きさ・向きが変わった時用）
+function positionMoreToolsPanel(forceOpen){
+  const panel=document.getElementById('more-tools-panel');
+  const btn=document.getElementById('more-tools-btn');
+  if(!panel||!btn)return;
+  const isOpen=panel.style.display==='grid';
+  if(!isOpen&&!forceOpen)return;
+  // このパネルはposition:fixedだが、親の.pageがtransform（中央寄せ）を持つため、
+  // left/bottomの基準は画面ではなく.pageの枠になる。画面の座標（ボタンの
+  // getBoundingClientRect）をそのままleft/bottomに使うと、横向き（アプリ画面が
+  // 画面の中央に480px幅で寄る）では.pageの左端ぶん、縦ではナビゲーションの
+  // 高さぶんだけ、ボタンからずれて開いてしまう。いったん基準の角（left:0・bottom:0）
+  // に置いて実際の位置を測り、その差分で合わせることで、どの基準でも正しく置く
+  panel.style.left='0px';
+  panel.style.bottom='0px';
+  panel.style.display='grid';
+  const origin=panel.getBoundingClientRect();
+  const r=btn.getBoundingClientRect();
+  panel.style.left=(r.right+8-origin.left)+'px';
+  panel.style.bottom=(origin.bottom-r.bottom)+'px';
 }
 
 let gpsLastUpdate=0,gpsStaleTimer=null,gpsRetryTimer=null,gpsWeakHeartbeat=null;
