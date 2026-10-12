@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-191 -->
+<!-- v20260902-192 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1372,7 +1372,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-191';
+const APP_BUILD='20260902-192';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1628,7 +1628,7 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   setTimeout(checkForUpdate,4000);
   setInterval(checkForUpdate,5*60*1000);
   document.addEventListener('visibilitychange',()=>{
-    if(document.hidden){pageHiddenAt=Date.now();nativeGapWhileHidden=false;startHiddenFeedStat();return;}
+    if(document.hidden){pageHiddenAt=Date.now();startHiddenFeedStat();return;}
     finishHiddenFeedStat();
     checkForUpdate();
     // 設定を変えるためにアプリの設定画面へ移動して戻ってきた時に、バックグラウンド診断の
@@ -1641,15 +1641,20 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
     // 出発（実車ボタンの押し忘れ検知を含む）も捕捉し直す。ごく短時間の切り替え
     // （通知を一瞬確認した等）まで毎回GPSを再取得すると、かえって不安定な
     // 読み取り値で誤検知しやすくなるため対象外にする
-    // ただし、ネイティブの位置情報サービスから、画面が非表示の間も途切れずに位置が
-    // 届き続けていた場合は、乗り場の出入りの判定もその間ずっと動いていたため、この
-    // 取り直しは不要。かえって、復帰直後の一定時間は出発の確定を保留してしまうため、行わない
+    // 画面に戻った直後は、ネイティブから位置が途切れず届いていた場合も、この取り直しと
+    // 猶予（退場の確定を45秒保留する）を省かない。戻った直後は位置が不安定になりやすく
+    // （OSの設定画面・他のアプリから戻った直後に、位置が一時的にずれることがある）、
+    // 猶予が無いと、実際には乗り場にいるのに「○号乗り場を出発しました」が出てしまうため。
+    // 離れていた間に出発していた場合の出発時刻は、圏外へ出た最初の観測時刻（cpExitDetectedTs）を
+    // 使うため、猶予があっても記録はずれない
     const hiddenMs=pageHiddenAt?Date.now()-pageHiddenAt:0;
-    const nativeContinuous=nativeFeedActive()&&!nativeGapWhileHidden;
-    if(isDuty&&hiddenMs>8000&&!nativeContinuous){
+    if(isDuty&&hiddenMs>8000){
       pendingCatchUpCheck=true;
       gpsCatchUpUntil=Date.now()+GPS_SETTLE_GRACE_MS;
       gpsCatchUpStartTs=Date.now();
+      // 離れる前に予約していた退場の確定は、離れていた間の位置を全て確認できた保証が無いため
+      // 取り消し、戻った後の新しい位置で改めて確認する
+      cancelPendingDepartures();
       _restartGPS();
     }
   });
@@ -2904,10 +2909,10 @@ function startGPS(){
 // ネイティブから位置が届かない端末・状況（古いAndroid版・iPhone・通常のブラウザ等）では、
 // これまで通りブラウザ標準のGPSをそのまま使う
 let lastNativeFixTs=0,lastNativeWriterOkTs=0;
-// 画面が非表示の間に、ネイティブからの位置がこの時間より長く途切れた場合は、OSがページの
-// 動作を止めていた可能性があるため、復帰時に見逃した出入りを捕捉し直す（visibilitychange参照）
-const NATIVE_GAP_HIDDEN_MS=15000;
-let nativeGapWhileHidden=false;
+// ネイティブが位置を渡してから、ページがそれを受け取るまでの時間がこの値を超えている位置は、
+// 今の位置ではない（画面が非表示の間、OSがページの動作を止めていて、戻った瞬間にまとめて
+// 届いた等）ため、使わない
+const NATIVE_FIX_MAX_AGE_MS=6000;
 // 画面が非表示になっていた間の、ネイティブからの位置の受信状況（hideで開始し、showで確定する）。
 // 診断カードで「他のアプリを使っていた間も、位置が途切れず届いていたか」を確認できるようにする
 let hiddenFeedStat=null;
@@ -2943,7 +2948,8 @@ window.onNativeLocation=function(lat,lng,acc,spd,brg,ts,writerOk){
   if(!isDuty||!leafletMap)return;
   if(typeof lat!=='number'||typeof lng!=='number'||isNaN(lat)||isNaN(lng))return;
   const now=Date.now();
-  if(document.hidden&&lastNativeFixTs&&now-lastNativeFixTs>NATIVE_GAP_HIDDEN_MS)nativeGapWhileHidden=true;
+  // ④ 古い位置は使わない（受信の記録・位置の判定のどちらにも数えない）
+  if(typeof ts==='number'&&ts>0&&now-ts>NATIVE_FIX_MAX_AGE_MS)return;
   if(document.hidden&&hiddenFeedStat){
     hiddenFeedStat.maxGapMs=Math.max(hiddenFeedStat.maxGapMs,now-hiddenFeedStat.lastTs);
     hiddenFeedStat.lastTs=now;
@@ -3026,6 +3032,7 @@ function runBackgroundDiagnosis(){
   if(needLoc)html+='<button class="btn btn-p" onclick="openLocationSettings()" style="width:100%;margin-top:10px">📍 アプリの設定を開く（「権限」→「位置情報」→「常に許可」）</button>';
   if(needBat)html+='<button class="btn btn-p" onclick="requestBatteryOptimizationExemption()" style="width:100%;margin-top:8px">🔋 電池の最適化を除外する</button>';
   html+='<div style="color:var(--muted);margin-top:10px">機種によっては、スマホ本体の「電池」「バッテリー」の設定で、このアプリを「制限なし」にする、「スリープ状態のアプリ」「バックグラウンド使用の制限」の対象から外す、といった設定も必要です。設定を変えて戻ってくると、この表示は自動で更新されます。</div>';
+  html+='<div style="margin-top:12px"><b>📜 直近の出発の確定の記録</b><div style="color:var(--muted);margin:2px 0 4px">「○号乗り場を出発しました」が実際の動きと合わなかった時は、この表示を画面に撮って管理者へ送ってください。</div>'+departureLogHtml()+'</div>';
   out.innerHTML=html;
 }
 // 出勤した時（アプリを開き直して乗務状態を復元した時を含む）に、背景で止まる設定になっていたら
@@ -5873,6 +5880,20 @@ let pendingDepartureTimer={};
 // 退場の確定を予定している時刻（ms）。タイマーが間引かれても、位置が更新されるたびに
 // この時刻を過ぎていないか確認するために使う
 let pendingDepartureDue={};
+// 退場を確定する時点で、最後に採用した位置がこの時間（ms）より古い場合は確定しない。
+// 画面が非表示の間などに位置が届かないままタイマーだけが動くと、古い位置（直前に外へ
+// ずれて見えた位置等）のまま確定してしまい、実際には乗り場にいるのに「出発しました」が
+// 出てしまう。位置が届くまで確定を見送り、新しい位置で改めて確認する
+const DEPARTURE_CONFIRM_MAX_FIX_AGE_MS=8000;
+// 予約中の退場の確定（タイマー）を全て取り消す。圏外へ出た最初の観測時刻（cpExitDetectedTs）は
+// 残すため、本当に出発していた場合は、新しい位置で改めて確定され、出発時刻もずれない
+function cancelPendingDepartures(){
+  Object.keys(pendingDepartureTimer).forEach(id=>{
+    clearTimeout(pendingDepartureTimer[id]);
+    delete pendingDepartureTimer[id];
+  });
+  pendingDepartureDue={};
+}
 // チェックポイントに「実際に何時何分から」いるかを時刻(ms)で記録し、localStorageにも
 // 書き残しておく。国内線プール出発後にアプリを開き直すことが多く、その際は
 // checkGeofencesの初回フィックスがそのエリアに既に入っている状態から始まるため、
@@ -6032,7 +6053,7 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
     // 過ぎているのにタイマーが動いていなければ、位置が更新されたこのタイミングで確定の
     // 最終確認を行う（実際に圏外へ出た時刻は別に控えてあるため、確定が遅れても記録はずれない）
     if(!nowInside&&pendingDepartureTimer[cp.id]&&pendingDepartureDue[cp.id]&&now>=pendingDepartureDue[cp.id]){
-      confirmDeparture(cp);
+      confirmDeparture(cp,'fix');
       return;
     }
     // GPSのジャンプ・ジッターで直前に反転したばかりの場合は、次の反転まで一定時間待つ
@@ -6083,17 +6104,22 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
       if(pendingDepartureTimer[cp.id])return;
       const confirmMs=getDepartureConfirmMs(cp);
       pendingDepartureDue[cp.id]=now+confirmMs;
-      pendingDepartureTimer[cp.id]=setTimeout(()=>confirmDeparture(cp),confirmMs);
+      pendingDepartureTimer[cp.id]=setTimeout(()=>confirmDeparture(cp,'timer'),confirmMs);
     }
   });
 }
 // 乗り場・プール等の退場を最終確認して確定する。確定までの待ち時間（getDepartureConfirmMs）が
 // 経った後にタイマーから呼ばれるほか、タイマーがバックグラウンドで間引かれて遅れている場合は、
 // 位置が更新されたタイミングでも呼ばれる（checkGeofences内の説明を参照）
-function confirmDeparture(cp){
+function confirmDeparture(cp,via){
   if(pendingDepartureTimer[cp.id]){clearTimeout(pendingDepartureTimer[cp.id]);delete pendingDepartureTimer[cp.id];}
   delete pendingDepartureDue[cp.id];
   if(myLat===null||myLng===null)return;
+  // 位置が古いまま（画面が非表示の間に位置が届かず、タイマーだけが動いた等）では確定しない。
+  // 圏外へ出た最初の観測時刻（cpExitDetectedTs）はそのまま残すため、位置が届いて、まだ
+  // 圏外のままなら、改めて確認した上で確定される（出発時刻もずれない）
+  const fixAgeMs=lastAcceptedFix?Date.now()-lastAcceptedFix.ts:Infinity;
+  if(fixAgeMs>DEPARTURE_CONFIRM_MAX_FIX_AGE_MS)return;
   if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M)){delete cpExitDetectedTs[cp.id];return;} // 境界付近だった（誤検知）
   // 最終確定の時点でもGPSの精度が十分でない場合は確定させない（精度自体は
   // 良さそうに見えても実際の位置とずれる時間帯があり、SPOT_DEPARTURE_MIN_GPS_AGE_MSの
@@ -6127,11 +6153,70 @@ function confirmDeparture(cp){
   cpInside[cp.id]=false;
   // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
   cpLastDepartureSnapshot[cp.id]={arriveTs:cpArriveTs[cp.id],poolModalHandled:!!cp.poolModalHandled,ts:Date.now(),tripSeqAtDeparture:tripCompletedSeq};
+  recordDepartureLog(cp,via,fixAgeMs);
   // onDeparture内で「1分以上滞在したか」の判定にcpArriveTsを使うため、
   // 消去はonDepartureの呼び出しが終わった後に行う
   onDeparture(cp);
   delete cpArriveTs[cp.id];saveCpArriveTs();
   delete cpExitDetectedTs[cp.id];
+}
+
+// ===== 出発を確定した時の状況の記録（診断用） =====
+// 「○号乗り場を出発しました」が実際の動きと合わなかった時に、その時の位置の古さ・精度・
+// 乗り場からの距離・画面から戻ってからの時間などを後から確認し、原因を特定するための記録。
+// 設定タブの「バックグラウンドのGPS診断」に直近の分を表示する。記録に失敗しても、出発の
+// 処理は止めない
+const DEPART_LOG_KEY='taxi_depart_log';
+const DEPART_LOG_MAX=20;
+function recordDepartureLog(cp,via,fixAgeMs){
+  try{
+    const now=Date.now();
+    let outM=null;
+    if(cp.lat!==null&&myLat!==null)outM=Math.round(haversine(myLat,myLng,cp.lat,cp.lng));
+    const settledSince=Math.max(gpsStartTs,gpsCatchUpStartTs);
+    const e={
+      at:now,cp:cp.name,
+      exitTs:cpExitDetectedTs[cp.id]||null,
+      arriveTs:cpArriveTs[cp.id]||null,
+      fixAgeMs:isFinite(fixAgeMs)?Math.round(fixAgeMs):null,
+      acc:typeof myAccuracy==='number'?Math.round(myAccuracy):null,
+      distM:outM,
+      sinceResumeMs:gpsCatchUpStartTs?now-gpsCatchUpStartTs:null,
+      sinceGpsStartMs:settledSince?now-settledSince:null,
+      hidden:!!document.hidden,
+      nativeAgeMs:lastNativeFixTs?now-lastNativeFixTs:null,
+      via:via||''
+    };
+    const arr=loadDepartureLog();
+    arr.push(e);
+    while(arr.length>DEPART_LOG_MAX)arr.shift();
+    localStorage.setItem(DEPART_LOG_KEY,JSON.stringify(arr));
+  }catch(err){console.error('出発の記録に失敗しました',err);}
+}
+function loadDepartureLog(){
+  try{
+    const a=JSON.parse(localStorage.getItem(DEPART_LOG_KEY)||'[]');
+    return Array.isArray(a)?a:[];
+  }catch(e){return [];}
+}
+// 診断カードに表示する、直近の出発の確定の記録（新しい順に最大5件）
+function departureLogHtml(){
+  const arr=loadDepartureLog().slice(-5).reverse();
+  if(!arr.length)return '<div style="color:var(--muted)">まだ記録がありません（乗り場やプールを出発すると、その時の状況が残ります）</div>';
+  const t=ms=>ms?new Date(ms).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'−';
+  const sec=ms=>ms===null||ms===undefined?'−':(ms<60000?Math.round(ms/1000)+'秒':Math.round(ms/60000)+'分');
+  return arr.map(e=>{
+    const parts=[
+      '圏外へ出た '+t(e.exitTs),
+      '位置の古さ '+sec(e.fixAgeMs),
+      '精度 '+(e.acc===null?'−':e.acc+'m'),
+      '中心から '+(e.distM===null?'−':e.distM+'m'),
+      '画面復帰・GPS開始から '+sec(e.sinceResumeMs===null?e.sinceGpsStartMs:e.sinceResumeMs),
+      '画面 '+(e.hidden?'非表示':'表示中'),
+      '確定 '+(e.via==='fix'?'位置更新時':'タイマー')
+    ];
+    return '<div style="padding:5px 0;border-bottom:1px solid var(--border)"><b>'+esc(t(e.at)+' '+(e.cp||''))+'</b><div style="color:var(--muted)">'+esc(parts.join(' ／ '))+'</div></div>';
+  }).join('');
 }
 
 // チェックポイント名から、押し忘れ検知で使う乗り場ラベル（1号〜4号／国際線）を判定する
