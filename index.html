@@ -23,10 +23,28 @@
   }catch(e){}
 })();
 </script>
+<script>
+// 画面の上下（ステータスバー・ナビゲーションバー）の余白の扱いを切り替える。
+// 端末によっては、アプリの画面がホームボタン・ホームジェスチャーの領域と重なって押せなくなるため、
+// 以前から、端末が知らせる「セーフエリア」の分だけ、ヘッダーの上とメニューの下に余白を
+// 取っていた（--sat / --sab）。一方、Androidアプリ（WebView）側が、最初からWebViewを
+// システムのバーの内側へ収めている場合は、重なりが起きないため、この余白は二重になって
+// 無駄な空白になる。そのため、Androidアプリ側が「バーの内側への配置は自分で行っている」と
+// 知らせてきた時だけ、ページ側の余白を0にする。知らせてこない場合（古いバージョンのアプリ、
+// Chrome、ホーム画面に追加したアプリ）は、従来どおりセーフエリアの分だけ余白を取る
+(function(){
+  try{
+    var b=window.AndroidBridge;
+    if(b&&typeof b.insetsHandledNatively==='function'&&b.insetsHandledNatively()){
+      document.documentElement.classList.add('native-insets');
+    }
+  }catch(e){}
+})();
+</script>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-187 -->
+<!-- v20260902-188 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -46,7 +64,12 @@
   --text:#e8e8f4;--muted:#7878a0;--accent:#4f8ef7;
   --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--purple:#a855f7;--cyan:#06b6d4;
   --gold:#fbbf24;--hh:54px;--nh:48px;
+  /* 画面の上下の余白（ステータスバー・ホームボタン/ホームジェスチャーの領域）。端末が知らせる
+     セーフエリアの分だけ取る。Androidアプリ側で既にWebViewをバーの内側へ収めている場合は、
+     下の.native-insetsで0にする（<head>内のスクリプトを参照） */
+  --sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px);
 }
+:root.native-insets{--sat:0px;--sab:0px}
 /* 一部の端末・ブラウザではアドレスバー等が常に表示され続け、100%（=100vh相当）だと
    実際に見えている範囲より高さを大きく見積もってしまい、position:fixedの画面下部の
    ボタン類がブラウザのツールバーの下に隠れて押せなくなることがあった。動的な
@@ -59,8 +82,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sans-serif;
   background:var(--bg);color:var(--text);max-width:480px;margin:0 auto;position:relative}
 .hdr{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
-  height:calc(var(--hh) + env(safe-area-inset-top,0px));box-sizing:border-box;
-  padding-top:env(safe-area-inset-top,0px);
+  height:calc(var(--hh) + var(--sat));box-sizing:border-box;
+  padding-top:var(--sat);
   background:var(--surface);border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;padding-left:14px;padding-right:14px;z-index:1000}
 .hdr-title{font-size:15px;font-weight:700;letter-spacing:.3px;line-height:1.15}
@@ -68,8 +91,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .duty-btn.on{background:var(--green);color:#fff}
 .duty-btn.off{background:var(--red);color:#fff}
 .nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
-  height:calc(var(--nh) + env(safe-area-inset-bottom,0px));box-sizing:border-box;
-  padding-bottom:env(safe-area-inset-bottom,0px);
+  height:calc(var(--nh) + var(--sab));box-sizing:border-box;
+  padding-bottom:var(--sab);
   background:var(--surface);border-top:1px solid var(--border);
   display:flex;z-index:1000}
 .nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -81,8 +104,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   background:var(--red);border-radius:8px;display:none;
   font-size:10px;font-weight:700;color:#fff;
   align-items:center;justify-content:center;padding:0 4px;line-height:16px;text-align:center}
-.page{display:none;position:fixed;top:calc(var(--hh) + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);
-  width:100%;max-width:480px;bottom:calc(var(--nh) + env(safe-area-inset-bottom,0px));overflow-y:auto}
+.page{display:none;position:fixed;top:calc(var(--hh) + var(--sat));left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;bottom:calc(var(--nh) + var(--sab));overflow-y:auto}
 .page.active{display:block}
 #page-map{overflow:hidden}
 #map{width:100%;height:100%;position:relative}
@@ -1137,7 +1160,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <!-- 出勤時 車番入力モーダル -->
 <div id="duty-car-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--surface);border-radius:20px;padding:28px 22px calc(22px + env(safe-area-inset-bottom,0px));width:100%;max-width:340px;max-height:calc(100vh - 32px);overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.6)">
+  <div style="background:var(--surface);border-radius:20px;padding:28px 22px calc(22px + var(--sab));width:100%;max-width:340px;max-height:calc(100vh - 32px);overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.6)">
     <div style="margin-bottom:16px;background:rgba(79,142,247,.1);border:1.5px solid rgba(79,142,247,.4);border-radius:12px;padding:12px">
       <div id="duty-planned-hours-label" style="font-size:13px;color:var(--text);margin-bottom:10px;text-align:center;font-weight:700">📅 本日の予定時間: --時間--分</div>
       <div style="display:flex;gap:6px">
@@ -1207,7 +1230,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <div class="arrival-sub" id="arrival-sub"></div>
 </div>
 <div id="fare-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
- <div style="background:var(--surface);border-radius:20px;padding:28px 22px calc(22px + env(safe-area-inset-bottom,0px));width:100%;max-width:340px;max-height:calc(100vh - 32px);overflow-y:auto">
+ <div style="background:var(--surface);border-radius:20px;padding:28px 22px calc(22px + var(--sab));width:100%;max-width:340px;max-height:calc(100vh - 32px);overflow-y:auto">
   <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:20px">🚕 お疲れさまでした</div>
   <div style="margin-bottom:16px">
    <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">運賃（円・税込）</div>
@@ -1262,7 +1285,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <!-- 日次精算レポート（退勤後に自動表示、設定タブの履歴からも再表示できる） -->
 <div id="settlement-report-modal" style="position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:16px">
- <div style="background:var(--surface);border-radius:20px;padding:22px 18px calc(18px + env(safe-area-inset-bottom,0px));width:100%;max-width:380px;max-height:calc(100vh - 32px);overflow-y:auto">
+ <div style="background:var(--surface);border-radius:20px;padding:22px 18px calc(18px + var(--sab));width:100%;max-width:380px;max-height:calc(100vh - 32px);overflow-y:auto">
   <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:2px">🧾 本日の納金額</div>
   <div id="settlement-date-label" style="text-align:center;font-size:12px;color:var(--text);margin-bottom:16px"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
@@ -1343,7 +1366,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-187';
+const APP_BUILD='20260902-188';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1668,7 +1691,7 @@ function showUpdateBanner(){
   b.id='update-banner';
   b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:var(--accent);color:#fff;'
     +'text-align:center;font-size:13px;font-weight:700;cursor:pointer;'
-    +'padding:10px 14px calc(10px + env(safe-area-inset-top,0px));';
+    +'padding:10px 14px calc(10px + var(--sat));';
   b.textContent='🔄 アプリの更新があります。タップして最新の状態に更新してください';
   b.onclick=()=>location.reload();
   document.body.appendChild(b);
@@ -1684,7 +1707,7 @@ function showGpsPermissionBanner(){
   b.id='gps-permission-banner';
   b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99998;background:var(--red);color:#fff;'
     +'text-align:center;font-size:13px;font-weight:700;cursor:pointer;'
-    +'padding:10px 14px calc(10px + env(safe-area-inset-top,0px));';
+    +'padding:10px 14px calc(10px + var(--sat));';
   b.textContent='📍 位置情報が許可されていません。タップして許可してください（仲間にアイコンが表示されません）';
   b.onclick=()=>openLocationSettings();
   document.body.appendChild(b);
@@ -1707,7 +1730,7 @@ function showGpsUnavailableBanner(){
   b.id='gps-unavailable-banner';
   b.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99998;background:var(--red);color:#fff;'
     +'text-align:center;font-size:13px;font-weight:700;cursor:pointer;'
-    +'padding:10px 14px calc(10px + env(safe-area-inset-top,0px));';
+    +'padding:10px 14px calc(10px + var(--sat));';
   b.textContent='📍 端末が位置情報を取得できません。アプリの許可ではなく、端末本体の「設定＞位置情報」がオンか確認してください';
   b.onclick=()=>openLocationSettings();
   document.body.appendChild(b);
@@ -1728,7 +1751,7 @@ function showPostResetDataBanner(backupTs){
   // ヘッダー（出勤する・設定ボタン等）に重なって操作できなくなることが無いよう、
   // 画面の一番上（top:0）ではなく、ヘッダーのすぐ下＝地図画面などページ本体の
   // 上端に表示する
-  b.style.cssText='position:fixed;left:0;right:0;top:calc(var(--hh) + env(safe-area-inset-top,0px));z-index:900;background:var(--gold);color:#1a1200;'
+  b.style.cssText='position:fixed;left:0;right:0;top:calc(var(--hh) + var(--sat));z-index:900;background:var(--gold);color:#1a1200;'
     +'display:flex;align-items:center;justify-content:space-between;gap:8px;'
     +'font-size:12px;font-weight:700;'
     +'padding:9px 10px 9px 14px;';
