@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-188 -->
+<!-- v20260902-189 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1366,7 +1366,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-188';
+const APP_BUILD='20260902-189';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -3077,6 +3077,7 @@ function registerDriverOnDisconnect(){
 function endDutyImmediate(){
   if(!isDuty)return;
   isDuty=false;
+  pendingWaitFinalize=null;clearBoardDep();
   notifyAndroidDutyStatus(false);
   if(db&&!testMode){
     const myRef=db.ref('drivers/'+myId);
@@ -3790,6 +3791,7 @@ async function adminForceStartDuty(){
 
 function _startDuty(){
   isDuty=true;
+  pendingWaitFinalize=null;clearBoardDep();
   notifyAndroidDutyStatus(true);
   const btn=document.getElementById('duty-btn');
   const lbl=document.getElementById('duty-label');
@@ -3860,15 +3862,47 @@ let jitsushaStart=null;
 let longJitsushaNotified=false;
 const LONG_JITSUSHA_WARN_MS=45*60*1000; // 45分
 let boardInfo=null;          // 実車時の乗車情報
-// 実車ボタンを、まだ乗り場エリア内にいる状態で押した場合に使う。押した時点では
-// 待機時間を確定させず、実際にGPSで退場が確定した時点でboardInfo.waitMinsを
-// 正しい時間に補正するための、補正待ちの情報（対象チェックポイントID・待機開始時刻）
-let pendingWaitCorrection=null;
-// 実車ボタンを、まだ乗り場エリア内にいる状態で押した場合、チャットへの
-// 「出発しました」自動通知も、押した瞬間ではなく実際にGPSで退場が確定した
-// 時刻を使って送りたい。押した時点ではまだ送らず、このオブジェクトに
-// 通知内容だけ保持しておき、onDeparture側で確定時刻を使って送信する
-let pendingDepartureChatNotif=null;
+// ===== 待機時間の計測ルール =====
+// 待機時間は「プールに到着した時刻」から「乗り場のエリアを出発した時刻」までとする。
+// 実車ボタンを押した時刻には左右されない。実車ボタンの押し忘れを防ぐために、乗り場を
+// 出発する前に早めに押す人も、出発した後に遅れて押す人もいるため、どちらの場合も
+// GPSで確認した出発時刻までを待機時間として記録する（GPSで出発が確認できなかった場合
+// だけ、従来どおり実車ボタンを押した時刻までとする）。
+// 出発の確定のしかた：
+//  ・国内線は、1〜4号乗り場の判定エリアを出た時刻を「出発の候補（spotTs）」として控え、
+//    羽田プール本体（半径200m）の退場が確定した時に、その候補の時刻で出発を確定する。
+//    乗り場の判定エリアは小さく、境界付近のGPSのブレや、隣の乗り場へ進む途中で一瞬
+//    エリアを出ただけのことがあるため、プール本体の退場で裏付けを取る。
+//    乗り場へ入り直した場合（誤って出たとみなされていた場合）は、候補を取り消す。
+//    乗り場のエリアに入った記録が無く、プール本体の退場だけが確認できた場合は、
+//    その退場時刻を使う
+//  ・国際線は、第3プール自体が乗り場のため、第3プールの退場が確定した時刻を使う
+// boardDep: {startTs:待機の起点, spotTs:乗り場を出た時刻の候補, endTs:確定した出発時刻}
+// リロードしても失われないよう、localStorageにも保存する
+const BOARD_DEP_KEY='taxi_board_dep';
+// 出発の記録がこれより古い場合は、別の乗車のものとみなして使わない
+const BOARD_DEP_MAX_AGE_MS=3*60*60*1000;
+function loadBoardDep(){
+  try{
+    const v=JSON.parse(localStorage.getItem(BOARD_DEP_KEY)||'null');
+    return (v&&typeof v==='object')?v:null;
+  }catch(e){return null;}
+}
+let boardDep=loadBoardDep();
+function saveBoardDep(){
+  try{
+    if(boardDep)localStorage.setItem(BOARD_DEP_KEY,JSON.stringify(boardDep));
+    else localStorage.removeItem(BOARD_DEP_KEY);
+  }catch(e){}
+}
+function clearBoardDep(){boardDep=null;saveBoardDep();}
+// 実車ボタンを、まだ乗り場のエリア内（プール内）にいる状態で押した場合に使う。この時点では
+// 待機時間を確定させず、実際に出発が確定した時（handleBoardAreaDeparture）に、
+// 送り先の記録・乗り場別の統計・待機履歴・チャットの出発通知を、確定した待機時間にそろえる。
+// {startTs:待機の起点, boardSpot, chat:出発通知を送るか, statRef:押した時点で記録した暫定の
+// 統計の保存先, histTs:押した時点で保存した暫定の待機履歴}。リロードをまたいで失われない
+// よう、乗務状態（saveAppState）にも含めて保存する
+let pendingWaitFinalize=null;
 // 乗り場からの自動出発通知をチャットへ送る前に、Firebase上の自分の
 // dutyActive（出退勤の共有された正式な状態）を必ず取り直して確認してから
 // 送信する。複数タブ・古いバックグラウンドインスタンス等でローカルのisDuty
@@ -3876,13 +3910,18 @@ let pendingDepartureChatNotif=null;
 // 出発通知がチャットに出てしまうことを確実に防ぐための最終防衛ライン
 // （呼び出し元では従来どおりローカルのisDutyも先にチェックしているが、
 // それとは別にここでも必ず再確認する）
-function sendAutoDepartureChat(text,ts){
+// 第2引数は「出発した時刻」。チャットに表示される時刻（time）は、この出発した時刻にする
+// （待機時間の終点と同じ。実車ボタンを押した時刻や、通知を送った時刻ではない）。
+// 一方、メッセージの送信時刻（ts）は実際に送る時刻にしておく。仲間の端末の未読表示・通知や
+// 既読の数は、tsが新しいかどうかで判定しているため、出発時刻まで古くしてしまうと、
+// 遅れて送るメッセージ（出発の後に実車ボタンを押した場合）が未読・通知の対象から漏れる
+function sendAutoDepartureChat(text,departTs){
   if(!db)return;
   db.ref('drivers/'+myId+'/dutyActive').once('value').then(snap=>{
     if(snap.val()!==true)return;
     const name=localStorage.getItem('taxi_name')||'自分';
     db.ref('chat').push({uid:myId,name,text,
-      time:new Date(ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts,isAuto:true})
+      time:new Date(departTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}),ts:Date.now(),isAuto:true})
       .catch(err=>console.error('chat auto push failed',err));
   }).catch(err=>console.error('dutyActive確認に失敗しました',err));
 }
@@ -3970,7 +4009,10 @@ function saveAppState(){
     poolModalHandled:!!(hCpSave&&hCpSave.poolModalHandled),
     cpArrivalTimeStr:hCpSave?hCpSave.arrivalTimeStr:null,
     // 乗り場移動履歴（1号→2号 等）も、確定前にリロードを挟んで消えないよう保存する
-    spotChangeHistory
+    spotChangeHistory,
+    // 実車ボタンを乗り場のエリア内で先に押し、出発の確定を待っている間にリロードしても、
+    // 確定した時に待機時間を正しくそろえられるよう保存する
+    pendingWaitFinalize
   }));
 }
 // オートフォロー・仲間フォローの状態は、出退勤の状態とは別に常に保存・復元する
@@ -4056,6 +4098,7 @@ function restoreAppState(){
   if(st.manualWaitAddr)manualWaitAddr=st.manualWaitAddr;
   if(st.jitsushaStart)jitsushaStart=st.jitsushaStart;
   if(Array.isArray(st.spotChangeHistory))spotChangeHistory=st.spotChangeHistory;
+  if(st.pendingWaitFinalize&&typeof st.pendingWaitFinalize==='object')pendingWaitFinalize=st.pendingWaitFinalize;
   // 待機場所ラベル復元
   const spotLblEl=document.getElementById('wait-spot-lbl');
   const restoredSpot=(st.waitSpot||'').replace('未設定','').trim();
@@ -4143,15 +4186,12 @@ function setStatus(s){
       return manualWaitStartTime||null;
     };
     // 待機時間の起点（waitStartTsUsed）：
-    // ① 号ボタンを押した／押し忘れて自動検知された、いずれの場合も「国内線プールに
-    //    入った時刻」(poolArriveTs) を起点にし、実車ボタンを押すまで（＝押し忘れの
-    //    場合は1分以上滞在後にエリアを出て自動的に実車扱いになった時刻まで）の
-    //    総経過時間とする。〇号ボタンを押した時刻や、プール到着から2分後に自動で
-    //    始まる待機タイマーの開始時刻は使わない
+    // ① 号ボタンを押した場合も押さなかった場合も「国内線プールに入った時刻」
+    //    (poolArriveTs) を起点にする。〇号ボタンを押した時刻や、プール到着から
+    //    10秒後に自動で始まる待機タイマーの開始時刻は使わない。
+    //    終点は、実車ボタンを押した時刻ではなく乗り場を出発した時刻（下の「待機時間の
+    //    終点」参照）
     let waitStartTsUsed;
-    // 実車ボタンを押した時点で、まだ待機の起点となったエリア内にいる場合、その
-    // チェックポイントを退場確定監視の対象にする（下のpendingWaitCorrection参照）
-    let departureWatchCp=null;
     if(boardSpot&&poolArriveTs&&spotArriveTs){
       // プール本体（羽田プール、半径200m）はGPSのブレで一瞬「退場→再入場」と
       // 誤判定され、cpArriveTsが実際より新しい時刻にリセットされてしまうことが
@@ -4159,16 +4199,9 @@ function setStatus(s){
       // 出たと誤検知される等）。号自体（1〜4号、精度基準がより厳しい）の到着時刻の
       // 方が古ければ、実際にはそちらからずっと待っていたということなので、
       // より古い方（＝実際の待機開始）を使う
-      if(spotArriveTs<poolArriveTs){
-        waitStartTsUsed=spotArriveTs;
-        departureWatchCp=spotCp;
-      }else{
-        waitStartTsUsed=poolArriveTs;
-        departureWatchCp=poolCp;
-      }
+      waitStartTsUsed=spotArriveTs<poolArriveTs?spotArriveTs:poolArriveTs;
     } else if(boardSpot&&poolArriveTs){
       waitStartTsUsed=poolArriveTs;
-      departureWatchCp=poolCp;
     } else if(boardSpot==='国際線'){
       // 国際線は、第4プール（予備）に1分以上停止していればその到着時刻を、
       // 素通りしていた場合は第3プール（本プール）への到着時刻を待機開始とする
@@ -4176,10 +4209,8 @@ function setStatus(s){
       const intlStartTs=intlPool4ArriveTs||(cp3?cpArriveTs[cp3.id]:null);
       intlPool4ArriveTs=null; // 使い終わったので次回の国際線待機のためにクリアしておく
       waitStartTsUsed=intlStartTs||legacyWaitStartTs();
-      departureWatchCp=cp3;
     } else if(boardSpot&&spotArriveTs){
       waitStartTsUsed=spotArriveTs;
-      departureWatchCp=spotCp;
     } else {
       waitStartTsUsed=legacyWaitStartTs();
     }
@@ -4195,7 +4226,30 @@ function setStatus(s){
     if(spotChangeHistory.length&&spotChangeHistory[0].ts&&(!waitStartTsUsed||spotChangeHistory[0].ts<waitStartTsUsed)){
       waitStartTsUsed=spotChangeHistory[0].ts;
     }
-    const waitMins=waitStartTsUsed?Math.round((Date.now()-waitStartTsUsed)/60000):null;
+    // 待機時間の終点（新ルール。詳しくはboardDepの定義部のコメント参照）：
+    // 実車ボタンを押した時刻ではなく、乗り場のエリアを出発した時刻までを待機時間とする。
+    //  ① 既に出発が確定している（出発後に遅れて押した）場合は、その出発時刻
+    //  ② まだ乗り場のエリア内（プール内）にいる（出発前に早めに押した）場合は、出発が
+    //     確定するまで待機時間を確定させない。ここでは押した時刻までを暫定値として
+    //     記録しておき、出発が確定した時（handleBoardAreaDeparture）に、送り先の記録・
+    //     乗り場別の統計・待機履歴・チャット通知を、確定した待機時間にそろえる
+    //  ③ どちらでもない（GPSで出発を確認できていない）場合は、従来どおり押した時刻まで
+    let waitEndTs=null;
+    let departurePending=false;
+    if(boardDep){
+      const depTs=boardDep.endTs||((!isInBoardArea()&&boardDep.spotTs)||null);
+      if(depTs&&Date.now()-depTs<BOARD_DEP_MAX_AGE_MS){
+        waitEndTs=depTs;
+        // 出発の記録に残した待機の起点（到着時刻）の方が古ければ、そちらを使う。
+        // 出発の後は到着時刻(cpArriveTs)が消えているため、上の起点が、待機タイマーの
+        // 開始時刻など、実際の到着より新しい時刻になっていることがある
+        if(boardDep.startTs&&(!waitStartTsUsed||boardDep.startTs<waitStartTsUsed))waitStartTsUsed=boardDep.startTs;
+      }
+    }
+    if(!waitEndTs&&waitStartTsUsed&&isInBoardArea())departurePending=true;
+    // 出発時刻が起点より後の場合だけ採用する（起点より前なら記録の食い違いのため、押した時刻にする）
+    const waitEndTsUsed=(waitEndTs&&waitEndTs>(waitStartTsUsed||0))?waitEndTs:Date.now();
+    const waitMins=waitStartTsUsed?Math.round((waitEndTsUsed-waitStartTsUsed)/60000):null;
     // 実車ボタンの押し忘れ検知（GPS自動判定）で実車になったかどうかを記録しておく。
     // 短時間で空車に戻された場合、GPS誤作動を疑って乗り場別送先リストの集計対象
     // から除外するために使う（createTripEntry参照）
@@ -4210,13 +4264,6 @@ function setStatus(s){
       spotHistory:spotChangeHistory.length>1?spotChangeHistory.slice():null,
       auto:wasAuto
     };
-    // 実車ボタンを、まだそのエリア内にいる状態で押した場合（＝出発前に押した場合）は、
-    // 押した瞬間の時刻ではなく、実際にGPSで退場が確定した時刻までを待機時間として
-    // 計上したい。ここでは即座に確定させず、退場確定を監視する情報だけ残しておき、
-    // 実際の退場確定はonDeparture側でboardInfo.waitMinsを補正する形で行う
-    pendingWaitCorrection=(departureWatchCp&&waitStartTsUsed&&cpInside[departureWatchCp.id])
-      ?{cpId:departureWatchCp.id,waitStartTsUsed}
-      :null;
     manualWaitStartTime=null;manualWaitAddr=null;
     // 同じ乗り場（羽田プール）に留まったまま連続でお客様を乗せる場合、実車ボタンを
     // 押すたびに号選択をリセットしてしまうと、毎回チップを押し直さない限り
@@ -4225,23 +4272,23 @@ function setStatus(s){
     const staysInPool=checkpoints.some(c=>c.spots&&c.spots.length>0&&cpInside[c.id]);
     if(!staysInPool)currentSpotSelection=null;
     spotChangeHistory=[];
-    // 曜日・時間帯別の待機時間統計に記録する（月末リセットの対象外で累計し続ける）
-    recordSpotWaitStat(boardSpot,waitMins,Date.now());
+    // 曜日・時間帯別の待機時間統計に記録する（月末リセットの対象外で累計し続ける）。
+    // 出発の確定待ちの場合は暫定値で記録しておき、確定した時に正しい値へ置き換える
+    const statRef=recordSpotWaitStat(boardSpot,waitMins,waitEndTsUsed,waitStartTsUsed);
     // 羽田空港の乗り場から出発する場合、仲間に自動でチャット通知する。
-    // 実車ボタンを、まだ乗り場エリア内にいる状態で押した場合（pendingWaitCorrection
-    // と同じ条件）は、押した瞬間はまだ実際の出発時刻ではないため、ここでは送らず、
-    // 実際にGPSで退場が確定した時刻（onDeparture）まで待ってから送る
+    // 出発の確定待ち（まだ乗り場エリア内）の場合は、押した瞬間はまだ実際の出発時刻ではない
+    // ため、ここでは送らず、出発が確定した時刻まで待ってから送る（resolvePendingWait）
+    let chatPending=false;
     if(boardSpot&&db&&isDuty&&!testMode){
-      const stillInsideAtBoard=!!(departureWatchCp&&cpInside[departureWatchCp.id]);
-      if(stillInsideAtBoard){
-        pendingDepartureChatNotif={cpId:departureWatchCp.id,boardSpot};
+      if(departurePending){
+        chatPending=true;
       }else{
         const name=localStorage.getItem('taxi_name')||'自分';
         const wm=(waitMins&&waitMins>0)?waitMins:0;
         const wh=Math.floor(wm/60),wmm=wm%60;
         const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
         const spotPhrase=boardSpot==='国際線'?'羽田空港国際線乗り場':`${boardSpot}乗り場`;
-        sendAutoDepartureChat(`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,Date.now());
+        sendAutoDepartureChat(`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,waitEndTsUsed);
       }
     }
     // 国際線乗り場からの出発（実車ボタン・押し忘れ検知のいずれも）は、本人にも通知する
@@ -4272,16 +4319,27 @@ function setStatus(s){
     // 止められているため、以前はここで待機履歴への記録がスキップされていた。
     // waitStartTsUsedの有無で判定することで、押した場合／押し忘れた場合の
     // どちらでも同じ基準で待機履歴に記録されるようにする
+    let histTs=null;
     if(waitStartTsUsed){
-      const nowStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+      const nowStr=new Date(waitEndTsUsed).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
       const spotLabel=boardSpot||(hCpAll?hCpAll.name:'待機中');
-      const elapsedSec=Math.max(0,Math.round((Date.now()-waitStartTsUsed)/1000));
-      if(elapsedSec>0)saveWaitHistory(spotLabel,arrStr,nowStr,elapsedSec);
+      const elapsedSec=Math.max(0,Math.round((waitEndTsUsed-waitStartTsUsed)/1000));
+      if(elapsedSec>0)histTs=saveWaitHistory(spotLabel,arrStr,nowStr,elapsedSec);
     }
+    // 乗り場のエリア内（プール内）で押した場合は、出発が確定するまで待機時間の確定を待つ。
+    // 出発が確定済みだった場合は、その記録はこの乗車で使い切る
+    pendingWaitFinalize=departurePending
+      ?{startTs:waitStartTsUsed,boardSpot,chat:chatPending,statRef,histTs}
+      :null;
+    if(waitEndTs)clearBoardDep();
     resetWait();
     saveAppState(); // 号選択の維持/リセット状態を、リロードをまたいでも正しく復元できるよう保存し直す
   }
   if(prev==='jitsusha'&&(s==='kuusha'||s==='kaisou')){
+    // 出発の確定（乗り場エリアの退場）を待っていたのに、確定しないまま降車まで進んだ場合
+    // （GPSが取れない等）は、乗り場を出た時刻の候補があればそれで確定し、無ければ実車ボタンを
+    // 押した時点の暫定値のままにする。確定待ちは次の乗車に持ち越さない
+    flushPendingWait();
     const fallbackBoardTs=jitsushaStart; // 実車開始時刻を、乗車時刻の保険として保持
     jitsushaStart=null;
     longJitsushaNotified=false;
@@ -4818,6 +4876,7 @@ function resetWait(){stopWait();waitSec=0;document.getElementById('wait-timer').
 function resetWaitAndHistory(){
   resetWait();
   boardInfo=null;manualWaitStartTime=null;manualWaitAddr=null;
+  pendingWaitFinalize=null;clearBoardDep();
   // 直近の自動登録された送り先エントリを1件削除
   for(let i=destinations.length-1;i>=0;i--){
     if(destinations[i].type==='trip'||destinations[i].auto){
@@ -4976,15 +5035,33 @@ const DOW_JP=['日','月','火','水','木','金','土'];
 const SPOT_WAIT_STAT_MAX_MINS=200;
 // 曜日・時間帯別の待機時間統計に記録する（team_destsとは別パスのため月末リセットの対象外）
 // 時間帯は「待機を始めた時刻（実車ボタンを押した時刻から待機時間を差し引いた時刻）」の時を使う
-function recordSpotWaitStat(boardSpot,waitMins,boardTs){
-  if(!db||!boardSpot||!waitMins||waitMins<=0||testMode)return;
-  if(waitMins>=SPOT_WAIT_STAT_MAX_MINS)return;
-  const arrivalTs=boardTs-waitMins*60000;
+// 戻り値は記録した場所（後から値を置き換えるため）。記録しなかった場合はnull。
+// arrivalTsOverrideを渡した場合は、その時刻（待機の起点）の「時」に記録する
+function recordSpotWaitStat(boardSpot,waitMins,boardTs,arrivalTsOverride){
+  if(!db||!boardSpot||!waitMins||waitMins<=0||testMode)return null;
+  if(waitMins>=SPOT_WAIT_STAT_MAX_MINS)return null;
+  const arrivalTs=arrivalTsOverride||(boardTs-waitMins*60000);
   const d=new Date(arrivalTs);
   const day=DOW_JP[d.getDay()];
   const hour=d.getHours();
-  db.ref(`spot_wait_stats/${boardSpot}/${day}/${hour}`).push(waitMins)
-    .catch(err=>console.error('spot_wait_stats push failed',err));
+  const path=`spot_wait_stats/${boardSpot}/${day}/${hour}`;
+  const ref=db.ref(path).push(waitMins);
+  ref.catch(err=>console.error('spot_wait_stats push failed',err));
+  return {path,key:ref.key||null};
+}
+// 実車ボタンを乗り場のエリア内で先に押した時に記録した暫定の値を、出発が確定した時間に置き換える
+// （暫定値を記録していなかった場合は、確定した時間で新しく記録する）
+function updateSpotWaitStat(statRef,boardSpot,mins,startTs,endTs){
+  if(!db||testMode||!boardSpot)return;
+  if(statRef){
+    // 保存先のキーが分からない場合は、二重に記録しないよう何もしない
+    if(!statRef.path||!statRef.key)return;
+    const r=db.ref(statRef.path+'/'+statRef.key);
+    if(mins>0&&mins<SPOT_WAIT_STAT_MAX_MINS)r.set(mins).catch(err=>console.error('spot_wait_stats update failed',err));
+    else r.remove().catch(err=>console.error('spot_wait_stats remove failed',err));
+    return;
+  }
+  recordSpotWaitStat(boardSpot,mins,endTs,startTs);
 }
 function openWaitStartModal(){
   // タイマーが既に動いている場合は、その開始時刻を修正できるようにする
@@ -5072,14 +5149,31 @@ function startWaitManual(startTs){
   toast('⏱ 待機タイマー スタート');
 }
 
+// 戻り値は保存した履歴のts（後から出発時刻・待機時間を直すためのキー）
 function saveWaitHistory(spotName,arrivalTimeStr,departureTimeStr,elapsedSec){
   const hist=JSON.parse(localStorage.getItem('taxi_wait_history')||'[]');
   const today=new Date().toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
-  hist.unshift({date:today,spot:spotName,arrival:arrivalTimeStr,departure:departureTimeStr,sec:elapsedSec,ts:Date.now()});
+  const ts=Date.now();
+  hist.unshift({date:today,spot:spotName,arrival:arrivalTimeStr,departure:departureTimeStr,sec:elapsedSec,ts});
   const cutoff=Date.now()-7*24*60*60*1000;
   const trimmed=hist.filter(h=>h.ts>cutoff).slice(0,200);
   localStorage.setItem('taxi_wait_history',JSON.stringify(trimmed));
   renderWaitHistory();
+  return ts;
+}
+// 実車ボタンを乗り場のエリア内で先に押した時に保存した暫定の履歴を、出発が確定した
+// 時刻・待機時間に直す
+function patchWaitHistory(histTs,startTs,endTs){
+  if(!histTs)return;
+  try{
+    const hist=JSON.parse(localStorage.getItem('taxi_wait_history')||'[]');
+    const h=hist.find(x=>x.ts===histTs);
+    if(!h)return;
+    h.departure=new Date(endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    h.sec=Math.max(0,Math.round((endTs-startTs)/1000));
+    localStorage.setItem('taxi_wait_history',JSON.stringify(hist));
+    renderWaitHistory();
+  }catch(e){console.error('待機履歴の更新に失敗しました',e);}
 }
 
 function renderWaitHistory(){
@@ -5813,39 +5907,98 @@ function intlPoolArrivalText(cp){
   if(cp.name.includes('国際線第3プール'))return '国際線第３プールに到着しました。';
   return null;
 }
+// 待機の起点・終点の計測用の関数群（計測ルールはboardDepの定義部のコメント参照）
+
+// 待機・出発の判定対象になるチェックポイントか（国内線プール・1〜4号乗り場・国際線の第3/第4プール）
+function isBoardRelatedCp(cp){
+  if(!cp)return false;
+  if(cp.spots&&cp.spots.length>0)return true;
+  if(spotLabelFromCheckpointName(cp.name))return true;
+  return !!(cp.name&&cp.name.includes('国際線')&&cp.name.includes('第4'));
+}
+// 今、プール・乗り場のエリア内にいるか（＝出発がまだ確定していないか）
+function isInBoardArea(){
+  return checkpoints.some(c=>cpInside[c.id]&&isBoardRelatedCp(c));
+}
+// 出発が確定する時点での、待機の起点（GPSの到着時刻のうち最も古いもの）。出発の確定後は
+// 到着時刻(cpArriveTs)が消されるため、確定する時点で控えておく
+function waitOriginTsForDeparture(cp){
+  const cands=[];
+  const poolCp=checkpoints.find(c=>c.spots&&c.spots.length>0);
+  if(poolCp&&cpArriveTs[poolCp.id])cands.push(cpArriveTs[poolCp.id]);
+  if(cp&&cpArriveTs[cp.id])cands.push(cpArriveTs[cp.id]);
+  if(cp&&spotLabelFromCheckpointName(cp.name)==='国際線'&&intlPool4ArriveTs)cands.push(intlPool4ArriveTs);
+  if(spotChangeHistory.length&&spotChangeHistory[0].ts)cands.push(spotChangeHistory[0].ts);
+  return cands.length?Math.min(...cands):null;
+}
+// 乗り場（1〜4号乗り場・国際線第3プール）または羽田プール本体の退場が確定した時に呼ばれる
+// （onDeparture）。出発した時刻を記録し、実車ボタンを先に押していた場合は、その待機時間・
+// 統計・待機履歴・チャット通知を、確定した時間にそろえる
+function handleBoardAreaDeparture(cp){
+  const label=spotLabelFromCheckpointName(cp.name); // '1号'〜'4号'／'国際線'／null
+  const isPool=!!(cp.spots&&cp.spots.length>0);
+  if(!label&&!isPool)return;
+  // 退場の確定は、実際に圏外へ出てから一定時間（getDepartureConfirmMs）経った後に行われる
+  // ため、実際に出た時刻は、その分さかのぼった時刻になる
+  const departTs=Date.now()-getDepartureConfirmMs(cp);
+  const startTs=waitOriginTsForDeparture(cp);
+  if(!boardDep)boardDep={};
+  if(startTs&&(!boardDep.startTs||startTs<boardDep.startTs))boardDep.startTs=startTs;
+  if(label&&label!=='国際線'){
+    // 国内線の乗り場（1〜4号）を出た：出発の「候補」として控えるだけにして、羽田プール
+    // 本体の退場が確定した時に確定させる（乗り場へ入り直した場合は、onArrivalで取り消す）
+    boardDep.spotTs=departTs;
+  }else{
+    // 羽田プール本体、または国際線第3プール（乗り場そのもの）の退場：出発を確定する。
+    // 国内線は、乗り場を出た時刻の候補があればその時刻を使う
+    const useSpot=isPool&&boardDep.spotTs&&boardDep.spotTs>(boardDep.startTs||0);
+    const endTs=useSpot?boardDep.spotTs:departTs;
+    boardDep.endTs=endTs;
+    boardDep.spotTs=null;
+    resolvePendingWait(endTs,false);
+  }
+  saveBoardDep();
+}
+// 実車ボタンを乗り場のエリア内で先に押していた場合（pendingWaitFinalize）の、出発確定時の処理。
+// 送り先の記録（boardInfo）・乗り場別の統計・待機履歴を、確定した待機時間にそろえ、
+// チャットの出発通知は確定した出発時刻で送る。noChatがtrueの時は、通知を送らない
+function resolvePendingWait(endTs,noChat){
+  const p=pendingWaitFinalize;
+  if(!p)return;
+  pendingWaitFinalize=null;
+  let mins=0;
+  if(p.startTs&&endTs>p.startTs){
+    mins=Math.round((endTs-p.startTs)/60000);
+    if(mins>0){
+      if(boardInfo)boardInfo.waitMins=mins;
+      updateSpotWaitStat(p.statRef,p.boardSpot,mins,p.startTs,endTs);
+      patchWaitHistory(p.histTs,p.startTs,endTs);
+    }
+  }
+  if(p.chat&&!noChat&&db&&isDuty&&!testMode){
+    const name=localStorage.getItem('taxi_name')||'自分';
+    const wm=mins>0?mins:((boardInfo&&boardInfo.waitMins>0)?boardInfo.waitMins:0);
+    const wh=Math.floor(wm/60),wmm=wm%60;
+    const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
+    const spotPhrase=p.boardSpot==='国際線'?'羽田空港国際線乗り場':`${p.boardSpot}乗り場`;
+    sendAutoDepartureChat(`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,endTs);
+  }
+  saveAppState();
+}
+// 出発が確定しないまま降車まで進んだ場合の処理。乗り場を出た時刻の候補があれば、それで確定する
+// （チャットの出発通知は、降車の時点で送っても意味がないため送らない）。無ければ、実車ボタンを
+// 押した時点の暫定値のままにする
+function flushPendingWait(){
+  const p=pendingWaitFinalize;
+  if(!p)return;
+  if(boardDep&&boardDep.spotTs&&boardDep.spotTs>(p.startTs||0))resolvePendingWait(boardDep.spotTs,true);
+  else{pendingWaitFinalize=null;saveAppState();}
+}
+
 function onDeparture(cp){
-  // 実車ボタンを、まだこのエリア内にいる状態で押していた場合（pendingWaitCorrection）、
-  // 押した瞬間の時刻ではなく、今まさに確定した退場時刻を使ってboardInfo.waitMinsを
-  // 補正する。退場確定は「圏外に出てから一定時間（getDepartureConfirmMs）経ってから」
-  // 行われるため、実際に圏外に出た時刻は今より少し前（Date.now()-confirmMs）になる。
-  // ただし何らかの理由でそれが待機開始時刻より前になってしまう場合は、待機開始時刻を
-  // 下回らないようにする（負の待機時間にならないための安全策）
-  if(pendingWaitCorrection&&pendingWaitCorrection.cpId===cp.id){
-    if(boardInfo){
-      const confirmMs=getDepartureConfirmMs(cp);
-      const trueDepartureTs=Math.max(pendingWaitCorrection.waitStartTsUsed,Date.now()-confirmMs);
-      const correctedMins=Math.round((trueDepartureTs-pendingWaitCorrection.waitStartTsUsed)/60000);
-      if(correctedMins>0)boardInfo.waitMins=correctedMins;
-    }
-    pendingWaitCorrection=null;
-  }
-  // 実車ボタンを押した時点ではまだ乗り場エリア内にいたため送信を保留していた
-  // チャットへの「出発しました」自動通知を、実際にGPSで退場が確定した今この
-  // 時刻（正確には確定までの待ち時間分だけ少し前）を使って送る
-  if(pendingDepartureChatNotif&&pendingDepartureChatNotif.cpId===cp.id){
-    const info=pendingDepartureChatNotif;
-    pendingDepartureChatNotif=null;
-    if(db&&isDuty&&!testMode){
-      const confirmMs=getDepartureConfirmMs(cp);
-      const trueDepartureTs=Date.now()-confirmMs;
-      const name=localStorage.getItem('taxi_name')||'自分';
-      const wm=(boardInfo&&boardInfo.waitMins>0)?boardInfo.waitMins:0;
-      const wh=Math.floor(wm/60),wmm=wm%60;
-      const waitStr=wh>0?`${wh}時間${wmm}分`:`${wmm}分`;
-      const spotPhrase=info.boardSpot==='国際線'?'羽田空港国際線乗り場':`${info.boardSpot}乗り場`;
-      sendAutoDepartureChat(`🚕【自動】${name}さんが${spotPhrase}を出発しました。（待機時間${waitStr}）`,trueDepartureTs);
-    }
-  }
+  // 待機時間の終点（乗り場エリアの出発時刻）の記録・確定（詳しくはboardDepの定義部のコメント参照）。
+  // 万一ここで例外が出ても、この後の出発通知等の処理を止めないようにする
+  try{handleBoardAreaDeparture(cp);}catch(e){console.error('出発時刻の記録に失敗しました',e);}
   // 待機タイマー・号選択・列移動履歴の停止は実車ボタンを押した時だけと決めているため、
   // チェックポイントのGPS上の退場（一時的にエリアを外れただけの場合も含む）では
   // 待機タイマーや号選択・待機先の情報を一切リセットしない。ここでは
@@ -5897,6 +6050,10 @@ function onDeparture(cp){
 }
 
 function onArrival(cp,dist){
+  // 新しい到着（滞在の開始・入り直し）では、前回の出発の記録や出発の候補は使わない。
+  // プール・乗り場へ入り直したのは、直前の「出発」がGPSの誤検知だったか、次の待機が
+  // 始まったかのどちらかのため
+  if(isBoardRelatedCp(cp))clearBoardDep();
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   if(cp.name&&cp.name.includes('国際線')&&cp.name.includes('第4'))lastIntlPool4EntryTs=Date.now();
   // 同じ滞在中にGPSの揺れ等で到着イベントが再発火しても、すでに選んだ号・到着時刻を消さない
@@ -6060,6 +6217,7 @@ async function recordAbure(){
   currentSpotSelection=null;
   spotChangeHistory=[];
   boardInfo=null;
+  pendingWaitFinalize=null;clearBoardDep();
   stopWait();waitSec=0;
   document.getElementById('wait-timer').textContent='00:00:00';
   const m=document.getElementById('map-wait-timer');if(m)m.textContent='00:00:00';
