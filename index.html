@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-192 -->
+<!-- v20260902-194 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -149,11 +149,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   display:flex;flex-direction:column-reverse;align-items:center;
   gap:calc(10px*var(--btn-scale,1))}
 .map-btn-stack.right{right:8px}
-/* あぶれボタンは「😔 あぶれ」という文字つきで他の丸ボタンより幅が広いため、
-   align-items:centerのままだと丸ボタン側が中央寄せされ、あぶれの顔マーク
-   （左側）の真上ではなくボタン全体の中央の真上に来てしまっていた。
-   左揃えにして、丸ボタンの列があぶれの顔マークの位置にまっすぐ揃うようにする */
+/* 左下のボタン列は左揃えにする（あぶれボタンは、顔マークと「あぶれ」を縦に2行で並べた
+   丸ボタンより少し狭いボタンで、align-self:centerで丸ボタンの列の真ん中に揃える） */
 .map-btn-stack.left{left:8px;align-items:flex-start}
+/* 地図画面の一番下の数字バー（#daily-bar）。ラベルは折り返さず1行にして、同じ段の数字が
+   同じ高さに揃うようにする（以前は「本日の出勤時間」等が2行に折り返し、数字の高さがずれていた） */
+.daily-cell{text-align:center;min-width:0}
+.daily-lbl{color:var(--muted);white-space:nowrap;line-height:1.3}
+.daily-val{white-space:nowrap;font-weight:800;line-height:1.25}
 /* ボタンを縮小限度（syncMapButtonStackLayout内のMIN_BTN_SCALE）まで縮めても
    縦の表示領域に収まらない端末では、このクラスとmax-heightを付け外しする。
    column-reverse＋flex-wrapにより、1列に収まらない分は自動的に隣の列へ
@@ -427,42 +430,43 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       </div>
     </div>
   </div>
-  <!-- 左右の余白は、地図左下・右下のボタン列（.map-btn-stack）の下に文字が
-       隠れないよう、ボタンの幅ぶんだけ空けている。左側は「😔 あぶれ」ボタンが
-       文字ラベルつきで丸ボタンより幅が広いため、右側より大きく余白を取る -->
+  <!-- 左右の余白は、地図左下・右下のボタン列（.map-btn-stack。幅44px＋端からの余白8px）の下に
+       数字が隠れないよう、同じ幅（58px）ずつ空ける。左右を同じにすることで、数字全体が画面の
+       真ん中に来る（以前は、左下の「😔 あぶれ」ボタンが横長だったため左だけ108px空けており、
+       数字が右に寄っていた）。上段は4項目・下段は3項目を、それぞれ同じ幅で均等に並べる -->
   <div id="daily-bar" style="position:absolute;left:0;right:0;bottom:0;z-index:480;
    background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border);
-   padding:4px 62px 4px 108px;pointer-events:none">
-   <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1px 4px;margin-bottom:2px">
-    <div style="text-align:center">
-     <div style="font-size:9px;color:var(--muted)">本日の出勤時間</div>
-     <div id="daily-start-time" style="font-size:13px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums">--:--</div>
+   padding:4px 58px;pointer-events:none">
+   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px 2px;margin-bottom:4px">
+    <div class="daily-cell">
+     <div class="daily-lbl" style="font-size:8.5px">本日の出勤時間</div>
+     <div id="daily-start-time" class="daily-val" style="font-size:13px;color:var(--text);font-variant-numeric:tabular-nums">--:--</div>
     </div>
-    <div style="text-align:center">
-     <div style="font-size:9px;color:var(--muted)">本日の上がり予定</div>
-     <div id="daily-worked-time" style="font-size:13px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
+    <div class="daily-cell">
+     <div class="daily-lbl" style="font-size:8.5px">本日の上がり予定</div>
+     <div id="daily-worked-time" class="daily-val" style="font-size:13px;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
     </div>
-    <div style="text-align:center">
-     <div style="font-size:9px;color:var(--muted)">本日の目標</div>
-     <div id="daily-target-amount" style="font-size:13px;font-weight:800;color:var(--text)">-</div>
+    <div class="daily-cell">
+     <div class="daily-lbl" style="font-size:8.5px">本日の目標</div>
+     <div id="daily-target-amount" class="daily-val" style="font-size:13px;color:var(--text)">-</div>
     </div>
-    <div style="text-align:center">
-     <div style="font-size:9px;color:var(--muted)">目標時間単価</div>
-     <div id="daily-target-hourly-rate" style="font-size:13px;font-weight:800;color:var(--text)">-</div>
+    <div class="daily-cell">
+     <div class="daily-lbl" style="font-size:8.5px">目標時間単価</div>
+     <div id="daily-target-hourly-rate" class="daily-val" style="font-size:13px;color:var(--text)">-</div>
     </div>
    </div>
-   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 8px">
-    <div style="text-align:center">
-     <div style="font-size:10px;color:var(--muted)">本日の残り時間</div>
-     <div id="daily-time-left" style="font-size:16px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums">--:--:--</div>
+   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px 4px">
+    <div class="daily-cell">
+     <div class="daily-lbl" style="font-size:10px">本日の残り時間</div>
+     <div id="daily-time-left" class="daily-val" style="font-size:16px;color:var(--gold);font-variant-numeric:tabular-nums">--:--:--</div>
     </div>
-    <div style="text-align:center">
-     <div style="font-size:10px;color:var(--muted)">目標まであと</div>
-     <div id="daily-amount-left" style="font-size:16px;font-weight:800;color:var(--cyan)">-</div>
+    <div class="daily-cell">
+     <div class="daily-lbl" style="font-size:10px">目標まであと</div>
+     <div id="daily-amount-left" class="daily-val" style="font-size:16px;color:var(--cyan)">-</div>
     </div>
-    <div style="text-align:center">
-     <div style="font-size:10px;color:var(--muted)">現在時間単価</div>
-     <div id="daily-hourly-rate" style="font-size:16px;font-weight:800;color:var(--gold)">-</div>
+    <div class="daily-cell">
+     <div class="daily-lbl" style="font-size:10px">現在時間単価</div>
+     <div id="daily-hourly-rate" class="daily-val" style="font-size:16px;color:var(--gold)">-</div>
     </div>
    </div>
   </div>
@@ -504,10 +508,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
        station-btnを「その他」パネルへまとめたため付け替えた。その後、
        イベント会場ボタン（🎪）と位置を入れ替え、🎪は「その他」パネルへ移動） -->
   <div class="map-btn-stack left">
-    <button id="abure-row" onclick="recordAbure()"
-      style="padding:6px 10px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;
+    <button id="abure-row" onclick="recordAbure()" title="あぶれ（お客様を乗せられなかった）を記録"
+      style="width:38px;padding:2px 0;border-radius:9px;font-weight:700;cursor:pointer;align-self:center;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1;
         background:rgba(239,68,68,.18);color:var(--red);border:2px solid var(--red);
-        backdrop-filter:blur(6px)">😔 あぶれ</button>
+        backdrop-filter:blur(6px)"><span style="font-size:13px">😔</span><span style="font-size:9px">あぶれ</span></button>
     <button class="map-ctrl-btn" id="more-tools-btn" onclick="toggleMoreToolsPanel()" title="その他のツール">🧰</button>
     <!-- position:relativeのラッパー自体はボタン1個ぶんの幅のままにし、
          GPS状態はその外側（右）にposition:absoluteで重ねる。アイコン自体は
@@ -1372,7 +1377,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-192';
+const APP_BUILD='20260902-194';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -6774,7 +6779,7 @@ function updateDailyBar(){
   if(remainSec<0){
    const overH=Math.floor(Math.abs(remainSec)/3600);
    const overM=Math.floor((Math.abs(remainSec)%3600)/60);
-   timeEl.textContent=`${pad(overH)}:${pad(overM)}オーバー`;
+   timeEl.innerHTML=`${pad(overH)}:${pad(overM)}<span style="font-size:10px">オーバー</span>`;
    timeEl.style.color='var(--red)';
   }else{
    timeEl.textContent=toHMS(remainSec);
