@@ -5953,6 +5953,65 @@ function cpHasStayed1Min(cp){
   const exitTs=cpExitDetectedTs[cp.id]||Date.now();
   return (exitTs-ts)>=CP_STOP_CONFIRM_MS;
 }
+// ===== 通過と停止の区別 =====
+// 「○○乗り場を出発しました」「到着！」の通知は、そこに実際に止まっていた時だけ出す。
+// 以前は、到着時刻からの経過時間が1分以上あれば「停止した」とみなしていたため、次の場合に
+// 通過しただけでも出発の通知が出ていた。
+//  ・半径200mのプールを、ゆっくり走り抜けた（通過に1分以上かかる）
+//  ・プールの縁に沿って走り、境界を出入りした
+//  ・一度本当に出発して離れた後、5分以内（お客様を乗せていなければ60分以内）に戻って通過した
+//    （再入場は「同じ滞在の続き」として、昔の到着時刻を引き継いでいたため）
+// そこで、次の2つを組み合わせる。
+//  ① 入った位置・時刻（cpEntryPos）を控え、「入った位置から出た位置までの平均速度」が遅い
+//     （＝その場にいた）ことを、出発の通知の条件にする。走り抜けた場合は平均速度が速くなる
+//  ② 一度出発を確定した後、遠く（rejoinAwayLimitM以上）まで離れてから戻ってきた場合は、
+//     GPSの揺れではなく新しい訪問なので、前回の到着時刻・入った位置を引き継がない
+// cpEntryPosはcpArriveTsと同じくlocalStorageにも保存し、リロードをまたいでも判定できるようにする
+function loadCpEntryPos(){
+  try{return JSON.parse(localStorage.getItem('taxi_cp_entry')||'{}');}catch(e){return {};}
+}
+function saveCpEntryPos(){
+  try{localStorage.setItem('taxi_cp_entry',JSON.stringify(cpEntryPos));}catch(e){}
+}
+let cpEntryPos=loadCpEntryPos(); // {cpId:{lat,lng,ts}} そのチェックポイントに入った位置と時刻
+let cpExitPos={};                // {cpId:{lat,lng}} 圏外へ出た最初の観測の位置（cpExitDetectedTsと対）
+const STOP_MAX_AVG_SPEED_MPS=1.0; // 入った位置→出た位置の平均速度がこれ未満なら、その場にいた
+const REJOIN_AWAY_MIN_M=80;       // 出発後にこれ以上（エリアの外周から）離れたら、戻っても新しい訪問
+// チェックポイントの外周（円は半径、長方形は中心から角までの距離）
+function cpOuterRadiusM(cp){
+  if(cp.shape==='rect')return Math.hypot((cp.length||0)/2,(cp.width||0)/2);
+  return cp.radius||0;
+}
+function rejoinAwayLimitM(cp){
+  return Math.max(REJOIN_AWAY_MIN_M,cpOuterRadiusM(cp)*0.75);
+}
+// 今回の訪問で、実際にその場に1分以上いたか（出発の通知の条件）
+function cpHadRealStop(cp){
+  const exitTs=cpExitDetectedTs[cp.id]||Date.now();
+  const ent=cpEntryPos[cp.id];
+  if(!ent||!ent.ts){
+    // 入った位置の記録が無い場合（この機能の追加前から滞在していた等）は、従来どおり
+    // 到着時刻からの経過時間で判定する
+    const ts=cpArriveTs[cp.id];
+    return !!ts&&(exitTs-ts)>=CP_STOP_CONFIRM_MS;
+  }
+  const elapsed=exitTs-ent.ts;
+  if(elapsed<CP_STOP_CONFIRM_MS)return false;
+  const ex=cpExitPos[cp.id]||(myLat!==null?{lat:myLat,lng:myLng}:null);
+  if(!ex||typeof ent.lat!=='number')return true;
+  const disp=haversine(ent.lat,ent.lng,ex.lat,ex.lng);
+  return disp/(elapsed/1000)<STOP_MAX_AVG_SPEED_MPS;
+}
+// 今、走行中か（直近20秒ほどの位置の動きから、秒速3m以上か）。到着の通知を出す前の確認に使う
+function movingFastNow(){
+  const now=Date.now();
+  const recent=posHistory.filter(h=>now-h.ts<=20000);
+  if(recent.length<2)return false;
+  const a=recent[0],b=recent[recent.length-1];
+  const dt=(b.ts-a.ts)/1000;
+  if(dt<8)return false;
+  return haversine(a.lat,a.lng,b.lat,b.lng)/dt>=3;
+}
 // cpHasStayed1Minと同じ考え方で、実際にそのチェックポイントの圏内にいた
 // おおよその時間（ミリ秒）を計算する
 function cpDwellMs(cp){
@@ -6000,6 +6059,13 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
     if(typeof accuracy==='number'&&accuracy>maxAcceptableAccuracyM(cp))return;
     const dist=haversine(lat,lng,cp.lat,cp.lng);
     const nowInside=isInsideCP(lat,lng,cp);
+    // 退場を確定した後、このチェックポイントからどれだけ離れたかを記録しておく。戻ってきた時に、
+    // GPSの揺れ（離れていない）か、本当に離れてから戻ったか（新しい訪問）を区別するために使う
+    const snapAway=cpLastDepartureSnapshot[cp.id];
+    if(snapAway&&!nowInside&&(typeof accuracy!=='number'||accuracy<=50)){
+      const away=dist-cpOuterRadiusM(cp);
+      if(away>(snapAway.maxAwayM||0))snapAway.maxAwayM=away;
+    }
     // 号選択のポップアップは、通常はcpInsideの「圏外→圏内」の遷移を検知した瞬間
     // （onArrival内）でのみ表示している。しかし、境界付近でのGPSのブレによって
     // 退場が確定しないまま（下のpendingDepartureTimerが繰り返しキャンセルされる等）
@@ -6025,13 +6091,16 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
     if(isColdStart){
       const wasInsideBeforeReload=cpInside[cp.id]||false;
       cpInside[cp.id]=nowInside;
+      // 既に中にいる状態から始まった場合、入った位置の記録が無ければ、今の位置・到着時刻（復元済みなら
+      // それ）を控える
+      if(nowInside&&!cpEntryPos[cp.id]){cpEntryPos[cp.id]={lat,lng,ts:cpArriveTs[cp.id]||now};saveCpEntryPos();}
       // 圏外から始まった場合、前回セッションで消し忘れた到着時刻が残っていれば掃除する。
       // ただし、リロード直前まで滞在中だったと分かっている場合（restoreAppStateで
       // 復元済み）は、〇号乗り場へ移動中に一時的に圏外にいるだけの可能性があるため、
       // 到着時刻は消さずに残す（本当に出発した場合は、この直後の通常のGPS監視で
       // 改めて確定する）。これにより、移動中にアプリの画面を開いても待機処理
       // （待機時間の起点）が途切れないようにする
-      if(!nowInside&&!wasInsideBeforeReload&&cpArriveTs[cp.id]){delete cpArriveTs[cp.id];saveCpArriveTs();}
+      if(!nowInside&&!wasInsideBeforeReload&&cpArriveTs[cp.id]){delete cpArriveTs[cp.id];saveCpArriveTs();delete cpEntryPos[cp.id];saveCpEntryPos();}
       return;
     }
     const wasInside=cpInside[cp.id]||false;
@@ -6044,14 +6113,14 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
           delete pendingDepartureTimer[cp.id];
         }
         delete pendingDepartureDue[cp.id];
-        delete cpExitDetectedTs[cp.id]; // 圏外への変化候補はGPSのブレだったので取り消す
+        delete cpExitDetectedTs[cp.id];delete cpExitPos[cp.id]; // 圏外への変化候補はGPSのブレだったので取り消す
       }
       return;
     }
     // 圏内→圏外の変化をGPSが最初に示した、生の観測時刻を記録する（デバウンスや
     // 退場確定待ちの影響を受けない）。cpDwellMs／cpHasStayed1Minはこれを基準に
     // 実際の滞在時間を計算する
-    if(!nowInside&&wasInside&&!cpExitDetectedTs[cp.id])cpExitDetectedTs[cp.id]=now;
+    if(!nowInside&&wasInside&&!cpExitDetectedTs[cp.id]){cpExitDetectedTs[cp.id]=now;cpExitPos[cp.id]={lat,lng};}
     // タイマー（setTimeout）は、画面を消している間・他のアプリを使っている間などのバック
     // グラウンドでは、OSやブラウザに間引かれて予定より大きく遅れることがある（最大1分程度）。
     // その間も位置はネイティブの位置情報サービスから届き続けるため、退場確定の予定時刻を
@@ -6067,7 +6136,7 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
     if(nowInside){
       cpLastTransitionTs[cp.id]=now;
       cpInside[cp.id]=true;
-      delete cpExitDetectedTs[cp.id]; // 新しい滞在の開始
+      delete cpExitDetectedTs[cp.id];delete cpExitPos[cp.id]; // 新しい滞在の開始
       // 直前に「退場確定」したばかり（CP_REJOIN_GRACE_MS以内）の再入場は、高架下等での
       // 一時的なGPSのブレによる誤検知の可能性が高いため、新規到着として扱わず、
       // 退場前の到着時刻・号選択の状態をそのまま引き継ぐ（待機時間の起点や
@@ -6079,14 +6148,20 @@ function checkGeofences(lat,lng,isColdStart,accuracy){
       const isNoTripLongRejoin=recentDep&&!isRecentRejoin
         &&(now-recentDep.ts)<CP_REJOIN_NO_TRIP_GRACE_MS
         &&tripCompletedSeq===recentDep.tripSeqAtDeparture;
-      if(isRecentRejoin||isNoTripLongRejoin){
+      // 退場を確定した後に遠くまで離れてから戻ってきた場合は、GPSの揺れではなく新しい訪問
+      // （通過・出直し）なので、前回の到着時刻や入った位置は引き継がない
+      const wentAway=!!recentDep&&(recentDep.maxAwayM||0)>=rejoinAwayLimitM(cp);
+      if((isRecentRejoin||isNoTripLongRejoin)&&!wentAway){
         cpArriveTs[cp.id]=recentDep.arriveTs;
+        cpEntryPos[cp.id]=recentDep.entry||{lat,lng,ts:recentDep.arriveTs||now};
         cp.poolModalHandled=recentDep.poolModalHandled;
         delete cpLastDepartureSnapshot[cp.id];
       }else{
         cpArriveTs[cp.id]=now;
+        cpEntryPos[cp.id]={lat,lng,ts:now};
+        if(wentAway)delete cpLastDepartureSnapshot[cp.id];
       }
-      saveCpArriveTs();
+      saveCpArriveTs();saveCpEntryPos();
       onArrival(cp,Math.round(dist));
     } else {
       // 退場は即確定せず、一定時間（通常30秒、乗り場は15秒）後も
@@ -6125,14 +6200,14 @@ function confirmDeparture(cp,via){
   // 圏外のままなら、改めて確認した上で確定される（出発時刻もずれない）
   const fixAgeMs=lastAcceptedFix?Date.now()-lastAcceptedFix.ts:Infinity;
   if(fixAgeMs>DEPARTURE_CONFIRM_MAX_FIX_AGE_MS)return;
-  if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M)){delete cpExitDetectedTs[cp.id];return;} // 境界付近だった（誤検知）
+  if(isInsideCP(myLat,myLng,cp,DEPARTURE_CONFIRM_BUFFER_M)){delete cpExitDetectedTs[cp.id];delete cpExitPos[cp.id];return;} // 境界付近だった（誤検知）
   // 最終確定の時点でもGPSの精度が十分でない場合は確定させない（精度自体は
   // 良さそうに見えても実際の位置とずれる時間帯があり、SPOT_DEPARTURE_MIN_GPS_AGE_MSの
   // 猶予時間だけでは足りないケースがあったため、時間だけでなく精度そのものも見る。
   // 上のガードと同じ理由で、乗り場に限らず全チェックポイントに適用する）。
   // ここでは何もリセットせず、cpInsideもtrueのままにしておくことで、次に精度の良い
   // フィックスが得られた時、checkGeofences側から改めて退場確定のやり直しが自然に働く
-  if(typeof myAccuracy==='number'&&myAccuracy>maxAcceptableAccuracyM(cp)){delete cpExitDetectedTs[cp.id];return;}
+  if(typeof myAccuracy==='number'&&myAccuracy>maxAcceptableAccuracyM(cp)){delete cpExitDetectedTs[cp.id];delete cpExitPos[cp.id];return;}
   // 1〜4号・国際線乗り場は互いに近接しているため、実際にはお客様を乗せずに
   // 列が進んで隣の号のエリアへ移動しただけでも、このチェックポイントからの
   // 「退場」自体は正しく検知されてしまう。押し忘れ検知はそれを「実車で
@@ -6149,21 +6224,28 @@ function confirmDeparture(cp,via){
         cpArriveTs[movedToCp.id]=cpArriveTs[cp.id];
         cpInside[movedToCp.id]=true;
       }
+      // 移った先の「入った位置」は、その乗り場に実際に入った時のものを使う（待機の起点は引き継ぐが、
+      // 止まっていたかの判定は、その乗り場での滞在だけで行う。隣を通り過ぎただけで出発の通知が出ないように）
+      if(!cpEntryPos[movedToCp.id])cpEntryPos[movedToCp.id]={lat:myLat,lng:myLng,ts:Date.now()};
+      delete cpEntryPos[cp.id];saveCpEntryPos();
       delete cpArriveTs[cp.id];saveCpArriveTs();
-      delete cpExitDetectedTs[cp.id];
+      delete cpExitDetectedTs[cp.id];delete cpExitPos[cp.id];
       return;
     }
   }
   cpLastTransitionTs[cp.id]=Date.now();
   cpInside[cp.id]=false;
   // 退場確定の直前の状態を控えておく（すぐ近くの再入場でGPSのブレとみなせる場合の復元用）
-  cpLastDepartureSnapshot[cp.id]={arriveTs:cpArriveTs[cp.id],poolModalHandled:!!cp.poolModalHandled,ts:Date.now(),tripSeqAtDeparture:tripCompletedSeq};
+  cpLastDepartureSnapshot[cp.id]={arriveTs:cpArriveTs[cp.id],poolModalHandled:!!cp.poolModalHandled,ts:Date.now(),tripSeqAtDeparture:tripCompletedSeq,
+    entry:cpEntryPos[cp.id]||null,
+    maxAwayM:Math.max(0,haversine(myLat,myLng,cp.lat,cp.lng)-cpOuterRadiusM(cp))};
   recordDepartureLog(cp,via,fixAgeMs);
-  // onDeparture内で「1分以上滞在したか」の判定にcpArriveTsを使うため、
+  // onDeparture内で「1分以上滞在したか」の判定にcpArriveTs・cpEntryPosを使うため、
   // 消去はonDepartureの呼び出しが終わった後に行う
   onDeparture(cp);
+  delete cpEntryPos[cp.id];saveCpEntryPos();
   delete cpArriveTs[cp.id];saveCpArriveTs();
-  delete cpExitDetectedTs[cp.id];
+  delete cpExitDetectedTs[cp.id];delete cpExitPos[cp.id];
 }
 
 // ===== 出発を確定した時の状況の記録（診断用） =====
@@ -6188,6 +6270,9 @@ function recordDepartureLog(cp,via,fixAgeMs){
       distM:outM,
       sinceResumeMs:gpsCatchUpStartTs?now-gpsCatchUpStartTs:null,
       sinceGpsStartMs:settledSince?now-settledSince:null,
+      stayMs:cpEntryPos[cp.id]?(cpExitDetectedTs[cp.id]||now)-cpEntryPos[cp.id].ts:null,
+      moveM:(cpEntryPos[cp.id]&&typeof cpEntryPos[cp.id].lat==='number'&&cpExitPos[cp.id])?Math.round(haversine(cpEntryPos[cp.id].lat,cpEntryPos[cp.id].lng,cpExitPos[cp.id].lat,cpExitPos[cp.id].lng)):null,
+      stop:cpHadRealStop(cp),
       hidden:!!document.hidden,
       nativeAgeMs:lastNativeFixTs?now-lastNativeFixTs:null,
       via:via||''
@@ -6216,6 +6301,7 @@ function departureLogHtml(){
       '位置の古さ '+sec(e.fixAgeMs),
       '精度 '+(e.acc===null?'−':e.acc+'m'),
       '中心から '+(e.distM===null?'−':e.distM+'m'),
+      '滞在 '+sec(e.stayMs===undefined?null:e.stayMs)+'・入口から出口まで '+(e.moveM===null||e.moveM===undefined?'−':e.moveM+'m')+'・止まっていた判定 '+(e.stop===true?'あり':(e.stop===false?'なし（通過）':'−')),
       '画面復帰・GPS開始から '+sec(e.sinceResumeMs===null?e.sinceGpsStartMs:e.sinceResumeMs),
       '画面 '+(e.hidden?'非表示':'表示中'),
       '確定 '+(e.via==='fix'?'位置更新時':'タイマー')
@@ -6352,7 +6438,7 @@ function onDeparture(cp){
   // DEPARTURE_CONFIRM_MS分の待ち時間を差し引いた上で到着時刻からの経過時間を見るため、
   // リロードを挟んでも通過（1分未満の滞在）と本当の停止を正しく区別できる
   const stayedOneMinAccurate=!!cp.stopConfirmed;
-  const hadConfirmedStop=stayedOneMinAccurate||cpHasStayed1Min(cp);
+  const hadConfirmedStop=stayedOneMinAccurate||cpHadRealStop(cp);
   if(hadConfirmedStop){
     // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
     sendNotif(cp.icon+' '+cp.name+' を出発',`出発 ${timeStr}`,'taxi-depart-'+cp.id);
@@ -6436,6 +6522,7 @@ function onArrival(cp,dist){
     if(!isDuty||myLat===null||myLng===null)return;
     const stillInside=isInsideCP(myLat,myLng,cp);
     if(!stillInside)return; // 60秒後にはもう外にいれば、通過とみなして通知しない
+    if(movingFastNow())return; // 中にいても走行中なら、止まったのではなく通り抜けている最中なので通知しない
     cp.stopConfirmed=true; // 出発時の通知可否の判定に使う
     // 到着・出発の通知はチャットには送らず、スマホのポップアップ通知のみとする
     const intlArrivalText=intlPoolArrivalText(cp);
