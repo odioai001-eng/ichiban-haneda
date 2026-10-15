@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-195 -->
+<!-- v20260902-196 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1382,7 +1382,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-195';
+const APP_BUILD='20260902-196';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1428,6 +1428,42 @@ function updateDisplayPosition(lat,lng,alpha){
 }
 let db=null,storage=null,myId=localStorage.getItem('taxi_my_id')||('d_'+Math.random().toString(36).slice(2,9));
 let driverData={},destinations=JSON.parse(localStorage.getItem('taxi_dests')||'[]'),teamDests={},teamDestsLoaded=false;
+// サーバー（Firebase）から最初のデータを受け取れたかどうか。受け取るまでは、空の表示（「ありません」等）
+// ではなく「読み込み中」を出す。アプリの更新・起動の直後は、通信状況によっては表示まで数十秒〜数分
+// かかることがあり、その間に「ありません」と出ると、データが消えたと誤解されてしまうため。
+// teamDestsLoadedは、1人分でも届いた時点でtrueになるため、「全員分を受け取り終えた」ことの
+// 判定にはこちら（teamDestsServerLoaded／chatServerLoaded）を使う
+let teamDestsServerLoaded=false,chatServerLoaded=false,fbConnected=false;
+const APP_START_TS=Date.now();
+const LOAD_SLOW_NOTICE_MS=20000; // これを過ぎても読み込めない時は、文言を「時間がかかっています／接続できていません」に変える
+function loadingNoticeText(){
+  if(Date.now()-APP_START_TS<LOAD_SLOW_NOTICE_MS)return '読み込み中...';
+  // 改行位置を指定する（white-space:pre-lineで表示）。幅の狭い画面で、語の途中で折り返されないように
+  return fbConnected
+    ?'読み込みに時間がかかっています。\n通信が遅い可能性があります。そのままお待ちください'
+    :'サーバーに接続できていません。\n電波の良い場所でお待ちください。\n（つながると自動で表示されます）';
+}
+// チャット欄が空の間、「読み込み中」等の案内を出す（メッセージが1件でも表示されたら消える）
+function showChatLoadingNotice(){
+  const c=document.getElementById('chat-msgs');
+  if(!c||chatServerLoaded||c.querySelector('.msg-row'))return;
+  let n=document.getElementById('chat-loading');
+  if(!n){
+    n=document.createElement('div');
+    n.id='chat-loading';
+    n.style.cssText='text-align:center;color:var(--muted);font-size:13px;padding:24px 14px;line-height:1.7;white-space:pre-line';
+    c.appendChild(n);
+  }
+  n.textContent=loadingNoticeText();
+}
+// サーバーからチャットの最初のデータを受け取れた時（0件の場合も含む）
+function finishChatLoading(){
+  chatServerLoaded=true;
+  const n=document.getElementById('chat-loading');
+  if(!n)return;
+  if(document.querySelector('#chat-msgs .msg-row'))n.remove();
+  else n.textContent='まだメッセージがありません';
+}
 let chatOnPage=false,broadcastCh=null,bannerTimer=null,isAdmin=false,waitTabTimer=null;
 let poolMoves=[],poolLocks={},poolLockTimer=null,myLastAction=null;
 let poolProgress={};
@@ -1637,6 +1673,11 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   }
   setTimeout(checkForUpdate,4000);
   setInterval(checkForUpdate,5*60*1000);
+  // 読み込みが長引いている間は、「読み込み中」を「時間がかかっています／接続できていません」に切り替える
+  setTimeout(()=>{
+    if(!teamDestsServerLoaded){try{renderTeamDests();}catch(e){}}
+    if(!chatServerLoaded)showChatLoadingNotice();
+  },LOAD_SLOW_NOTICE_MS+500);
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden){pageHiddenAt=Date.now();startHiddenFeedStat();return;}
     finishHiddenFeedStat();
@@ -4618,6 +4659,10 @@ function connectFirebase(config){
     storage=firebase.storage();
     db.ref('.info/connected').on('value',snap=>{
       const conn=snap.val();
+      fbConnected=!!conn;
+      // 読み込み中の案内（「読み込み中」「接続できていません」）を、接続状態に合わせて更新する
+      if(!teamDestsServerLoaded){try{renderTeamDests();}catch(e){}}
+      if(!chatServerLoaded)showChatLoadingNotice();
       const dot=document.getElementById('conn-dot');
       const txt=document.getElementById('conn-txt');
       if(conn){
@@ -4666,30 +4711,10 @@ function connectFirebase(config){
       const id=snap.key;if(id===myId)return;
       delete driverData[id];removePeerMarker(id);updateDriverList();
     });
-    db.ref('team_sales').on('value',snap=>{
-      teamSales=snap.val()||{};
-      renderRankingPage();
-    });
-    db.ref('spot_dest_stats').on('value',snap=>{
-      spotDestStats=snap.val()||{};
-      renderSpotDestTable();
-    });
-    db.ref('spot_wait_stats').on('value',snap=>{
-      spotWaitStats=snap.val()||{};
-      renderSpotWaitStats();
-      cleanupBadSpotWaitStats();
-    });
-    // 参加申請の通知は、過去に管理者PINでログインしたことがある端末にのみローカル通知する
-    // （全ドライバーの端末にブロードキャストされるのを防ぐため、Firebase側は全員が購読しつつ、
-    // 表示するかどうかを各端末でtaxi_is_admin_deviceフラグを見て判断する）
-    const pendingInitTs=Date.now();
-    db.ref('users_pending').on('child_added',snap=>{
-      const v=snap.val();
-      if(!v||v.status!=='pending')return;
-      if((v.ts||0)<pendingInitTs)return; // 接続前からある申請（承認待ちリストで確認可能）は通知しない
-      if(localStorage.getItem('taxi_is_admin_device')!=='1')return;
-      sendNotif('🆕 参加申請','('+(v.name||'名前未設定')+(v.car?' / '+v.car:'')+')から参加申請がありました',snap.key);
-    });
+    // ※ 画面にすぐ見せたいデータ（チャット・仲間の送り先）は、容量の大きい他のデータ（ランキング・
+    //   乗り場別の統計・列移動・チャット全体の変更監視等）より先に要求する。Firebaseは1本の回線で、
+    //   要求した順にデータを返すため、後ろに回すほど、先にある大きなデータの受信が終わるまで
+    //   表示されない（更新・起動の直後に、チャットや仲間の送り先が長い間空に見える原因になる）
     const chatInitTs=Date.now();
     db.ref('chat').limitToLast(100).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
@@ -4702,68 +4727,8 @@ function connectFirebase(config){
         sendNotif('💬 '+(m.name||'仲間'),notifBody,'chat-msg-'+snap.key);
       }
     });
-    db.ref('chat').on('child_removed',snap=>{
-      const el=document.querySelector(`[data-msgkey="${snap.key}"]`);
-      if(el)el.remove();
-    });
-    db.ref('chat').on('child_changed',snap=>{
-      const m=snap.val();if(!m)return;
-      chatMsgCache[snap.key]=m;
-      const bar=document.querySelector(`.reaction-bar[data-reactkey="${snap.key}"]`);
-      if(bar){
-        const wasVisible=bar.style.display!=='none';
-        const temp=document.createElement('div');
-        temp.innerHTML=buildReactionBarHtml(snap.key,m.reactions||{});
-        const newBar=temp.firstElementChild;
-        if(wasVisible)newBar.style.display='flex';
-        bar.replaceWith(newBar);
-      }
-    });
-    db.ref('pool_moves').limitToLast(200).on('child_added',snap=>{
-      const m=snap.val();if(!m)return;
-      poolMoves.push(m);poolMoves.sort((a,b)=>a.ts-b.ts);
-      if(poolMoves.length>200)poolMoves.shift();
-      renderPoolChart();
-      if(poolPanelOpen)refreshPoolHistory(null);
-    });
-    db.ref('intl_pool_moves').limitToLast(50).on('child_added',snap=>{
-      const m=snap.val();if(!m)return;
-      intlPoolMoves.push(m);intlPoolMoves.sort((a,b)=>a.ts-b.ts);
-      if(intlPoolMoves.length>50)intlPoolMoves.shift();
-      renderIntlMoveLog();
-    });
-    db.ref('pool_move_history').limitToLast(50).on('child_added',snap=>{
-      const m=snap.val();if(!m)return;
-      m.key=snap.key;
-      poolMoveHistory.push(m);poolMoveHistory.sort((a,b)=>a.startTs-b.startTs);
-      if(poolMoveHistory.length>50)poolMoveHistory.shift();
-      renderPoolMoveHistoryLog();
-    });
-    db.ref('pool_move_history').on('child_removed',snap=>{
-      poolMoveHistory=poolMoveHistory.filter(m=>m.key!==snap.key);
-      renderPoolMoveHistoryLog();
-    });
-    db.ref('pool_locks').on('value',snap=>{
-      poolLocks=snap.val()||{};
-      renderPoolButtons();
-    });
-    db.ref('pool_progress').on('value',snap=>{
-      poolProgress=snap.val()||{};
-      renderPoolChart();
-    });
-    db.ref('pool_session_meta').on('value',snap=>{
-      poolSessionMeta=snap.val()||{};
-      renderPoolChart();
-    });
-    db.ref('chat_reads').on('value',snap=>{
-      chatReadMap=snap.val()||{};
-      refreshChatReadCounts();
-    });
-    // 管理者が月次リセットを実行した瞬間（既にアプリを開いている仲間がいても）
-    // すぐにバナーで気づけるよう、一度きりの読み込みではなくリアルタイムで購読する
-    db.ref('team_dests_backup').on('value',snap=>{
-      checkPostResetOwnDataBanner(snap.val());
-    });
+    // 直近100件の読み込みが完了した（0件の場合も含む）ことを知らせる。同じ範囲の購読なので、通信は増えない
+    db.ref('chat').limitToLast(100).once('value',()=>finishChatLoading());
     // team_dests全体をルートで1本の'value'リスナーとして購読すると、
     // 誰か1人が1件記録するたびに「その時点の仲間全員分の全期間の記録」を
     // まるごと再送・再パースすることになる。仲間の人数・記録件数が増えるほど
@@ -4851,7 +4816,7 @@ function connectFirebase(config){
     // team_destsに誰の記録も1件も無い（child_addedが一度も発火しない）場合でも
     // 「読み込み中」表示のままにならないよう、初回の読み込み完了を別途確定させる
     db.ref('team_dests').once('value',snap=>{
-      teamDestsLoaded=true;
+      teamDestsLoaded=true;teamDestsServerLoaded=true;
       try{renderTeamDests();}catch(e){console.error('renderTeamDests error',e);}
       // 起動直後にも、Firebaseに届いていない自分の送り先が残っていれば共有し直す
       autoResendUnsyncedOwnDests((snap.val()||{})[myId]);
@@ -4879,13 +4844,105 @@ function connectFirebase(config){
           teamDests[driverId]=all[driverId]||{};
           attachTeamDestDriverListener(driverId); // 既に張られていれば何もしない
         });
-        teamDestsLoaded=true;
+        teamDestsLoaded=true;teamDestsServerLoaded=true;
         if(myId in all)syncOwnDestinationsFromFirebase();
         try{renderDests();}catch(e){console.error('renderDests error',e);}
         try{renderTeamDests();}catch(e){console.error('renderTeamDests error',e);}
         autoResendUnsyncedOwnDests(all[myId]);
       }).catch(err=>console.error('team_dests full resync failed',err));
     },30000);
+    db.ref('team_sales').on('value',snap=>{
+      teamSales=snap.val()||{};
+      renderRankingPage();
+    });
+    db.ref('spot_dest_stats').on('value',snap=>{
+      spotDestStats=snap.val()||{};
+      renderSpotDestTable();
+    });
+    db.ref('spot_wait_stats').on('value',snap=>{
+      spotWaitStats=snap.val()||{};
+      renderSpotWaitStats();
+      cleanupBadSpotWaitStats();
+    });
+    // 参加申請の通知は、過去に管理者PINでログインしたことがある端末にのみローカル通知する
+    // （全ドライバーの端末にブロードキャストされるのを防ぐため、Firebase側は全員が購読しつつ、
+    // 表示するかどうかを各端末でtaxi_is_admin_deviceフラグを見て判断する）
+    const pendingInitTs=Date.now();
+    db.ref('users_pending').on('child_added',snap=>{
+      const v=snap.val();
+      if(!v||v.status!=='pending')return;
+      if((v.ts||0)<pendingInitTs)return; // 接続前からある申請（承認待ちリストで確認可能）は通知しない
+      if(localStorage.getItem('taxi_is_admin_device')!=='1')return;
+      sendNotif('🆕 参加申請','('+(v.name||'名前未設定')+(v.car?' / '+v.car:'')+')から参加申請がありました',snap.key);
+    });
+    db.ref('pool_moves').limitToLast(200).on('child_added',snap=>{
+      const m=snap.val();if(!m)return;
+      poolMoves.push(m);poolMoves.sort((a,b)=>a.ts-b.ts);
+      if(poolMoves.length>200)poolMoves.shift();
+      renderPoolChart();
+      if(poolPanelOpen)refreshPoolHistory(null);
+    });
+    db.ref('intl_pool_moves').limitToLast(50).on('child_added',snap=>{
+      const m=snap.val();if(!m)return;
+      intlPoolMoves.push(m);intlPoolMoves.sort((a,b)=>a.ts-b.ts);
+      if(intlPoolMoves.length>50)intlPoolMoves.shift();
+      renderIntlMoveLog();
+    });
+    db.ref('pool_move_history').limitToLast(50).on('child_added',snap=>{
+      const m=snap.val();if(!m)return;
+      m.key=snap.key;
+      poolMoveHistory.push(m);poolMoveHistory.sort((a,b)=>a.startTs-b.startTs);
+      if(poolMoveHistory.length>50)poolMoveHistory.shift();
+      renderPoolMoveHistoryLog();
+    });
+    db.ref('pool_move_history').on('child_removed',snap=>{
+      poolMoveHistory=poolMoveHistory.filter(m=>m.key!==snap.key);
+      renderPoolMoveHistoryLog();
+    });
+    db.ref('pool_locks').on('value',snap=>{
+      poolLocks=snap.val()||{};
+      renderPoolButtons();
+    });
+    db.ref('pool_progress').on('value',snap=>{
+      poolProgress=snap.val()||{};
+      renderPoolChart();
+    });
+    db.ref('pool_session_meta').on('value',snap=>{
+      poolSessionMeta=snap.val()||{};
+      renderPoolChart();
+    });
+    db.ref('chat_reads').on('value',snap=>{
+      chatReadMap=snap.val()||{};
+      refreshChatReadCounts();
+    });
+    // 管理者が月次リセットを実行した瞬間（既にアプリを開いている仲間がいても）
+    // すぐにバナーで気づけるよう、一度きりの読み込みではなくリアルタイムで購読する
+    // バナーの表示判定に使うのは更新日時（ts）だけ。以前は控え全体（リセット前の仲間全員分の
+    // 送り先。team_dests本体と同じ大きさ）を、アプリを開くたびに毎回ダウンロードしていた。
+    // 自分の分のダウンロード（downloadMyBackedUpDests）は、押した時にだけ読み込む
+    db.ref('team_dests_backup/ts').on('value',snap=>{
+      const ts=snap.val();
+      checkPostResetOwnDataBanner(ts?{ts}:null);
+    });
+    // チャット全体の「削除」「リアクションの変更」の監視は、過去の全メッセージを対象にするため
+    // データ量が大きい。画面に見せるデータ（上のチャット・仲間の送り先）より後に要求する
+    db.ref('chat').on('child_removed',snap=>{
+      const el=document.querySelector(`[data-msgkey="${snap.key}"]`);
+      if(el)el.remove();
+    });
+    db.ref('chat').on('child_changed',snap=>{
+      const m=snap.val();if(!m)return;
+      chatMsgCache[snap.key]=m;
+      const bar=document.querySelector(`.reaction-bar[data-reactkey="${snap.key}"]`);
+      if(bar){
+        const wasVisible=bar.style.display!=='none';
+        const temp=document.createElement('div');
+        temp.innerHTML=buildReactionBarHtml(snap.key,m.reactions||{});
+        const newBar=temp.firstElementChild;
+        if(wasVisible)newBar.style.display='flex';
+        bar.replaceWith(newBar);
+      }
+    });
   }catch(e){toast('⚠️ Firebase: '+e.message);console.error(e);}
 }
 
@@ -5471,7 +5528,9 @@ function renderTeamDests(){
   const allDriverIds=Object.keys(teamDests).filter(id=>id!==myId)
     .sort((a,b)=>latestTeamDestTs(b)-latestTeamDestTs(a));
   if(!allDriverIds.length){
-    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">仲間の送り先がありません</div>';
+    // サーバーから最初のデータを受け取るまでは、「ありません」と出さない（消えたと誤解されるため）
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px;line-height:1.7;white-space:pre-line">'
+      +(teamDestsServerLoaded?'仲間の送り先がありません':loadingNoticeText())+'</div>';
     return;
   }
   let html='';
@@ -9865,6 +9924,7 @@ function initLocalChat(){
   broadcastCh.onmessage=e=>{if(e.data.type==='msg'&&e.data.uid!==myId){appendChatBubble(e.data,false);}};
   const hist=JSON.parse(localStorage.getItem('taxi_chat_hist')||'[]');
   hist.slice(-60).forEach(m=>appendChatBubble(m,m.uid===myId));
+  showChatLoadingNotice(); // サーバーから届くまで、チャット欄が空のまま消えたように見えないようにする
 }
 
 function updateChatBadge(){
@@ -10617,6 +10677,8 @@ let lastChatDateStr=null;
 function appendChatBubble(m,isMe,fbKey){
   const key=m.ts+'_'+(m.uid||'');
   if(seenMsgIds.has(key))return;seenMsgIds.add(key);
+  const loadingNotice=document.getElementById('chat-loading');
+  if(loadingNotice)loadingNotice.remove();
   const container=document.getElementById('chat-msgs');
   // 日付が変わったら区切り線を挿入
   if(m.ts){
