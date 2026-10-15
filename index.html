@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-194 -->
+<!-- v20260902-195 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -140,7 +140,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .gps-dot.on{background:var(--green);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes blinkRed{0%,49%{opacity:1}50%,100%{opacity:.15}}
-/* 地図右下・左下のボタン群を、個別に手計算したbottom座標ではなく
+/* 地図左下のボタン群を、個別に手計算したbottom座標ではなく
    flexboxで自動的に積み上げる。端末やブラウザによって表示領域の高さが
    変わっても、ボタン同士が重なったり隙間が詰まりすぎたりしない。
    --btn-scaleはsyncMapButtonStackLayout()がこのスタック要素に直接
@@ -148,22 +148,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .map-btn-stack{position:absolute;bottom:8px;z-index:500;
   display:flex;flex-direction:column-reverse;align-items:center;
   gap:calc(10px*var(--btn-scale,1))}
-.map-btn-stack.right{right:8px}
 /* 左下のボタン列は左揃えにする（あぶれボタンは、顔マークと「あぶれ」を縦に2行で並べた
    丸ボタンより少し狭いボタンで、align-self:centerで丸ボタンの列の真ん中に揃える） */
 .map-btn-stack.left{left:8px;align-items:flex-start}
-/* 地図画面の一番下の数字バー（#daily-bar）。ラベルは折り返さず1行にして、同じ段の数字が
-   同じ高さに揃うようにする（以前は「本日の出勤時間」等が2行に折り返し、数字の高さがずれていた） */
-.daily-cell{text-align:center;min-width:0}
+/* 地図画面の一番下の数字バー（#daily-bar）。
+   ・左は、左下のボタン列（幅44px＋端から8px）の右に6px空けた位置（58px）から、右は画面の右端
+     （6px）までを使う。4項目・3項目を、それぞれ「項目と項目の間」と「両端の余白」が同じ幅に
+     なるよう並べる（space-evenly）。以前は左右とも58pxずつ空けていたため、右下に何も無い時は
+     右端だけが大きく空いて見えた。右下の🚗ボタンは、数字に重ならないようバーの真上に置く
+   ・横向きなど画面が低い時だけは、右側の＋/−・🎯・👥ボタン（上から固定位置）が数字バーに
+     重なるため、右も58px空ける
+   ・ラベルは折り返さず1行にして、同じ段の数字が同じ高さに揃うようにする */
+#daily-bar{padding:4px 6px 4px 58px}
+@media (max-height:520px){#daily-bar{padding-right:58px}}
+.daily-row{display:flex;justify-content:space-evenly;align-items:flex-start}
+.daily-cell{text-align:center;flex:0 0 auto}
 .daily-lbl{color:var(--muted);white-space:nowrap;line-height:1.3}
 .daily-val{white-space:nowrap;font-weight:800;line-height:1.25}
 /* ボタンを縮小限度（syncMapButtonStackLayout内のMIN_BTN_SCALE）まで縮めても
    縦の表示領域に収まらない端末では、このクラスとmax-heightを付け外しする。
    column-reverse＋flex-wrapにより、1列に収まらない分は自動的に隣の列へ
-   折り返される。leftは地図側（右）へ、rightは地図側（左）へ折り返すよう、
-   wrapの向きをそれぞれ変える */
+   折り返される（地図側＝右へ折り返す） */
 .map-btn-stack.left.wrap-fit{flex-wrap:wrap}
-.map-btn-stack.right.wrap-fit{flex-wrap:wrap-reverse}
 .pool-info-cell{text-align:center;font-size:13px;font-weight:700;color:#fff;line-height:1.4;
   background:rgba(79,142,247,.25);border-radius:8px;padding:4px 2px;border:1px solid rgba(79,142,247,.4)}
 .pool-btn{padding:7px 2px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
@@ -430,43 +436,50 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       </div>
     </div>
   </div>
-  <!-- 左右の余白は、地図左下・右下のボタン列（.map-btn-stack。幅44px＋端からの余白8px）の下に
-       数字が隠れないよう、同じ幅（58px）ずつ空ける。左右を同じにすることで、数字全体が画面の
-       真ん中に来る（以前は、左下の「😔 あぶれ」ボタンが横長だったため左だけ108px空けており、
-       数字が右に寄っていた）。上段は4項目・下段は3項目を、それぞれ同じ幅で均等に並べる -->
-  <div id="daily-bar" style="position:absolute;left:0;right:0;bottom:0;z-index:480;
-   background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border);
-   padding:4px 58px;pointer-events:none">
-   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px 2px;margin-bottom:4px">
-    <div class="daily-cell">
-     <div class="daily-lbl" style="font-size:8.5px">本日の出勤時間</div>
-     <div id="daily-start-time" class="daily-val" style="font-size:13px;color:var(--text);font-variant-numeric:tabular-nums">--:--</div>
+  <!-- 地図の一番下の数字バー（#daily-bar）と、その真上の右端に出る🚗（移動記録）ボタンを、
+       ひとまとめ（#daily-dock）にして下端へ固定する。🚗ボタンはバーの高さに自動で追従して
+       「バーの上端の8px上」に置かれるため、乗り場を選んだ時（🚗が出る時）でも、数字の位置は
+       変わらず、🚗が数字に重なることもない。左の余白（58px）は左下のボタン列の幅ぶん。
+       右の余白は画面の端まで使う（横向きなど低い画面のみ、右の＋/−・🎯・👥を避けて58px） -->
+  <div id="daily-dock" style="position:absolute;left:0;right:0;bottom:0;z-index:480;pointer-events:none">
+   <!-- 移動記録ボタン -->
+   <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;
+     position:absolute;right:8px;bottom:calc(100% + 8px);pointer-events:auto;
+     background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
+     border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
+     backdrop-filter:blur(6px)">🚗</button>
+   <div id="daily-bar" style="background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border)">
+    <div class="daily-row" style="margin-bottom:4px">
+     <div class="daily-cell">
+      <div class="daily-lbl" style="font-size:9px">本日の出勤時間</div>
+      <div id="daily-start-time" class="daily-val" style="font-size:13px;color:var(--text);font-variant-numeric:tabular-nums">--:--</div>
+     </div>
+     <div class="daily-cell">
+      <div class="daily-lbl" style="font-size:9px">本日の上がり予定</div>
+      <div id="daily-worked-time" class="daily-val" style="font-size:13px;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
+     </div>
+     <div class="daily-cell">
+      <div class="daily-lbl" style="font-size:9px">本日の目標</div>
+      <div id="daily-target-amount" class="daily-val" style="font-size:13px;color:var(--text)">-</div>
+     </div>
+     <div class="daily-cell">
+      <div class="daily-lbl" style="font-size:9px">目標時間単価</div>
+      <div id="daily-target-hourly-rate" class="daily-val" style="font-size:13px;color:var(--text)">-</div>
+     </div>
     </div>
-    <div class="daily-cell">
-     <div class="daily-lbl" style="font-size:8.5px">本日の上がり予定</div>
-     <div id="daily-worked-time" class="daily-val" style="font-size:13px;color:var(--cyan);font-variant-numeric:tabular-nums">--:--</div>
-    </div>
-    <div class="daily-cell">
-     <div class="daily-lbl" style="font-size:8.5px">本日の目標</div>
-     <div id="daily-target-amount" class="daily-val" style="font-size:13px;color:var(--text)">-</div>
-    </div>
-    <div class="daily-cell">
-     <div class="daily-lbl" style="font-size:8.5px">目標時間単価</div>
-     <div id="daily-target-hourly-rate" class="daily-val" style="font-size:13px;color:var(--text)">-</div>
-    </div>
-   </div>
-   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px 4px">
-    <div class="daily-cell">
-     <div class="daily-lbl" style="font-size:10px">本日の残り時間</div>
-     <div id="daily-time-left" class="daily-val" style="font-size:16px;color:var(--gold);font-variant-numeric:tabular-nums">--:--:--</div>
-    </div>
-    <div class="daily-cell">
-     <div class="daily-lbl" style="font-size:10px">目標まであと</div>
-     <div id="daily-amount-left" class="daily-val" style="font-size:16px;color:var(--cyan)">-</div>
-    </div>
-    <div class="daily-cell">
-     <div class="daily-lbl" style="font-size:10px">現在時間単価</div>
-     <div id="daily-hourly-rate" class="daily-val" style="font-size:16px;color:var(--gold)">-</div>
+    <div class="daily-row">
+     <div class="daily-cell">
+      <div class="daily-lbl" style="font-size:10px">本日の残り時間</div>
+      <div id="daily-time-left" class="daily-val" style="font-size:16px;color:var(--gold);font-variant-numeric:tabular-nums">--:--:--</div>
+     </div>
+     <div class="daily-cell">
+      <div class="daily-lbl" style="font-size:10px">目標まであと</div>
+      <div id="daily-amount-left" class="daily-val" style="font-size:16px;color:var(--cyan)">-</div>
+     </div>
+     <div class="daily-cell">
+      <div class="daily-lbl" style="font-size:10px">現在時間単価</div>
+      <div id="daily-hourly-rate" class="daily-val" style="font-size:16px;color:var(--gold)">-</div>
+     </div>
     </div>
    </div>
   </div>
@@ -492,16 +505,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="map-layer-chip"     id="layer-google" onclick="setTileLayer('google')">Google</div>
     <div class="map-layer-chip"     id="layer-gsat"   onclick="setTileLayer('gsat')"  >衛星</div>
   </div>
-  <!-- 地図右下のボタン群。仲間の状況・オートフォローはmap-zoom-sub-ctrl
-       （+/-ボタンの真下）へ移動したため、現在はこのスタックに残るのは
-       移動記録ボタンのみ -->
-  <div class="map-btn-stack right">
-    <!-- 移動記録ボタン -->
-    <button id="pool-toggle-btn" onclick="togglePoolPanel()" style="display:none;
-      background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
-      border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
-      backdrop-filter:blur(6px)">🚗</button>
-  </div>
+  <!-- 地図右下の移動記録ボタン（🚗）は、数字バーの真上（#daily-dock内）にある。
+       仲間の状況・オートフォローはmap-zoom-sub-ctrl（+/-ボタンの真下）にある -->
   <!-- 地図左下のボタン群。イベント終演ハブへのリンクボタンは他のボタンと
        同じ位置のままにし、GPS状態表示はその右（地図側）にはみ出す形で並べる。
        これにより左端に余白を作らずに済む（以前はstation-btnに付けていたが、
@@ -1377,7 +1382,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-194';
+const APP_BUILD='20260902-195';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -1824,7 +1829,7 @@ function syncZoomCtrlVisibility(visible){
   if(zc)zc.style.display=visible?'flex':'none';
 }
 
-// 地図左下・右下のボタン群（.map-btn-stack）は通常CSSのbottom:8pxで
+// 地図左下のボタン群（.map-btn-stack）は通常CSSのbottom:8pxで
 // 自動的に下から積み上がるが、これは上側のステータスバー（空車/実車/回送・
 // 待機タイマー・号選択・列移動情報など）の高さを一切考慮していない。
 // ステータスバーの内容は機能追加のたびに増えて縦に長くなっており、画面の
