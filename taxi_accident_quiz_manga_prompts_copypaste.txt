@@ -10,7 +10,7 @@ Style: Japanese manga illustration, clean black ink linework, flat cel-shaded co
 Aspect ratio 16:9, important subjects in the upper two thirds of the frame.
 
 ===== 03. オープニング（OP） / OP-3　タイトル用（背景のみ） =====
-Style: Japanese manga illustration, clean black ink linework, flat cel-shaded colors with light screentone shading, slightly semi-realistic proportions, expressive but restrained, warm daylight palette, high readability, cinematic 16:9 composition, no text, no letters, no logos, no watermark. Dynamic manga speed-line background in warm yellow and white radiating from the center, Gen-san in the lower left giving a confident smile, small yellow taxi at the lower right, large empty space in the center for title text, no text
+Style: Japanese manga illustration, clean black ink linework, flat cel-shaded colors with light screentone shading, slightly semi-realistic proportions, expressive but restrained, warm daylight palette, high readability, cinematic 16:9 composition, no text, no letters, no logos, no watermark. Character: 60-year-old Japanese male taxi driver, kind but sharp eyes, short neat grey hair under a navy blue taxi driver cap with a small gold badge, thick grey mustache, light wrinkles around the eyes, navy uniform jacket, white shirt, thin red necktie, white driving gloves, calm and observant expression. Dynamic manga speed-line background in warm yellow and white radiating from the center, Gen-san in the lower left giving a confident smile, small yellow taxi at the lower right, large empty space in the center for title text, no text
 Aspect ratio 16:9, important subjects in the upper two thirds of the frame.
 
 ===== 04. 第1問　左折　＜歩行者を見送ったあと、左から自転車＞ / Q1-問題用 =====
@@ -30,7 +30,7 @@ Style: Japanese manga illustration, clean black ink linework, flat cel-shaded co
 Aspect ratio 16:9, important subjects in the upper two thirds of the frame.
 
 ===== 08. 第2問　右折　＜譲られたトラックの陰のバイク＞ / Q2-答え用 =====
-Style: Japanese manga illustration, clean black ink linework, flat cel-shaded colors with light screentone shading, slightly semi-realistic proportions, expressive but restrained, warm daylight palette, high readability, cinematic 16:9 composition, no text, no letters, no logos, no watermark. Same composition, but a semi-transparent "x-ray" effect reveals a motorcycle with a rider hidden behind the stopped truck, speeding straight ahead in the next lane. The hidden area behind the truck is shaded by a translucent purple overlay to show the blind spot. Gen-san's eyes in the rear-view mirror area are looking carefully to the right. Educational manga diagram feeling, no text
+Style: Japanese manga illustration, clean black ink linework, flat cel-shaded colors with light screentone shading, slightly semi-realistic proportions, expressive but restrained, warm daylight palette, high readability, cinematic 16:9 composition, no text, no letters, no logos, no watermark. Same composition, but a semi-transparent "x-ray" effect reveals a motorcycle with a rider hidden behind the stopped truck, speeding straight ahead in the next lane. The hidden area behind the truck is shaded by a translucent purple overlay to show the blind spot. Educational manga diagram feeling, no text
 Aspect ratio 16:9, important subjects in the upper two thirds of the frame.
 
 ===== 09. 第2問　右折　＜譲られたトラックの陰のバイク＞ / Q2-ゲンさんカット =====
