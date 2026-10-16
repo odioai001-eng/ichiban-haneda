@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-196 -->
+<!-- v20260902-197 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -209,18 +209,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   max-height:60%;overflow-y:auto}
 .driver-panel.open{transform:translateY(0)}
 .dp-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 6px}
-.dp-title{font-size:13px;font-weight:700;color:var(--muted);padding:0 14px 8px;
+/* 仲間の状況パネル（地図の👥ボタンで開く）。運転の合間にひと目で読めるよう、文字を大きめにしている。
+   状態（空車・実車・回送）と🎯・📋ボタンは、文字が大きくなって横幅が足りなくなるため、右側で縦に並べる
+   （上に状態、下にボタン）。名前・車番・住所は、できるだけ1行に収める */
+.dp-title{font-size:17px;font-weight:700;color:var(--muted);padding:6px 14px 10px;
   display:flex;justify-content:space-between;align-items:center}
-.dp-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
-.driver-row{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;
+/* 縦長の画面では、スクロールしても見出しと✕を上に残す（文字が大きくなって行が増えると、スクロールが
+   必要になりやすいため）。横向きなど低い画面では、行を見せる領域を優先して固定しない */
+@media (min-height:521px){.dp-title{position:sticky;top:0;z-index:2;background:var(--surface)}}
+.dp-close{background:none;border:none;color:var(--muted);font-size:24px;line-height:1;padding:6px 10px;cursor:pointer}
+.driver-row{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;
   border-bottom:1px solid var(--border)}
 .driver-row:last-child{border-bottom:none}
-.driver-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;margin-top:2px}
+.driver-avatar{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:19px;font-weight:700;color:#fff;flex-shrink:0;margin-top:2px}
 .driver-info{flex:1;min-width:0}
-.driver-name{font-size:14px;font-weight:600}
-.driver-sub{font-size:11px;color:var(--muted);margin-top:1px}
-.driver-status{font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap}
+.driver-name{font-size:20px;font-weight:700;line-height:1.25}
+.driver-sub{font-size:15px;color:var(--muted);margin-top:2px;line-height:1.35}
+.driver-addr{font-size:15px;color:var(--muted);margin-top:3px;line-height:1.35}
+.driver-wait{margin-top:6px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);
+  border-radius:10px;padding:8px 12px}
+.driver-wait-title{font-size:17px;font-weight:700;color:var(--gold)}
+.driver-wait-spot{font-size:15px;color:var(--text);margin-top:3px;line-height:1.35}
+.driver-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0}
+.driver-btns{display:flex;gap:8px}
+.dp-btn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  min-width:44px;height:40px;padding:0 8px;font-size:20px;line-height:1;cursor:pointer;color:var(--text);
+  display:flex;align-items:center;justify-content:center}
+.driver-status{font-size:15px;font-weight:700;padding:5px 11px;border-radius:12px;white-space:nowrap}
 .driver-status.kuusha{background:rgba(239,68,68,.15);color:var(--red)}
 .driver-status.jitsusha{background:rgba(34,197,94,.15);color:var(--green)}
 .driver-status.kaisou{background:rgba(245,158,11,.15);color:var(--amber)}
@@ -1382,7 +1398,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-196';
+const APP_BUILD='20260902-197';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -5042,24 +5058,23 @@ function makeDriverRow(id, d, isMe){
   return `<div class="driver-row" ${rowClick}>
     <div class="driver-avatar" style="background:${cfg.color}${isMe?';box-shadow:0 0 0 2px #fff,0 0 0 4px '+cfg.color:''}">${esc(initial)}</div>
     <div class="driver-info">
-      <div class="driver-name" style="${isMe?'':'color:var(--accent);text-decoration:underline dotted'}">${esc(d.name||'不明')}${isMe?' <span style="font-size:10px;color:var(--accent)">(自分)</span>':''}</div>
+      <div class="driver-name" style="${isMe?'':'color:var(--accent);text-decoration:underline dotted'}">${esc(d.name||'不明')}${isMe?' <span style="font-size:13px;color:var(--accent)">(自分)</span>':''}</div>
       <div class="driver-sub">${d.car?`${esc(d.car)}号車${d.plate?' '+esc(d.plate):''}  · `:''}${timeStr}</div>
-      ${hasLoc?`<div id="driver-addr-${id}" style="font-size:11px;color:var(--muted);margin-top:2px">${cachedAddr&&cachedAddr.addr?'📍 '+esc(cachedAddr.addr):'📍 住所を取得中…'}</div>`:''}
+      ${hasLoc?`<div id="driver-addr-${id}" class="driver-addr">${cachedAddr&&cachedAddr.addr?'📍 '+esc(cachedAddr.addr):'📍 住所を取得中…'}</div>`:''}
       ${isWaiting?`
-        <div style="margin-top:5px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);
-          border-radius:8px;padding:6px 10px">
-          <div style="font-size:13px;font-weight:700;color:var(--gold)">⏱ ${waitMins}分 待機中</div>
-          ${waitSpot?`<div style="font-size:12px;color:var(--text);margin-top:2px">${spotIcon} ${esc(waitSpot)}</div>`:''}
+        <div class="driver-wait">
+          <div class="driver-wait-title">⏱ ${waitMins}分 待機中</div>
+          ${waitSpot?`<div class="driver-wait-spot">${spotIcon} ${esc(waitSpot)}</div>`:''}
         </div>`:''}
     </div>
-    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+    <div class="driver-actions">
       ${status!=='offline'?`<div class="driver-status ${clsMap[status]}">${cfg.label}</div>`:''}
-      ${alive?`<button onclick="event.stopPropagation();${isMe?'followMyself()':`followPeer('${id}')`}"
-        style="background:${(isMe?(autoFollow&&!followPeerId):followPeerId===id)?'var(--accent)':'var(--surface2)'};border:1px solid var(--border);
-        border-radius:8px;padding:4px 8px;font-size:14px;cursor:pointer;color:var(--text)">🎯</button>`:''}
-      ${!isMe?`<button onclick="event.stopPropagation();toggleDriverDests('${id}')"
-        style="background:var(--surface2);border:1px solid var(--border);
-        border-radius:8px;padding:4px 8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--accent)">📋</button>`:''}
+      <div class="driver-btns">
+      ${alive?`<button class="dp-btn" onclick="event.stopPropagation();${isMe?'followMyself()':`followPeer('${id}')`}"
+        style="background:${(isMe?(autoFollow&&!followPeerId):followPeerId===id)?'var(--accent)':'var(--surface2)'}">🎯</button>`:''}
+      ${!isMe?`<button class="dp-btn" onclick="event.stopPropagation();toggleDriverDests('${id}')"
+        style="font-weight:700;color:var(--accent)">📋</button>`:''}
+      </div>
     </div>
   </div>
   ${!isMe?`<div id="ddests-${id}" style="display:none;padding:0 10px 10px"></div>`:''}`;
@@ -5086,7 +5101,7 @@ function updateDriverList(){
     }
     return makeDriverRow(id,d,false);
   }).join('');
-  container.innerHTML=myRow+peerRows||'<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">仲間がいません</div>';
+  container.innerHTML=myRow+peerRows||'<div style="text-align:center;color:var(--muted);font-size:17px;padding:24px 20px">仲間がいません</div>';
   document.getElementById('online-count').textContent=`${online}人`;
 }
 
@@ -5131,29 +5146,29 @@ function toggleDriverDests(id){
   if(!el)return;
   if(el.style.display!=='none'){el.style.display='none';return;}
   const entries=Object.values(teamDests[id]||{}).filter(e=>e.type==='trip');
-  if(!entries.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:4px 0">送先の記録がありません</div>';el.style.display='block';return;}
+  if(!entries.length){el.innerHTML='<div style="font-size:15px;color:var(--muted);padding:6px 0">送先の記録がありません</div>';el.style.display='block';return;}
   entries.sort((a,b)=>(b.ts||0)-(a.ts||0));
   const driverDutyStart=getEffectiveShiftStart((driverData[id]&&driverData[id].dutyStartTs)||0);
   const tripsSorted=entries.filter(e=>(e.ts||0)>=driverDutyStart).sort((a,b)=>(a.ts||0)-(b.ts||0));
   const numMap=new Map();tripsSorted.forEach((e,i)=>numMap.set(e.ts,i+1));
   // 表示自体も、出勤（または午前9時のリセット）以降の記録に限定する
   const shown=entries.filter(e=>(e.ts||0)>=driverDutyStart);
-  if(!shown.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);padding:4px 0">本日の送先の記録がありません</div>';el.style.display='block';return;}
+  if(!shown.length){el.innerHTML='<div style="font-size:15px;color:var(--muted);padding:6px 0">本日の送先の記録がありません</div>';el.style.display='block';return;}
   el.innerHTML=shown.map(e=>{
     const no=numMap.get(e.ts)||'';
     const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(e);
-    return `<div style="border:2px solid #fff;border-radius:10px;padding:8px 12px;margin-bottom:6px;background:var(--surface)">
-      ${no?`<div style="font-size:13px;font-weight:800;color:var(--accent);margin-bottom:2px">#${no}</div>`:''}
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:3px">
-        <span style="font-size:13px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(e.boardTime||'--:--')}</span>
-        <span style="font-size:11px;color:var(--muted)">${boardDesc}</span>
+    return `<div style="border:2px solid #fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--surface)">
+      ${no?`<div style="font-size:17px;font-weight:800;color:var(--accent);margin-bottom:3px">#${no}</div>`:''}
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px">
+        <span style="font-size:17px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(e.boardTime||'--:--')}</span>
+        <span style="font-size:15px;color:var(--muted);line-height:1.35">${boardDesc}</span>
       </div>
-      ${historyStr?`<div style="font-size:10px;color:var(--muted);margin:-1px 0 3px 2px">🔄 乗り場移動: ${historyStr}</div>`:''}
-      <div style="display:flex;align-items:baseline;gap:8px">
-        <span style="font-size:13px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(e.alightTime||'--:--')}</span>
-        <span style="font-size:12px;font-weight:600;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
+      ${historyStr?`<div style="font-size:13px;color:var(--muted);margin:-1px 0 4px 2px;line-height:1.35">🔄 乗り場移動: ${historyStr}</div>`:''}
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:17px;font-weight:800;color:var(--amber);white-space:nowrap">${esc(e.alightTime||'--:--')}</span>
+        <span style="font-size:16px;font-weight:600;line-height:1.35;${isAbure?'color:var(--red)':''}">${alightDesc}</span>
       </div>
-      ${waitStr?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${waitStr}</div>`:''}
+      ${waitStr?`<div style="font-size:14px;color:var(--muted);margin-top:3px">${waitStr}</div>`:''}
     </div>`;
   }).join('');
   el.style.display='block';
