@@ -162,17 +162,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 #daily-bar{padding:4px 6px 4px 58px}
 @media (max-height:520px){#daily-bar{padding-right:58px}}
 .daily-row{display:flex;justify-content:space-evenly;align-items:flex-start}
-/* 数字バーのいちばん下（＝地図画面の最下部）に出す、オートフォロー中の人の現在地の住所。
-   「🎯 名前」と住所を1行に並べ、住所が長い時は…で省略する（バーの高さが変わらないよう折り返さない）。
-   フォローしていない時・自分の位置がまだ取れていない時は、行ごと隠す（JS側で切り替える）。
-   低い画面（横向き等）では、地図を広く見せるため出さない */
-.follow-addr{display:none;align-items:center;justify-content:center;gap:8px;min-width:0;
-  margin-top:4px;padding-top:4px;border-top:1px solid var(--border)}
-.follow-addr-who{flex-shrink:0;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-size:13px;font-weight:700;line-height:1.4;color:#fff;background:var(--accent);border-radius:10px;padding:2px 9px}
+/* 地図そのものの最下部（数字バーのすぐ上）に、透けた表示で重ねる、オートフォロー中の人の現在地の住所。
+   数字バーの中ではなく、地図の下端に浮かせる（数字バーの高さは変わらず、地図の見える範囲も狭くならない）。
+   バーの高さに自動で追従して「バーの上端の8px上」に置く（#daily-dock内の絶対配置）。
+   左は左下のボタン列とGPS状態の札（〜86px）を避け、右は画面の端の近くまで（🚗ボタンが出ている間だけ、
+   そのぶん空ける）、中央寄せで出す。
+   背景は半透明にして地図が透けて見えるようにし、文字は影つきの白にする。タップは地図に通す
+   （dockがpointer-events:none）。住所が長い時は…で省略して1行のまま。
+   フォローしていない時・自分の位置がまだ取れていない時は、まるごと隠す（JS側で切り替える）。
+   低い画面（横向き等）では出さない */
+.follow-addr{position:absolute;left:92px;right:12px;bottom:calc(100% + 8px);
+  display:none;justify-content:center;pointer-events:none}
+/* 🚗（移動記録）ボタンが出ている間（乗り場を選んでいる時）だけ、右側をそのぶん空ける */
+#daily-dock.has-car .follow-addr{right:56px}
+.follow-addr-pill{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;
+  background:rgba(13,13,26,.5);backdrop-filter:blur(3px);border-radius:14px;padding:3px 11px;
+  text-shadow:0 1px 3px rgba(0,0,0,.85)}
+.follow-addr-who{flex-shrink:0;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:13px;font-weight:700;line-height:1.4;color:#fff;background:rgba(79,142,247,.75);border-radius:10px;padding:1px 8px}
 .follow-addr-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-size:16px;font-weight:700;line-height:1.35;color:var(--text)}
-.follow-addr-text.muted{color:var(--muted);font-weight:600}
+  font-size:15px;font-weight:700;line-height:1.4;color:#fff}
+.follow-addr-text.muted{color:rgba(255,255,255,.75);font-weight:600}
 @media (max-height:520px){#follow-addr{display:none!important}}
 .daily-cell{text-align:center;flex:0 0 auto}
 .daily-lbl{color:var(--muted);white-space:nowrap;line-height:1.3}
@@ -467,7 +477,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   <!-- 地図の一番下の数字バー（#daily-bar）と、その真上の右端に出る🚗（移動記録）ボタンを、
        ひとまとめ（#daily-dock）にして下端へ固定する。🚗ボタンはバーの高さに自動で追従して
        「バーの上端の8px上」に置かれるため、乗り場を選んだ時（🚗が出る時）でも、数字の位置は
-       変わらず、🚗が数字に重なることもない。左の余白（58px）は左下のボタン列の幅ぶん。
+       変わらず、🚗が数字に重なることもない（同じ要領で、オートフォロー中の人の住所も、バーのすぐ上に
+       半透明で浮かせる）。左の余白（58px）は左下のボタン列の幅ぶん。
        右の余白は画面の端まで使う（横向きなど低い画面のみ、右の＋/−・🎯・👥を避けて58px） -->
   <div id="daily-dock" style="position:absolute;left:0;right:0;bottom:0;z-index:480;pointer-events:none">
    <!-- 移動記録ボタン -->
@@ -476,6 +487,14 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
      background:rgba(79,142,247,.18);color:var(--accent);border:2px solid var(--accent);
      border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;
      backdrop-filter:blur(6px)">🚗</button>
+   <!-- オートフォロー中の人（自分、または🎯で選んだ仲間）の現在地の住所。バーのすぐ上＝地図の最下部に、
+        半透明で浮かせる（自分は住所だけ、仲間は名前と住所）。updateFollowAddrBar()が更新する -->
+   <div id="follow-addr" class="follow-addr">
+    <div class="follow-addr-pill">
+     <span id="follow-addr-who" class="follow-addr-who" style="display:none"></span>
+     <span id="follow-addr-text" class="follow-addr-text"></span>
+    </div>
+   </div>
    <div id="daily-bar" style="background:rgba(13,13,26,.85);backdrop-filter:blur(6px);border-top:1px solid var(--border)">
     <div class="daily-row" style="margin-bottom:4px">
      <div class="daily-cell">
@@ -508,11 +527,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div class="daily-lbl" style="font-size:10px">現在時間単価</div>
       <div id="daily-hourly-rate" class="daily-val" style="font-size:16px;color:var(--gold)">-</div>
      </div>
-    </div>
-    <!-- オートフォロー中の人（自分、または🎯で選んだ仲間）の現在地の住所。updateFollowAddrBar()が更新する -->
-    <div id="follow-addr" class="follow-addr">
-     <span id="follow-addr-who" class="follow-addr-who"></span>
-     <span id="follow-addr-text" class="follow-addr-text"></span>
     </div>
    </div>
   </div>
@@ -5301,7 +5315,7 @@ async function processGeocodeQueue(){
   geocodeQueueRunning=false;
 }
 
-// ===== 地図の最下部: オートフォロー中の人の現在地の住所 =====
+// ===== 地図の最下部（バーのすぐ上）に透けて出す: オートフォロー中の人の現在地の住所 =====
 // フォローの対象は、仲間をフォロー中ならその人、自分のオートフォロー中なら自分。どちらでもなければ
 // （オートフォローOFF）表示しない。自分の位置がまだ取れていない間（休み中・GPS停止中）も表示しない。
 // 仲間が退勤した・位置が届いていない時は、「位置情報がありません」と出す
@@ -5335,8 +5349,11 @@ function updateFollowAddrBar(){
   else if(c&&c.failed){text='住所を取得できません';muted=true;}
   else{text='住所を取得中…';muted=true;}
   const whoEl=document.getElementById('follow-addr-who'),textEl=document.getElementById('follow-addr-text');
-  const who='🎯 '+t.name;
+  // 自分をフォロー中は住所だけ。仲間をフォロー中は、誰の住所かが分かるよう名前も出す
+  const who=t.isMe?'':'🎯 '+t.name;
   if(whoEl.textContent!==who)whoEl.textContent=who;
+  const whoDisp=who?'':'none';
+  if(whoEl.style.display!==whoDisp)whoEl.style.display=whoDisp;
   if(textEl.textContent!==text)textEl.textContent=text;
   textEl.classList.toggle('muted',muted);
   if(row.style.display!=='flex')row.style.display='flex';
@@ -10075,6 +10092,9 @@ let poolPanelOpen=false,poolHistoryOpen=false;
 function syncPoolPanel(){
   const btn=document.getElementById('pool-toggle-btn');
   if(btn)btn.style.display=currentSpotSelection?'block':'none';
+  // 🚗が出ている間は、地図の最下部に出すフォロー中の人の住所が🚗に重ならないよう、右側を空ける
+  const dock=document.getElementById('daily-dock');
+  if(dock)dock.classList.toggle('has-car',!!currentSpotSelection);
   if(!currentSpotSelection){hidePoolPanel();hidePoolHistory();}
   renderPoolChart();renderPoolButtons();
 }
