@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260902-197 -->
+<!-- v20260902-198 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -162,6 +162,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 #daily-bar{padding:4px 6px 4px 58px}
 @media (max-height:520px){#daily-bar{padding-right:58px}}
 .daily-row{display:flex;justify-content:space-evenly;align-items:flex-start}
+/* 数字バーのいちばん下（＝地図画面の最下部）に出す、オートフォロー中の人の現在地の住所。
+   「🎯 名前」と住所を1行に並べ、住所が長い時は…で省略する（バーの高さが変わらないよう折り返さない）。
+   フォローしていない時・自分の位置がまだ取れていない時は、行ごと隠す（JS側で切り替える）。
+   低い画面（横向き等）では、地図を広く見せるため出さない */
+.follow-addr{display:none;align-items:center;justify-content:center;gap:8px;min-width:0;
+  margin-top:4px;padding-top:4px;border-top:1px solid var(--border)}
+.follow-addr-who{flex-shrink:0;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:13px;font-weight:700;line-height:1.4;color:#fff;background:var(--accent);border-radius:10px;padding:2px 9px}
+.follow-addr-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:16px;font-weight:700;line-height:1.35;color:var(--text)}
+.follow-addr-text.muted{color:var(--muted);font-weight:600}
+@media (max-height:520px){#follow-addr{display:none!important}}
 .daily-cell{text-align:center;flex:0 0 auto}
 .daily-lbl{color:var(--muted);white-space:nowrap;line-height:1.3}
 .daily-val{white-space:nowrap;font-weight:800;line-height:1.25}
@@ -496,6 +508,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div class="daily-lbl" style="font-size:10px">現在時間単価</div>
       <div id="daily-hourly-rate" class="daily-val" style="font-size:16px;color:var(--gold)">-</div>
      </div>
+    </div>
+    <!-- オートフォロー中の人（自分、または🎯で選んだ仲間）の現在地の住所。updateFollowAddrBar()が更新する -->
+    <div id="follow-addr" class="follow-addr">
+     <span id="follow-addr-who" class="follow-addr-who"></span>
+     <span id="follow-addr-text" class="follow-addr-text"></span>
     </div>
    </div>
   </div>
@@ -1398,7 +1415,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-197';
+const APP_BUILD='20260902-198';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4313,6 +4330,7 @@ function saveAppState(){
 // （非番中に地図を見ている時にフォローしていても、再読み込みで消えないように）
 function saveFollowState(){
   localStorage.setItem('taxi_follow_state',JSON.stringify({autoFollow,followPeerId}));
+  try{updateFollowAddrBar();}catch(e){} // 地図の最下部の住所行も、フォローの切り替えにすぐ追従させる
 }
 function restoreFollowState(){
   const raw=localStorage.getItem('taxi_follow_state');
@@ -5242,17 +5260,26 @@ let geocodeQueue=[];
 let geocodeQueueRunning=false;
 const DRIVER_ADDR_MAX_AGE_MS=5*60*1000;
 const DRIVER_ADDR_MOVE_THRESHOLD_M=300;
-function scheduleDriverGeocode(id,lat,lng){
+const DRIVER_ADDR_RETRY_MS=30*1000; // 取得に失敗した時は、これだけ待って取り直す（圏外・一時的な不調から早く復帰するため）
+// 逆ジオコーディングに失敗すると、reverseGeocodeは住所の代わりに「緯度,経度」の文字列を返す
+function isCoordText(s){return /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/.test(String(s||''));}
+// force=trueは、地図の最下部に出すフォロー中の人の住所用（仲間の状況パネルを開いていなくても取得する）
+function scheduleDriverGeocode(id,lat,lng,force){
   if(lat===null||lat===undefined||lng===null||lng===undefined)return;
-  // 仲間の状況パネルを開いている時だけ取得する（無駄なAPI呼び出しを避ける）
+  // 仲間の状況パネルを開いている時だけ取得する（無駄なAPI呼び出しを避ける）。ただし、
+  // 地図の最下部に出すフォロー中の人の分は、パネルを閉じていても取得する
   const panel=document.getElementById('driver-panel');
-  if(!panel||!panel.classList.contains('open'))return;
+  if(!force&&(!panel||!panel.classList.contains('open')))return;
   const cached=driverAddrCache[id];
   if(cached){
     if(cached.fetching)return;
     const age=Date.now()-cached.ts;
-    const moved=haversine(lat,lng,cached.lat,cached.lng);
-    if(age<DRIVER_ADDR_MAX_AGE_MS&&moved<DRIVER_ADDR_MOVE_THRESHOLD_M)return; // 十分新しい
+    if(cached.failed){
+      if(age<DRIVER_ADDR_RETRY_MS)return; // 失敗した直後は取り直さない
+    }else{
+      const moved=haversine(lat,lng,cached.lat,cached.lng);
+      if(age<DRIVER_ADDR_MAX_AGE_MS&&moved<DRIVER_ADDR_MOVE_THRESHOLD_M)return; // 十分新しい
+    }
   }
   if(geocodeQueue.some(q=>q.id===id))return; // すでにキュー待ち
   driverAddrCache[id]={...(cached||{}),lat,lng,fetching:true};
@@ -5265,13 +5292,56 @@ async function processGeocodeQueue(){
   while(geocodeQueue.length){
     const {id,lat,lng}=geocodeQueue.shift();
     const addr=await reverseGeocode(lat,lng);
-    driverAddrCache[id]={lat,lng,addr,ts:Date.now(),fetching:false};
+    driverAddrCache[id]={lat,lng,addr,ts:Date.now(),fetching:false,failed:isCoordText(addr)};
     const el=document.getElementById('driver-addr-'+id);
     if(el)el.textContent='📍 '+addr;
+    try{updateFollowAddrBar();}catch(e){}
     if(geocodeQueue.length)await new Promise(r=>setTimeout(r,1200));
   }
   geocodeQueueRunning=false;
 }
+
+// ===== 地図の最下部: オートフォロー中の人の現在地の住所 =====
+// フォローの対象は、仲間をフォロー中ならその人、自分のオートフォロー中なら自分。どちらでもなければ
+// （オートフォローOFF）表示しない。自分の位置がまだ取れていない間（休み中・GPS停止中）も表示しない。
+// 仲間が退勤した・位置が届いていない時は、「位置情報がありません」と出す
+function getFollowTarget(){
+  if(followPeerId){
+    const d=driverData[followPeerId];
+    const alive=!!d&&(Date.now()-(d.ts||0))<PEER_ALIVE_MS&&d.dutyActive===true;
+    const hasLoc=alive&&d.lat!==null&&d.lat!==undefined&&d.lng!==null&&d.lng!==undefined;
+    return {id:followPeerId,name:(d&&d.name)||'仲間',isMe:false,lat:hasLoc?Number(d.lat):null,lng:hasLoc?Number(d.lng):null};
+  }
+  if(autoFollow)return {id:myId,name:'自分',isMe:true,lat:myLat,lng:myLng};
+  return null;
+}
+function updateFollowAddrBar(){
+  const row=document.getElementById('follow-addr');
+  if(!row)return;
+  const t=getFollowTarget();
+  const hasLoc=!!t&&t.lat!==null&&t.lat!==undefined&&t.lng!==null&&t.lng!==undefined;
+  if(!t||(t.isMe&&!hasLoc)){ // フォローなし／自分の位置がまだ無い
+    if(row.style.display!=='none')row.style.display='none';
+    return;
+  }
+  // 住所の取得は、地図の画面が見えている間だけ行う（他の画面・バックグラウンドでは、見えない住所のために
+  // 無料の逆ジオコーディングAPIを呼ばない）。取得は仲間の状況パネルと同じキャッシュ・キューを使う
+  const mapVisible=!document.hidden&&document.getElementById('page-map').classList.contains('active');
+  if(hasLoc&&mapVisible)scheduleDriverGeocode(t.id,t.lat,t.lng,true);
+  const c=driverAddrCache[t.id];
+  let text,muted=false;
+  if(!hasLoc){text='位置情報がありません';muted=true;}
+  else if(c&&c.addr&&!c.failed){text='📍 '+c.addr;}
+  else if(c&&c.failed){text='住所を取得できません';muted=true;}
+  else{text='住所を取得中…';muted=true;}
+  const whoEl=document.getElementById('follow-addr-who'),textEl=document.getElementById('follow-addr-text');
+  const who='🎯 '+t.name;
+  if(whoEl.textContent!==who)whoEl.textContent=who;
+  if(textEl.textContent!==text)textEl.textContent=text;
+  textEl.classList.toggle('muted',muted);
+  if(row.style.display!=='flex')row.style.display='flex';
+}
+setInterval(()=>{try{updateFollowAddrBar();}catch(e){}},2000);
 
 function kanjiToNum(s){
   const map={'〇':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
@@ -11005,6 +11075,7 @@ function showPage(name,btn){
   syncZoomCtrlVisibility(name==='map');
   if(name==='map'){
     setTimeout(()=>leafletMap.invalidateSize(),80);
+    try{updateFollowAddrBar();}catch(e){}
     // 他ページから戻った際に、号選択・総列数・入力開始時間の表示を最新状態で再描画する
     renderSpotRow();
   }
