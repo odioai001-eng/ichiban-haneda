@@ -846,6 +846,15 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <button class="btn btn-g" onclick="renderPendingList()" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
       <div id="pending-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
     </div>
+    <div class="sec">📱 簡易版アプリの利用申請</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">簡易版（出退勤・売上管理）の利用申請です。上の「参加申請の承認」（本体アプリ）とは別に管理します。許可すると、申請した人の簡易版がすぐ使えるようになります。</div>
+      <button class="btn btn-g" onclick="renderSimpleAccessList()" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px">許可待ち</div>
+      <div id="simple-pending-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
+      <div style="font-size:12px;font-weight:700;margin:14px 0 4px">利用中（許可済み）</div>
+      <div id="simple-approved-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
+    </div>
     <div class="sec">🗑 アカウント管理</div>
     <div class="card">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Firebaseに登録されているドライバーを管理できます。「📴 強制オフライン」は地図・仲間リストから一時的に外すだけで、送り先の記録は残ります（次に出勤すればまた表示されます）。「削除」は送り先の記録ごと完全に削除します。</div>
@@ -1429,7 +1438,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20260902-198';
+const APP_BUILD='20261021-1';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4923,6 +4932,18 @@ function connectFirebase(config){
       if(localStorage.getItem('taxi_is_admin_device')!=='1')return;
       sendNotif('🆕 参加申請','('+(v.name||'名前未設定')+(v.car?' / '+v.car:'')+')から参加申請がありました',snap.key);
     });
+    // 簡易版アプリの利用申請も、本体の参加申請と同じく管理者として使った端末にだけ通知する。
+    // 拒否のあと申請し直した場合は既存の記録が書き換わるため、child_changedも見る
+    const onSimplePending=snap=>{
+      const v=snap.val();
+      if(!v||v.status!=='pending')return;
+      if((v.ts||0)<pendingInitTs)return;
+      if(isAdmin)renderSimpleAccessList();
+      if(localStorage.getItem('taxi_is_admin_device')!=='1')return;
+      sendNotif('📱 簡易版の利用申請',(v.lastName||'')+' '+(v.firstName||'')+'さんから利用申請がありました','simple_'+snap.key);
+    };
+    db.ref('simple_pending').on('child_added',onSimplePending);
+    db.ref('simple_pending').on('child_changed',onSimplePending);
     db.ref('pool_moves').limitToLast(200).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
       poolMoves.push(m);poolMoves.sort((a,b)=>a.ts-b.ts);
@@ -9430,7 +9451,7 @@ function adminLogin(){
     document.getElementById('admin-area').style.display='block';
     document.getElementById('admin-name').value=localStorage.getItem('taxi_name')||'';
     document.getElementById('admin-car').value=localStorage.getItem('taxi_car')||'';
-    renderCPs();renderRankingPage();toast('🔓 管理者モード');
+    renderCPs();renderRankingPage();renderSimpleAccessList();toast('🔓 管理者モード');
     checkMonthStartDestsReset();
   }else{toast('⚠️ PINが違います');document.getElementById('pin-input').value='';}
 }
@@ -10694,6 +10715,88 @@ function rejectUser(uid,name){
   }).catch(err=>{
     console.error('rejectUser failed',err);
     toast('⚠️ 拒否の反映に失敗しました');
+  });
+}
+
+// ===== 簡易版アプリの利用申請（simple_pending / simple_approved） =====
+let simpleAccessCache={pending:{},approved:{}};
+function renderSimpleAccessList(){
+  if(!db)return;
+  const pEl=document.getElementById('simple-pending-list');
+  const aEl=document.getElementById('simple-approved-list');
+  if(!pEl||!aEl)return;
+  Promise.all([db.ref('simple_pending').once('value'),db.ref('simple_approved').once('value')]).then(([ps,as])=>{
+    const pendingAll=ps.val()||{},approved=as.val()||{};
+    simpleAccessCache={pending:pendingAll,approved};
+    const muted=t=>`<div style="font-size:12px;color:var(--muted)">${t}</div>`;
+    const pending=Object.entries(pendingAll).filter(([id,v])=>v&&v.status==='pending'&&!approved[id])
+      .sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+    pEl.innerHTML=pending.length?pending.map(([id,v])=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">${esc(v.lastName)} ${esc(v.firstName)}</div>
+          <div style="font-size:11px;color:var(--cyan);word-break:break-all">${esc(v.email)}</div>
+          <div style="font-size:11px;color:var(--muted)">${new Date(v.ts).toLocaleString('ja-JP')}</div>
+        </div>
+        <button class="btn btn-p" style="padding:5px 10px;font-size:12px" onclick="approveSimpleUser('${id}')">許可</button>
+        <button class="btn btn-d" style="padding:5px 10px;font-size:12px" onclick="rejectSimpleUser('${id}')">拒否</button>
+      </div>`).join(''):muted('許可待ちの申請はありません');
+    const list=Object.entries(approved).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+    aEl.innerHTML=list.length?list.map(([id,v])=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">${esc(v.lastName)} ${esc(v.firstName)}</div>
+          <div style="font-size:11px;color:var(--muted);word-break:break-all">${v.auto?'申請制の導入前から利用':esc(v.email)}</div>
+        </div>
+        <button class="btn btn-g" style="padding:5px 10px;font-size:12px;color:var(--red)" onclick="revokeSimpleUser('${id}')">利用停止</button>
+      </div>`).join(''):muted('利用中の人はいません');
+  }).catch(err=>{
+    console.error('renderSimpleAccessList failed',err);
+    toast('⚠️ 申請リストの読み込みに失敗しました');
+  });
+}
+function simpleAccessName(v){return ((v&&v.lastName)||'')+' '+((v&&v.firstName)||'');}
+function approveSimpleUser(id){
+  if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
+  const v=simpleAccessCache.pending[id];
+  if(!v)return;
+  if(!confirm(simpleAccessName(v)+'さんの簡易版の利用を許可しますか？'))return;
+  Promise.all([
+    db.ref('simple_approved/'+id).set({lastName:v.lastName||'',firstName:v.firstName||'',email:v.email||'',ts:Date.now()}),
+    db.ref('simple_pending/'+id+'/status').set('approved')
+  ]).then(()=>{
+    toast('✅ '+simpleAccessName(v)+'さんを許可しました');
+    renderSimpleAccessList();
+  }).catch(err=>{
+    console.error('approveSimpleUser failed',err);
+    toast('⚠️ 許可の反映に失敗しました。電波状況を確認してもう一度お試しください');
+  });
+}
+function rejectSimpleUser(id){
+  if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
+  const v=simpleAccessCache.pending[id];
+  if(!v)return;
+  if(!confirm(simpleAccessName(v)+'さんの申請を拒否しますか？'))return;
+  // 削除せず「拒否」として残し、申請した人の画面に「許可されませんでした」と出す
+  db.ref('simple_pending/'+id+'/status').set('rejected').then(()=>{
+    toast('🚫 '+simpleAccessName(v)+'さんの申請を拒否しました');
+    renderSimpleAccessList();
+  }).catch(err=>{
+    console.error('rejectSimpleUser failed',err);
+    toast('⚠️ 拒否の反映に失敗しました');
+  });
+}
+function revokeSimpleUser(id){
+  if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
+  const v=simpleAccessCache.approved[id];
+  if(!v)return;
+  if(!confirm(simpleAccessName(v)+'さんの簡易版の利用を停止しますか？\n（次にアプリを開いた時から使えなくなります。記録は消えません）'))return;
+  db.ref('simple_approved/'+id).remove().then(()=>{
+    toast('⛔ '+simpleAccessName(v)+'さんの利用を停止しました');
+    renderSimpleAccessList();
+  }).catch(err=>{
+    console.error('revokeSimpleUser failed',err);
+    toast('⚠️ 利用停止の反映に失敗しました');
   });
 }
 

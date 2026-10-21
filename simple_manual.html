@@ -256,9 +256,33 @@ kbd{font-family:inherit; font-weight:700; background:var(--surface2); border:1px
     <div class="op-num">01</div>
     <div>
       <h2>はじめて使うとき</h2>
-      <div class="sub">最初に一度だけ「ようこそ」画面が出ます</div>
+      <div class="sub">最初に「利用申請」、許可されたら「ようこそ」画面</div>
     </div>
   </div>
+
+  <h3 style="font-size:14.5px; margin-bottom:10px">①利用申請をする</h3>
+  <div class="mock">
+    <div style="font-size:15px; font-weight:800; margin-bottom:6px">利用申請 📝</div>
+    <div class="m-lbl">名字</div>
+    <div class="m-field">高橋</div>
+    <div class="m-lbl">名前</div>
+    <div class="m-field">一郎</div>
+    <div class="m-lbl">メールアドレス</div>
+    <div class="m-field">taro@example.com</div>
+    <span class="m-btn pri">📨 申請する</span>
+  </div>
+  <ul class="steps">
+    <li><div>このアプリは<b>管理者の許可</b>が必要です。はじめて開くと「利用申請」の画面が出るので、<b>名字・名前・メールアドレス</b>を入れて「📨 申請する」を押します</div></li>
+    <li><div>「許可待ちです」の画面になります。<b>管理者が許可すると、自動で使えるようになります</b>（アプリを閉じて待っていても大丈夫です）</div></li>
+    <li><div>入力を間違えたときは「✏️ 申請内容を修正する」で直して、もう一度申請できます</div></li>
+    <li><div>許可されなかった場合は、申請画面に「許可されませんでした」と出ます。内容を確認して申請し直すか、管理者に相談してください</div></li>
+  </ul>
+  <div class="note">
+    <span>📱</span>
+    <div>許可は<b>スマホ1台ごと</b>です。機種変更したときや、別のスマホでも使うときは、そのスマホでもう一度申請してください。以前から簡易版を使っていたスマホは、申請しなくてもそのまま使えます。</div>
+  </div>
+
+  <h3 style="font-size:14.5px; margin:26px 0 10px">②名前と同期コードを入れる</h3>
 
   <div class="mock">
     <div style="font-size:15px; font-weight:800; margin-bottom:6px">ようこそ 👋</div>
@@ -576,6 +600,7 @@ kbd{font-family:inherit; font-weight:700; background:var(--surface2); border:1px
     <li><div><b>日割り時間が 0時間00分 になり出勤できない</b> — 今月の合計勤務時間をすでに使い切っています。「🕐 上がり時間を指定」で帰る時刻を入れて出勤してください</div></li>
     <li><div><b>出勤時刻を間違えたまま出勤してしまった</b> — そのまま退勤し、退勤画面の「勤務時間」を正しい時間に直してから「✅ 退勤する」を押してください。あとから記録一覧の「編集」で直すこともできます</div></li>
     <li><div><b>退勤を押し忘れたまま翌日になった</b> — いったん退勤し、勤務時間と売上を正しい値に直して保存してください</div></li>
+    <li><div><b>「利用申請」の画面が出て使えない</b> — 新しいスマホ、または管理者に利用を停止された場合です。申請して、管理者の許可を待ってください</div></li>
     <li><div><b>機種変更したら記録が無い</b> — 前のスマホで使っていた同期コードを「⚙️設定」に入れて「🔄 このコードのデータを復元」を押してください。同期コードを設定していなかった場合、前のスマホの記録は移せません</div></li>
     <li><div><b>「このコードのデータが見つかりません」と出る</b> — 同期コードの文字が、大文字・小文字・全角・半角まで前と同じか確認してください</div></li>
   </ul>
