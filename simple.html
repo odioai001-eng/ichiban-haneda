@@ -31,6 +31,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   background:var(--surface);border-bottom:1px solid var(--border);
   display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000}
 .hdr-title{font-size:31px;font-weight:700;letter-spacing:.3px;line-height:1.25}
+.hdr-help{position:absolute;right:6px;bottom:0;height:var(--hh);display:flex;align-items:center;
+  font-size:30px;text-decoration:none;padding:0 6px}
 .hdr-status{font-size:19px;color:var(--muted);margin-top:3px}
 .page{display:none}
 .page.active{display:block}
@@ -127,6 +129,7 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
 <div class="hdr">
   <div class="hdr-title" id="hdr-name">出退勤・売上管理</div>
   <div class="hdr-status" id="hdr-status">休み中</div>
+  <a class="hdr-help" href="simple_manual.html" title="使い方ガイド">📖</a>
 </div>
 
 <div class="page active" id="page-duty">
@@ -302,7 +305,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260825-1';
+const APP_BUILD='20261021-1';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;

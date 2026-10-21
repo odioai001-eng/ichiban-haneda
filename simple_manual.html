@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>簡易版 使い方ガイド</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0d1a; --surface:#161628; --surface2:#1e1e35; --border:#2a2a4a;
+  --fg:#e8e8f4; --muted:#9191b4; --accent:#4f8ef7;
+  --green:#22c55e; --amber:#f59e0b; --red:#ef4444; --cyan:#06b6d4; --gold:#fbbf24;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f3f3f8; --surface:#ffffff; --surface2:#eceef5; --border:#dadce8;
+    --fg:#1b1b2e; --muted:#5c5c7a; --accent:#2f6fe0;
+    --green:#16a34a; --amber:#b45309; --red:#dc2626; --cyan:#0891b2; --gold:#b7791f;
+    color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f3f3f8; --surface:#ffffff; --surface2:#eceef5; --border:#dadce8;
+  --fg:#1b1b2e; --muted:#5c5c7a; --accent:#2f6fe0;
+  --green:#16a34a; --amber:#b45309; --red:#dc2626; --cyan:#0891b2; --gold:#b7791f;
+  color-scheme:light;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif;
+  padding-inline:18px; padding-block:28px 60px;
+  max-width:560px; margin:0 auto;
+  line-height:1.75; font-size:15px;
+}
+h1,h2,h3{font-family:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN',sans-serif; text-wrap:balance; margin:0}
+a{color:var(--accent)}
+
+/* ---------- hero ---------- */
+.hero{padding-block:8px 20px}
+.hero .eyebrow{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:11px; font-weight:700; letter-spacing:.08em;
+  color:var(--accent); background:color-mix(in srgb, var(--accent) 14%, transparent);
+  border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  padding:5px 11px; border-radius:999px; margin-bottom:14px;
+}
+.hero h1{font-size:28px; font-weight:900; letter-spacing:.01em; margin-bottom:10px}
+.hero p{color:var(--muted); font-size:14.5px; max-width:46ch}
+.chipline{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+.chip{
+  font-size:12px; font-weight:600; color:var(--fg);
+  background:var(--surface2); border:1px solid var(--border);
+  padding:6px 12px; border-radius:999px; display:inline-flex; align-items:center; gap:6px;
+}
+
+/* ---------- table of contents ---------- */
+.toc{
+  background:var(--surface); border:1px solid var(--border); border-radius:16px;
+  padding:16px 18px; margin:26px 0 32px;
+}
+.toc h2{font-size:13px; letter-spacing:.06em; color:var(--muted); font-weight:700; margin-bottom:10px}
+.toc ol{margin:0; padding:0; list-style:none; display:grid; gap:2px}
+.toc li a{
+  display:flex; align-items:baseline; gap:10px; text-decoration:none; color:var(--fg);
+  padding:7px 4px; border-radius:8px; font-size:14px;
+}
+.toc li a:hover{background:var(--surface2)}
+.toc .n{
+  font-family:'Zen Kaku Gothic New',sans-serif; font-weight:900; font-size:12px;
+  color:var(--accent); flex-shrink:0; width:1.6em;
+}
+
+/* ---------- section ---------- */
+section.op{margin-block:40px; scroll-margin-top:16px}
+section.op + section.op{padding-top:36px; border-top:1px solid var(--border)}
+.op-head{display:flex; align-items:flex-start; gap:14px; margin-bottom:16px}
+.op-num{
+  font-family:'Zen Kaku Gothic New',sans-serif; font-weight:900; font-size:15px;
+  color:var(--bg); background:var(--accent);
+  width:34px; height:34px; border-radius:10px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.op-head h2{font-size:20px; font-weight:700}
+.op-head .sub{color:var(--muted); font-size:13px; margin-top:3px}
+
+.steps{margin:0 0 18px; padding:0; list-style:none; display:grid; gap:10px}
+.steps li{display:flex; gap:11px; align-items:flex-start}
+.steps li::before{
+  content:""; width:7px; height:7px; border-radius:50%; background:var(--accent);
+  margin-top:8px; flex-shrink:0;
+}
+.steps b{font-weight:700}
+
+.note{
+  display:flex; gap:10px; align-items:flex-start;
+  background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--cyan);
+  border-radius:0 12px 12px 0; padding:12px 14px; margin-top:14px; font-size:13.5px; color:var(--muted);
+}
+.note.warn{border-left-color:var(--amber)}
+.note b{color:var(--fg)}
+
+/* ---------- phone mockups (built from the app's own css tokens) ---------- */
+.mock{
+  background:var(--bg); border:1px solid var(--border); border-radius:18px;
+  padding:14px; max-width:300px; margin:0 auto 18px;
+  box-shadow:0 1px 0 color-mix(in srgb, var(--fg) 6%, transparent) inset;
+}
+.m-hdr{
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:8px 10px; margin-bottom:10px;
+}
+.m-title{font-size:10.5px; font-weight:700}
+.m-duty{font-size:10px; font-weight:700; color:#fff; padding:4px 10px; border-radius:999px}
+.m-duty.off{background:var(--red)}
+.m-duty.on{background:var(--green)}
+
+.m-row{display:flex; gap:6px; margin-bottom:6px}
+.m-pill{
+  flex:1; text-align:center; font-size:10.5px; font-weight:700; padding:8px 4px; border-radius:9px;
+  border:1.5px solid transparent;
+}
+.m-pill.kuusha{background:color-mix(in srgb, var(--red) 20%, var(--surface)); color:var(--red); border-color:var(--red)}
+.m-pill.jitsusha{background:var(--surface2); color:var(--muted)}
+.m-pill.kaisou{background:var(--surface2); color:var(--muted)}
+
+.m-chips{display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin-bottom:8px}
+.m-chip{
+  background:var(--surface2); color:var(--muted); font-size:9px; font-weight:700;
+  text-align:center; padding:6px 2px; border-radius:7px; border:1px solid var(--border);
+}
+.m-chip.sel{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+.m-card{
+  background:var(--surface); border:1.5px solid var(--border); border-radius:9px;
+  padding:9px 10px; margin-bottom:7px; font-size:10.5px;
+}
+.m-card .t1{color:var(--accent); font-weight:800; font-size:11px; margin-bottom:3px}
+.m-card .t2{color:var(--cyan); font-weight:700}
+.m-card .t3{color:var(--amber); font-weight:700}
+.m-card .fare{color:var(--green); font-weight:800; margin-top:4px}
+
+.m-nav{
+  display:flex; justify-content:space-around; background:var(--surface);
+  border:1px solid var(--border); border-radius:10px; padding:7px 2px; margin-top:4px;
+}
+.m-navitem{display:flex; flex-direction:column; align-items:center; gap:2px; font-size:8px; color:var(--muted)}
+.m-navitem.sel{color:var(--accent)}
+.m-navitem .ic{font-size:14px}
+
+.m-badge{
+  display:inline-flex; align-items:center; gap:4px; background:var(--surface2);
+  border:1px solid var(--border); border-radius:999px; padding:4px 10px; font-size:10px; font-weight:700;
+}
+.m-badge .dot{width:28px; height:28px; border-radius:50%; background:var(--accent); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800}
+.m-badge .ko{color:var(--gold)}
+
+.m-bubble{
+  background:var(--surface2); border-radius:10px; padding:8px 11px; font-size:10.5px;
+  max-width:88%; margin-bottom:6px; color:var(--muted);
+}
+.m-bubble.auto{color:var(--cyan); font-style:normal; border:1px dashed var(--cyan); background:transparent}
+
+.m-rank{display:flex; align-items:center; gap:8px; padding:6px 0; font-size:11px; border-bottom:1px solid var(--border)}
+.m-rank:last-child{border-bottom:none}
+.m-rank .pos{font-family:'Zen Kaku Gothic New',sans-serif; font-weight:900; color:var(--gold); width:16px}
+.m-rank .name-wrap{display:flex; flex-direction:column; flex:1; min-width:0; gap:1px}
+.m-rank .name{font-weight:600}
+.m-rank .sub{font-size:9px; color:var(--muted); font-weight:400}
+.m-rank .amt{color:var(--green); font-weight:800; white-space:nowrap}
+
+/* ---------- flow diagram (duty cycle) ---------- */
+.flow{display:flex; align-items:center; gap:4px; overflow-x:auto; padding:6px 2px 14px; margin-bottom:8px}
+.flow-step{
+  flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:6px; width:72px;
+}
+.flow-step .ic{
+  width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+  font-size:19px; background:var(--surface); border:1.5px solid var(--border);
+}
+.flow-step span{font-size:10.5px; text-align:center; color:var(--muted); font-weight:600; line-height:1.3}
+.flow-arrow{flex-shrink:0; color:var(--border); font-size:16px}
+
+/* ---------- footer ---------- */
+footer{margin-top:50px; padding-top:22px; border-top:1px solid var(--border); color:var(--muted); font-size:12.5px}
+
+@media (max-width:420px){
+  .hero h1{font-size:24px}
+  .op-head h2{font-size:18px}
+}
+
+/* ---------- simple-app specific mockups ---------- */
+.m-hdr.center{flex-direction:column; justify-content:center; gap:1px}
+.m-hdr .m-st{font-size:9px; color:var(--muted)}
+.m-btn{display:block; text-align:center; font-size:11px; font-weight:800; color:#fff; padding:10px; border-radius:9px; margin-top:6px}
+.m-btn.go{background:var(--green)}
+.m-btn.end{background:var(--red)}
+.m-btn.pri{background:var(--accent)}
+.m-btn.ghost{background:var(--surface2); color:var(--fg); border:1px solid var(--border); font-weight:700}
+.m-kv{display:flex; justify-content:space-between; font-size:10.5px; padding:3px 0}
+.m-kv .k{color:var(--muted)}
+.m-kv .v{font-weight:700}
+.m-field{background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:6px 8px; font-size:11px; margin:2px 0 7px; font-variant-numeric:tabular-nums}
+.m-lbl{font-size:9.5px; color:var(--muted)}
+.m-big{font-size:22px; font-weight:800; color:var(--gold); text-align:center; font-variant-numeric:tabular-nums}
+.m-keys{display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin-top:6px}
+.m-keys span{background:var(--surface2); border:1px solid var(--border); border-radius:7px; text-align:center; font-size:12px; font-weight:700; padding:6px 0}
+.m-disp{text-align:center; font-size:22px; font-weight:800; letter-spacing:2px; color:var(--cyan); background:var(--surface2); border-radius:8px; padding:6px; font-variant-numeric:tabular-nums}
+kbd{font-family:inherit; font-weight:700; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:1px 7px; font-size:.92em}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="eyebrow">🚕 簡易版</div>
+  <h1>出退勤・売上管理（簡易版）<br>使い方ガイド</h1>
+  <p>出勤・退勤の記録と、自分の売上管理だけに絞ったシンプルなアプリです。GPSは使いません。退勤するときに、その日の売上をまとめて1回入力するだけで、今月の合計や1日あたりの目安が自動で計算されます。</p>
+  <div class="chipline">
+    <span class="chip">🚕 出勤・退勤</span>
+    <span class="chip">📊 今月の売上</span>
+    <span class="chip">🎯 1日の目安</span>
+    <span class="chip">🔄 機種変更しても引継ぎ</span>
+  </div>
+</div>
+
+<div class="note warn" style="margin-top:4px">
+  <span>🗓️</span>
+  <div><b>毎月はじめに必ず行うこと</b><br>「⚙️設定」タブの「目標設定」で、<b>今月の出勤予定日数</b>と<b>今月の目標金額</b>を入力して「保存」を押してください。これを入れないと、1日あたりの目標金額や、出勤時の「日割り時間」が計算されません。</div>
+</div>
+
+<nav class="toc">
+  <h2>目次</h2>
+  <ol>
+    <li><a href="#s1"><span class="n">01</span>はじめて使うとき</a></li>
+    <li><a href="#s2"><span class="n">02</span>画面の見かた</a></li>
+    <li><a href="#s3"><span class="n">03</span>出勤する</a></li>
+    <li><a href="#s4"><span class="n">04</span>時刻の入れ方（テンキー）</a></li>
+    <li><a href="#s5"><span class="n">05</span>勤務中の画面</a></li>
+    <li><a href="#s6"><span class="n">06</span>退勤する</a></li>
+    <li><a href="#s7"><span class="n">07</span>売上管理を見る・記録を直す</a></li>
+    <li><a href="#s8"><span class="n">08</span>入力を忘れた日を追加する</a></li>
+    <li><a href="#s9"><span class="n">09</span>設定（目標・繰越・同期）</a></li>
+    <li><a href="#s10"><span class="n">10</span>困ったときは</a></li>
+  </ol>
+</nav>
+
+<section class="op" id="s1">
+  <div class="op-head">
+    <div class="op-num">01</div>
+    <div>
+      <h2>はじめて使うとき</h2>
+      <div class="sub">最初に一度だけ「ようこそ」画面が出ます</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div style="font-size:15px; font-weight:800; margin-bottom:6px">ようこそ 👋</div>
+    <div class="m-lbl">名前</div>
+    <div class="m-field">高橋</div>
+    <div class="m-lbl">同期コード（任意）</div>
+    <div class="m-field" style="color:var(--muted)">例: 好きな文字列・数字</div>
+    <span class="m-btn pri">🆕 新規に始める</span>
+    <span class="m-btn ghost">🔄 コードのデータを復元して始める</span>
+  </div>
+
+  <ul class="steps">
+    <li><div><b>はじめて使う人</b> — 名前を入れて「🆕 新規に始める」を押します</div></li>
+    <li><div><b>前に使っていた人・機種変更した人</b> — 前に使っていた<b>同期コード</b>を入れて「🔄 コードのデータを復元して始める」を押すと、これまでの記録が戻ります</div></li>
+  </ul>
+
+  <div class="note">
+    <span>🔑</span>
+    <div><b>同期コードは、できるだけ決めておいてください。</b>同期コードを入れておくと、記録が自動でサーバーにも保存されます。入れないと記録はこのスマホの中だけにあり、機種変更やアプリの削除で消えてしまいます。コードは自分だけが分かる文字や数字にして、メモしておいてください（同じコードを入れた人は同じデータを見られます）。あとから「⚙️設定」でも設定できます。</div>
+  </div>
+</section>
+
+<section class="op" id="s2">
+  <div class="op-head">
+    <div class="op-num">02</div>
+    <div>
+      <h2>画面の見かた</h2>
+      <div class="sub">下の3つのタブで切り替えます</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="m-hdr center">
+      <span class="m-title">高橋さん</span>
+      <span class="m-st">休み中</span>
+    </div>
+    <div style="text-align:center; color:var(--muted); font-size:10px; padding:16px 0">（画面の中身）</div>
+    <div class="m-nav">
+      <div class="m-navitem sel"><span class="ic">🚕</span>出退勤</div>
+      <div class="m-navitem"><span class="ic">📊</span>売上管理</div>
+      <div class="m-navitem"><span class="ic">⚙️</span>設定</div>
+    </div>
+  </div>
+
+  <ul class="steps">
+    <li><div><b>🚕 出退勤</b> — 出勤・退勤のボタンと、勤務中の残り時間</div></li>
+    <li><div><b>📊 売上管理</b> — 今月の売上・勤務時間のまとめ、記録の一覧、入力を忘れた日の追加</div></li>
+    <li><div><b>⚙️ 設定</b> — 今月の目標、前のシステムからの繰越、同期コード</div></li>
+  </ul>
+  <p>画面上部の右上にある <kbd>📖</kbd> を押すと、いつでもこのガイドを開けます。</p>
+</section>
+
+<section class="op" id="s3">
+  <div class="op-head">
+    <div class="op-num">03</div>
+    <div>
+      <h2>出勤する</h2>
+      <div class="sub">「🚕 出退勤」タブの緑のボタンから</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div style="font-size:12px; font-weight:800; margin-bottom:6px">出勤</div>
+    <div class="m-lbl">出勤時刻</div>
+    <div class="m-field">08:30</div>
+    <div class="m-kv"><span class="k">予定</span><span class="v" style="color:var(--gold)">11時間30分</span></div>
+    <div style="display:flex; gap:5px">
+      <span class="m-btn ghost" style="flex:1; font-size:9.5px">📐 日割り時間で勤務する</span>
+      <span class="m-btn ghost" style="flex:1; font-size:9.5px">🕐 上がり時間を指定</span>
+    </div>
+    <div style="font-size:10.5px; margin-top:8px">☑ 🖥️ 決済端末を持ちました</div>
+    <span class="m-btn pri">✅ 出勤する</span>
+  </div>
+
+  <ul class="steps">
+    <li><div><b>①「🚕 出勤する」を押す</b> — 出勤の画面が開きます</div></li>
+    <li><div><b>②出勤時刻を確認</b> — 今の時刻が最初から入っています。違うときは欄を押して直します（<a href="#s4">04 時刻の入れ方</a>）</div></li>
+    <li><div><b>③今日の勤務時間を決める</b> — 次のどちらかを押します</div></li>
+  </ul>
+  <ul class="steps" style="padding-left:18px">
+    <li><div><b>📐 日割り時間で勤務する</b> — 今月の目標時間と、これまでの勤務時間から、今日働くべき時間を自動で計算します</div></li>
+    <li><div><b>🕐 上がり時間を指定</b> — 「上がり予定時刻」の欄が出るので、帰る時刻を入れます。日をまたぐ時刻（例: 出勤 20:00 → 上がり 05:00）も、翌日として計算されます</div></li>
+  </ul>
+  <ul class="steps">
+    <li><div><b>④「🖥️ 決済端末を持ちました」にチェック</b></div></li>
+    <li><div><b>⑤「✅ 出勤する」を押す</b> — ③と④の両方が済むまで、このボタンは押せません</div></li>
+  </ul>
+
+  <div class="note">
+    <span>📐</span>
+    <div><b>日割り時間の決まり方</b><br>今月の合計勤務時間（初期値 288時間）から、これまでに働いた時間と「出勤予定日数×30分」を引き、さらに<b>月の最終日のために15時間を残して</b>、残りの日数で均等に割ります。今日が最後の1日なら、残りの時間がすべて今日の分になります。</div>
+  </div>
+</section>
+
+<section class="op" id="s4">
+  <div class="op-head">
+    <div class="op-num">04</div>
+    <div>
+      <h2>時刻の入れ方（テンキー）</h2>
+      <div class="sub">出勤・退勤・上がり予定・追加の時刻欄すべて共通</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div style="font-size:12px; font-weight:800; margin-bottom:6px">出勤時刻</div>
+    <div class="m-disp">09:30</div>
+    <div style="text-align:center; font-size:9px; color:var(--muted); margin-top:4px">数字4ケタで入力（例: 0930 → 09:30）</div>
+    <div class="m-keys">
+      <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span>
+      <span>7</span><span>8</span><span>9</span><span>C</span><span>0</span><span>⌫</span>
+    </div>
+    <span class="m-btn pri">✅ 決定</span>
+  </div>
+
+  <ul class="steps">
+    <li><div><b>時刻の欄を押す</b>と、数字のテンキーが出ます</div></li>
+    <li><div><b>数字を4ケタ押す</b> — <kbd>0</kbd><kbd>9</kbd><kbd>3</kbd><kbd>0</kbd> で <b>09:30</b>、<kbd>1</kbd><kbd>7</kbd><kbd>4</kbd><kbd>5</kbd> で <b>17:45</b>。「:」は押さなくて大丈夫です</div></li>
+    <li><div><b>「✅ 決定」を押す</b>と欄に入ります</div></li>
+  </ul>
+  <ul class="steps">
+    <li><div><kbd>⌫</kbd> は1文字消す、<kbd>C</kbd> は全部消す、右上の <kbd>✕</kbd> は変えずに閉じる</div></li>
+    <li><div>開いた直後は今の時刻が表示されています。数字を押すと最初から入れ直しになります</div></li>
+    <li><div>「25:61」のような、ありえない時刻は入りません（警告が出ます）</div></li>
+  </ul>
+</section>
+
+<section class="op" id="s5">
+  <div class="op-head">
+    <div class="op-num">05</div>
+    <div>
+      <h2>勤務中の画面</h2>
+      <div class="sub">出勤すると「🚕 出退勤」タブがこの画面になります</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="m-card">
+      <div class="m-kv"><span class="k">出勤時刻</span><span class="v">08:30</span></div>
+      <div class="m-kv"><span class="k">上がり予定時刻</span><span class="v">20:00</span></div>
+    </div>
+    <div class="m-card">
+      <div style="text-align:center; font-size:9.5px; color:var(--muted)">残り時間</div>
+      <div class="m-big">あと 3時間12分</div>
+    </div>
+    <div class="m-card">
+      <div class="m-kv"><span class="k">本日の目標売上</span><span class="v" style="color:var(--gold)">¥42,000</span></div>
+    </div>
+    <span class="m-btn end">🏁 退勤する</span>
+  </div>
+
+  <ul class="steps">
+    <li><div><b>残り時間</b> — 上がり予定時刻まであとどれだけかを表示します。過ぎると赤字で<b>「定時超過 ◯時間◯分」</b>に変わります</div></li>
+    <li><div><b>本日の目標売上</b> — 今月の目標金額から、これまでの売上を引き、残りの出勤日数で割った金額です</div></li>
+  </ul>
+  <div class="note">
+    <span>📱</span>
+    <div>アプリを閉じても、スマホの画面を消しても、出勤中の状態はそのまま残ります。開き直せば続きから表示されます。</div>
+  </div>
+</section>
+
+<section class="op" id="s6">
+  <div class="op-head">
+    <div class="op-num">06</div>
+    <div>
+      <h2>退勤する</h2>
+      <div class="sub">勤務中の画面の赤いボタンから</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div style="font-size:12px; font-weight:800; margin-bottom:6px">退勤</div>
+    <div class="m-lbl">退勤時刻</div>
+    <div class="m-field">20:05</div>
+    <div class="m-lbl">勤務時間</div>
+    <div class="m-field">11時間35分</div>
+    <div class="m-lbl">本日の税抜き売上（円）</div>
+    <div class="m-field">45000</div>
+    <div class="m-lbl">自腹高速代（円）</div>
+    <div class="m-field">0</div>
+    <span class="m-btn pri">✅ 退勤する</span>
+  </div>
+
+  <ul class="steps">
+    <li><div><b>①「🏁 退勤する」を押す</b></div></li>
+    <li><div><b>②退勤時刻と勤務時間を確認</b> — どちらも今の時刻から自動で入っています</div></li>
+    <li><div><b>③本日の税抜き売上</b>を入れる</div></li>
+    <li><div><b>④自腹高速代</b>があれば入れる（無ければ空欄のままでOK）</div></li>
+    <li><div><b>⑤「✅ 退勤する」を押す</b> — その日の記録が1件保存され、売上管理に反映されます</div></li>
+  </ul>
+
+  <div class="note warn">
+    <span>⏱️</span>
+    <div><b>退勤時刻を直したときは、勤務時間も直してください。</b>記録される勤務時間は「勤務時間」の欄の数字です。退勤時刻を変えても勤務時間は自動では変わりません。勤務時間は「11時間35分」「11:35」のどちらの書き方でも入れられます。</div>
+  </div>
+  <div class="note">
+    <span>💴</span>
+    <div>売上を入れずに退勤しようとすると「売上が0円ですが、このまま退勤しますか？」と確認が出ます。あとから「📊 売上管理」の記録一覧で直すこともできます。</div>
+  </div>
+</section>
+
+<section class="op" id="s7">
+  <div class="op-head">
+    <div class="op-num">07</div>
+    <div>
+      <h2>売上管理を見る・記録を直す</h2>
+      <div class="sub">「📊 売上管理」タブ</div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="m-lbl" style="font-weight:700; margin-bottom:4px">今月のまとめ</div>
+    <div class="m-card">
+      <div class="m-kv"><span class="k">残り出勤日数</span><span class="v">8日</span></div>
+      <div class="m-kv"><span class="k">1日あたりの目標金額</span><span class="v" style="color:var(--gold)">¥42,000</span></div>
+      <div class="m-kv"><span class="k">1日あたりの営業時間</span><span class="v" style="color:var(--cyan)">11時間30分</span></div>
+      <div class="m-kv"><span class="k">今月の売り上げ（税抜き）</span><span class="v" style="color:var(--green)">¥512,000</span></div>
+    </div>
+    <div class="m-lbl" style="font-weight:700; margin:6px 0 4px">記録一覧</div>
+    <div class="m-card" style="display:flex; align-items:center; gap:6px">
+      <span style="flex:1"><span style="color:var(--muted)">10/20</span> <b style="color:var(--gold)">11時間35分</b> <b style="color:var(--green)">¥45,000</b></span>
+      <span class="m-chip" style="padding:4px 6px">編集</span>
+      <span class="m-chip" style="padding:4px 6px; color:var(--red)">削除</span>
+    </div>
+  </div>
+
+  <h3 style="font-size:14.5px; margin-bottom:10px">今月のまとめ</h3>
+  <ul class="steps">
+    <li><div><b>残り出勤日数</b> — 出勤予定日数 − 出勤した日数（繰越の日数を含む）</div></li>
+    <li><div><b>1日あたりの目標金額</b> — 目標の残り金額 ÷ 残り出勤日数</div></li>
+    <li><div><b>1日あたりの営業時間</b> — 出勤時の「日割り時間」と同じ計算です</div></li>
+    <li><div><b>平均金額</b>・<b>今月の売り上げ</b>・<b>自腹高速代</b>・<b>合計勤務時間</b> — 繰越の分も含めた今月の合計です</div></li>
+  </ul>
+
+  <h3 style="font-size:14.5px; margin:26px 0 10px">記録を直す・消す</h3>
+  <ul class="steps">
+    <li><div><b>編集</b> — 勤務時間 → 税抜き売上 → 自腹高速代 の順に入力欄が出ます。変えない項目はそのまま「OK」を押してください。途中で「キャンセル」を押すと何も変わりません</div></li>
+    <li><div><b>削除</b> — 確認のあと、その日の記録を消します。消した記録は元に戻せません</div></li>
+  </ul>
+  <div class="note">
+    <span>📅</span>
+    <div>表示されるのは<b>今月の記録だけ</b>です。月が変わると、まとめと一覧は自動で新しい月に切り替わります（前の月の記録は消えずに保存されています）。</div>
+  </div>
+</section>
+
+<section class="op" id="s8">
+  <div class="op-head">
+    <div class="op-num">08</div>
+    <div>
+      <h2>入力を忘れた日を追加する</h2>
+      <div class="sub">「📊 売上管理」タブの中ほど</div>
+    </div>
+  </div>
+
+  <p>出勤・退勤のボタンを押し忘れた日は、あとからまとめて1件追加できます。</p>
+  <ul class="steps">
+    <li><div><b>①日付</b>を選ぶ</div></li>
+    <li><div><b>②出勤時刻・退勤時刻</b>をテンキーで入れる — 勤務時間はこの2つから自動で計算されます</div></li>
+    <li><div><b>③その日の税抜き売上</b>と、あれば<b>自腹高速代</b>を入れる</div></li>
+    <li><div><b>④「✅ この内容で追加する」</b>を押す</div></li>
+  </ul>
+  <div class="note">
+    <span>🌙</span>
+    <div>夜勤などで退勤時刻が出勤時刻より早い場合（例: 20:00 出勤 → 05:00 退勤）は、退勤を<b>翌日</b>として計算します。日付は<b>出勤した日</b>を選んでください。</div>
+  </div>
+</section>
+
+<section class="op" id="s9">
+  <div class="op-head">
+    <div class="op-num">09</div>
+    <div>
+      <h2>設定（目標・繰越・同期）</h2>
+      <div class="sub">「⚙️ 設定」タブ</div>
+    </div>
+  </div>
+
+  <h3 style="font-size:14.5px; margin-bottom:10px">目標設定（毎月はじめに）</h3>
+  <ul class="steps">
+    <li><div><b>今月の出勤予定日数</b> — 例: 20</div></li>
+    <li><div><b>今月の合計勤務時間</b> — 初期値は 288 です。決まっている時間が違う場合だけ変えてください</div></li>
+    <li><div><b>今月の目標金額（税抜）</b> — 例: 600000</div></li>
+    <li><div>入れたら<b>「✅ 保存」</b>を押します</div></li>
+  </ul>
+
+  <h3 style="font-size:14.5px; margin:26px 0 10px">繰越（月の途中から使い始めたとき）</h3>
+  <p>月の途中からこのアプリを使い始めたときは、それまでの分（前のシステムや紙で記録していた分）をここに入れます。今月のまとめや1日あたりの目安に足して計算されます。</p>
+  <ul class="steps">
+    <li><div><b>売上・自腹高速代</b>は円で、<b>時間</b>は「時:分」（例: <b>85:30</b>）で、<b>日数</b>は出勤した日数を入れて「✅ 保存」</div></li>
+    <li><div>翌月になったら<b>「🗑 クリア」</b>で消してください（自動では消えません）</div></li>
+  </ul>
+
+  <h3 style="font-size:14.5px; margin:26px 0 10px">端末間同期・バックアップ</h3>
+  <ul class="steps">
+    <li><div><b>名前・同期コード</b>を入れて<b>「✅ 保存して送信」</b> — 今のデータをサーバーに保存します。以後は、退勤・記録の追加・編集のたびに自動で送信されます</div></li>
+    <li><div><b>「🔄 このコードのデータを復元」</b> — サーバーに保存されたデータで、このスマホの中身を<b>上書き</b>します。機種変更したときや、別のスマホで同じデータを見たいときに使います</div></li>
+  </ul>
+  <div class="note warn">
+    <span>⚠️</span>
+    <div>「復元」をすると、このスマホにだけあった記録（同期コードを入れる前の記録など）は消えます。迷ったときは、先に今のスマホで「✅ 保存して送信」を押してから、新しいスマホで「復元」してください。</div>
+  </div>
+</section>
+
+<section class="op" id="s10">
+  <div class="op-head">
+    <div class="op-num">10</div>
+    <div>
+      <h2>困ったときは</h2>
+      <div class="sub">よくある質問</div>
+    </div>
+  </div>
+
+  <ul class="steps">
+    <li><div><b>時刻の欄を押しても何も出ない／入力できない</b> — 画面上部に青い「更新」の帯が出ていたら押してください。出ていない場合は、アプリをいったん閉じて開き直すと新しい版になります</div></li>
+    <li><div><b>「✅ 出勤する」が押せない</b> — 「📐 日割り時間」か「🕐 上がり時間を指定」で予定時間を決めることと、「決済端末を持ちました」のチェックの<b>両方</b>が必要です</div></li>
+    <li><div><b>日割り時間が「288時間」のように長すぎる／目標金額が「-」</b> — 今月の出勤予定日数が入っていません。「⚙️設定」の「目標設定」で入れて保存してください</div></li>
+    <li><div><b>日割り時間が 0時間00分 になり出勤できない</b> — 今月の合計勤務時間をすでに使い切っています。「🕐 上がり時間を指定」で帰る時刻を入れて出勤してください</div></li>
+    <li><div><b>出勤時刻を間違えたまま出勤してしまった</b> — そのまま退勤し、退勤画面の「勤務時間」を正しい時間に直してから「✅ 退勤する」を押してください。あとから記録一覧の「編集」で直すこともできます</div></li>
+    <li><div><b>退勤を押し忘れたまま翌日になった</b> — いったん退勤し、勤務時間と売上を正しい値に直して保存してください</div></li>
+    <li><div><b>機種変更したら記録が無い</b> — 前のスマホで使っていた同期コードを「⚙️設定」に入れて「🔄 このコードのデータを復元」を押してください。同期コードを設定していなかった場合、前のスマホの記録は移せません</div></li>
+    <li><div><b>「このコードのデータが見つかりません」と出る</b> — 同期コードの文字が、大文字・小文字・全角・半角まで前と同じか確認してください</div></li>
+  </ul>
+
+  <div class="note">
+    <span>💬</span>
+    <div>ここに無い症状や、操作で分からないことがあれば、遠慮なく管理者まで聞いてください。</div>
+  </div>
+</section>
+
+<footer>
+  出退勤・売上管理（簡易版）・使い方ガイド　｜　<a href="simple.html">アプリに戻る</a>
+</footer>
+
+</body>
+</html>
