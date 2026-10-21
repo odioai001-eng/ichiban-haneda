@@ -849,11 +849,20 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div class="sec">📱 イチバン売上&amp;時間管理アプリの利用申請</div>
     <div class="card">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">イチバン売上&amp;時間管理アプリ（旧・簡易版）の利用申請です。上の「参加申請の承認」（本体アプリ）とは別に管理します。許可すると、申請した人がすぐ使えるようになります。</div>
-      <button class="btn btn-g" onclick="renderSimpleAccessList()" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
+      <button class="btn btn-g" onclick="renderAccessList('simple')" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
       <div style="font-size:12px;font-weight:700;margin-bottom:4px">許可待ち</div>
       <div id="simple-pending-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
       <div style="font-size:12px;font-weight:700;margin:14px 0 4px">利用中（許可済み）<span id="simple-approved-count" style="color:var(--muted);font-weight:400"></span></div>
       <div id="simple-approved-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
+    </div>
+    <div class="sec">🫰 売上時間管理アプリの利用申請</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">売上時間管理アプリ（odioai001-eng.github.io/ichiban-app/）の利用申請です。上の2つとは別に管理します。許可すると、申請した人がすぐ使えるようになります。</div>
+      <button class="btn btn-g" onclick="renderAccessList('app')" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px">許可待ち</div>
+      <div id="app-pending-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
+      <div style="font-size:12px;font-weight:700;margin:14px 0 4px">利用中（許可済み）<span id="app-approved-count" style="color:var(--muted);font-weight:400"></span></div>
+      <div id="app-approved-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
     </div>
     <div class="sec">🗑 アカウント管理</div>
     <div class="card">
@@ -1438,7 +1447,14 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261021-4';
+const APP_BUILD='20261022-1';
+// 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
+// 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
+const ACCESS_APPS={
+  simple:{label:'イチバン売上&時間管理アプリ',short:'売上&時間管理アプリ',icon:'📱'},
+  app:{label:'売上時間管理アプリ',short:'売上時間管理アプリ',icon:'🫰'}
+};
+const accessCache={simple:{pending:{},approved:{}},app:{pending:{},approved:{}}};
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4932,18 +4948,21 @@ function connectFirebase(config){
       if(localStorage.getItem('taxi_is_admin_device')!=='1')return;
       sendNotif('🆕 参加申請','('+(v.name||'名前未設定')+(v.car?' / '+v.car:'')+')から参加申請がありました',snap.key);
     });
-    // 簡易版アプリの利用申請も、本体の参加申請と同じく管理者として使った端末にだけ通知する。
-    // 拒否のあと申請し直した場合は既存の記録が書き換わるため、child_changedも見る
-    const onSimplePending=snap=>{
-      const v=snap.val();
-      if(!v||v.status!=='pending')return;
-      if((v.ts||0)<pendingInitTs)return;
-      if(isAdmin)renderSimpleAccessList();
-      if(localStorage.getItem('taxi_is_admin_device')!=='1')return;
-      sendNotif('📱 売上&時間管理アプリの利用申請',(v.lastName||'')+' '+(v.firstName||'')+'さんから利用申請がありました','simple_'+snap.key);
-    };
-    db.ref('simple_pending').on('child_added',onSimplePending);
-    db.ref('simple_pending').on('child_changed',onSimplePending);
+    // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請も、本体の参加申請と
+    // 同じく管理者として使った端末にだけ通知する。拒否のあと申請し直した場合は既存の記録が
+    // 書き換わるため、child_changedも見る
+    Object.keys(ACCESS_APPS).forEach(key=>{
+      const onAccessPending=snap=>{
+        const v=snap.val();
+        if(!v||v.status!=='pending')return;
+        if((v.ts||0)<pendingInitTs)return;
+        if(isAdmin)renderAccessList(key);
+        if(localStorage.getItem('taxi_is_admin_device')!=='1')return;
+        sendNotif(ACCESS_APPS[key].icon+' '+ACCESS_APPS[key].short+'の利用申請',(v.lastName||'')+' '+(v.firstName||'')+'さんから利用申請がありました',key+'_'+snap.key);
+      };
+      db.ref(key+'_pending').on('child_added',onAccessPending);
+      db.ref(key+'_pending').on('child_changed',onAccessPending);
+    });
     db.ref('pool_moves').limitToLast(200).on('child_added',snap=>{
       const m=snap.val();if(!m)return;
       poolMoves.push(m);poolMoves.sort((a,b)=>a.ts-b.ts);
@@ -9451,7 +9470,7 @@ function adminLogin(){
     document.getElementById('admin-area').style.display='block';
     document.getElementById('admin-name').value=localStorage.getItem('taxi_name')||'';
     document.getElementById('admin-car').value=localStorage.getItem('taxi_car')||'';
-    renderCPs();renderRankingPage();renderSimpleAccessList();toast('🔓 管理者モード');
+    renderCPs();renderRankingPage();renderAllAccessLists();toast('🔓 管理者モード');
     checkMonthStartDestsReset();
   }else{toast('⚠️ PINが違います');document.getElementById('pin-input').value='';}
 }
@@ -10718,16 +10737,18 @@ function rejectUser(uid,name){
   });
 }
 
-// ===== 簡易版アプリの利用申請（simple_pending / simple_approved） =====
-let simpleAccessCache={pending:{},approved:{}};
-function renderSimpleAccessList(){
+// ===== 個人用アプリの利用申請 =====
+// イチバン売上&時間管理アプリ（simple.html）と売上時間管理アプリ（ichiban-app）は、
+// それぞれ別の場所（{key}_pending / {key}_approved）に申請・許可を保存する。
+// 管理者画面でもアプリごとに別の欄で管理し、処理はこの共通の関数で行う
+function renderAccessList(key){
   if(!db)return;
-  const pEl=document.getElementById('simple-pending-list');
-  const aEl=document.getElementById('simple-approved-list');
+  const pEl=document.getElementById(key+'-pending-list');
+  const aEl=document.getElementById(key+'-approved-list');
   if(!pEl||!aEl)return;
-  Promise.all([db.ref('simple_pending').once('value'),db.ref('simple_approved').once('value')]).then(([ps,as])=>{
+  Promise.all([db.ref(key+'_pending').once('value'),db.ref(key+'_approved').once('value')]).then(([ps,as])=>{
     const pendingAll=ps.val()||{},approved=as.val()||{};
-    simpleAccessCache={pending:pendingAll,approved};
+    accessCache[key]={pending:pendingAll,approved};
     const muted=t=>`<div style="font-size:12px;color:var(--muted)">${t}</div>`;
     const pending=Object.entries(pendingAll).filter(([id,v])=>v&&v.status==='pending'&&!approved[id])
       .sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
@@ -10737,11 +10758,11 @@ function renderSimpleAccessList(){
           <div style="font-size:13px;font-weight:700">${esc(v.lastName)} ${esc(v.firstName)}</div>
           <div style="font-size:11px;color:var(--muted)">申請日時：${new Date(v.ts).toLocaleString('ja-JP')}</div>
         </div>
-        <button class="btn btn-p" style="padding:5px 10px;font-size:12px" onclick="approveSimpleUser('${id}')">許可</button>
-        <button class="btn btn-d" style="padding:5px 10px;font-size:12px" onclick="rejectSimpleUser('${id}')">拒否</button>
+        <button class="btn btn-p" style="padding:5px 10px;font-size:12px" onclick="approveAccessUser('${key}','${id}')">許可</button>
+        <button class="btn btn-d" style="padding:5px 10px;font-size:12px" onclick="rejectAccessUser('${key}','${id}')">拒否</button>
       </div>`).join(''):muted('許可待ちの申請はありません');
     const list=Object.entries(approved).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
-    const cnt=document.getElementById('simple-approved-count');
+    const cnt=document.getElementById(key+'-approved-count');
     if(cnt)cnt.textContent=list.length?' '+list.length+'人':'';
     const ymd=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}):'-';
     aEl.innerHTML=list.length?list.map(([id,v])=>`
@@ -10750,73 +10771,74 @@ function renderSimpleAccessList(){
           <div style="font-size:13px;font-weight:700">${esc(v.lastName)} ${esc(v.firstName)||'<span style="color:var(--muted);font-weight:400">（名前未登録）</span>'}</div>
           <div style="font-size:11px;color:var(--muted)">${v.auto?'登録日':'許可日'}：${ymd(v.ts)}${v.auto?'（申請制の導入前から利用）':''}</div>
         </div>
-        <button class="btn btn-g" style="padding:5px 8px;font-size:12px" onclick="editSimpleUserName('${id}')">✏️</button>
-        <button class="btn btn-g" style="padding:5px 10px;font-size:12px;color:var(--red)" onclick="revokeSimpleUser('${id}')">利用停止</button>
+        <button class="btn btn-g" style="padding:5px 8px;font-size:12px" onclick="editAccessUserName('${key}','${id}')">✏️</button>
+        <button class="btn btn-g" style="padding:5px 10px;font-size:12px;color:var(--red)" onclick="revokeAccessUser('${key}','${id}')">利用停止</button>
       </div>`).join(''):muted('利用中の人はいません');
   }).catch(err=>{
-    console.error('renderSimpleAccessList failed',err);
+    console.error('renderAccessList failed',key,err);
     toast('⚠️ 申請リストの読み込みに失敗しました');
   });
 }
-function simpleAccessName(v){return ((v&&v.lastName)||'')+' '+((v&&v.firstName)||'');}
-function approveSimpleUser(id){
+function renderAllAccessLists(){Object.keys(ACCESS_APPS).forEach(renderAccessList);}
+function accessName(v){return ((v&&v.lastName)||'')+' '+((v&&v.firstName)||'');}
+function approveAccessUser(key,id){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
-  const v=simpleAccessCache.pending[id];
+  const v=accessCache[key].pending[id];
   if(!v)return;
-  if(!confirm(simpleAccessName(v)+'さんのイチバン売上&時間管理アプリの利用を許可しますか？'))return;
+  if(!confirm(accessName(v)+'さんの'+ACCESS_APPS[key].label+'の利用を許可しますか？'))return;
   Promise.all([
-    db.ref('simple_approved/'+id).set({lastName:v.lastName||'',firstName:v.firstName||'',ts:Date.now(),appliedTs:v.ts||null}),
-    db.ref('simple_pending/'+id+'/status').set('approved')
+    db.ref(key+'_approved/'+id).set({lastName:v.lastName||'',firstName:v.firstName||'',ts:Date.now(),appliedTs:v.ts||null}),
+    db.ref(key+'_pending/'+id+'/status').set('approved')
   ]).then(()=>{
-    toast('✅ '+simpleAccessName(v)+'さんを許可しました');
-    renderSimpleAccessList();
+    toast('✅ '+accessName(v)+'さんを許可しました');
+    renderAccessList(key);
   }).catch(err=>{
-    console.error('approveSimpleUser failed',err);
+    console.error('approveAccessUser failed',key,err);
     toast('⚠️ 許可の反映に失敗しました。電波状況を確認してもう一度お試しください');
   });
 }
 // 許可済みの人の名字・名前を直す（申請制の導入前から使っている人は名字だけのことがあるため）
-function editSimpleUserName(id){
+function editAccessUserName(key,id){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
-  const v=simpleAccessCache.approved[id];
+  const v=accessCache[key].approved[id];
   if(!v)return;
   const last=prompt('名字',v.lastName||'');
   if(last===null)return;
   const first=prompt('名前',v.firstName||'');
   if(first===null)return;
   if(!last.trim()){toast('⚠️ 名字を入力してください');return;}
-  db.ref('simple_approved/'+id).update({lastName:last.trim(),firstName:first.trim()}).then(()=>{
+  db.ref(key+'_approved/'+id).update({lastName:last.trim(),firstName:first.trim()}).then(()=>{
     toast('✅ 名前を更新しました');
-    renderSimpleAccessList();
+    renderAccessList(key);
   }).catch(err=>{
-    console.error('editSimpleUserName failed',err);
+    console.error('editAccessUserName failed',key,err);
     toast('⚠️ 名前の更新に失敗しました');
   });
 }
-function rejectSimpleUser(id){
+function rejectAccessUser(key,id){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
-  const v=simpleAccessCache.pending[id];
+  const v=accessCache[key].pending[id];
   if(!v)return;
-  if(!confirm(simpleAccessName(v)+'さんの申請を拒否しますか？'))return;
+  if(!confirm(accessName(v)+'さんの申請を拒否しますか？'))return;
   // 削除せず「拒否」として残し、申請した人の画面に「許可されませんでした」と出す
-  db.ref('simple_pending/'+id+'/status').set('rejected').then(()=>{
-    toast('🚫 '+simpleAccessName(v)+'さんの申請を拒否しました');
-    renderSimpleAccessList();
+  db.ref(key+'_pending/'+id+'/status').set('rejected').then(()=>{
+    toast('🚫 '+accessName(v)+'さんの申請を拒否しました');
+    renderAccessList(key);
   }).catch(err=>{
-    console.error('rejectSimpleUser failed',err);
+    console.error('rejectAccessUser failed',key,err);
     toast('⚠️ 拒否の反映に失敗しました');
   });
 }
-function revokeSimpleUser(id){
+function revokeAccessUser(key,id){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
-  const v=simpleAccessCache.approved[id];
+  const v=accessCache[key].approved[id];
   if(!v)return;
-  if(!confirm(simpleAccessName(v)+'さんのイチバン売上&時間管理アプリの利用を停止しますか？\n（次にアプリを開いた時から使えなくなります。記録は消えません）'))return;
-  db.ref('simple_approved/'+id).remove().then(()=>{
-    toast('⛔ '+simpleAccessName(v)+'さんの利用を停止しました');
-    renderSimpleAccessList();
+  if(!confirm(accessName(v)+'さんの'+ACCESS_APPS[key].label+'の利用を停止しますか？\n（次にアプリを開いた時から使えなくなります。記録は消えません）'))return;
+  db.ref(key+'_approved/'+id).remove().then(()=>{
+    toast('⛔ '+accessName(v)+'さんの利用を停止しました');
+    renderAccessList(key);
   }).catch(err=>{
-    console.error('revokeSimpleUser failed',err);
+    console.error('revokeAccessUser failed',key,err);
     toast('⚠️ 利用停止の反映に失敗しました');
   });
 }
