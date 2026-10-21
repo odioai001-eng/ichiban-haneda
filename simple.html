@@ -6,10 +6,10 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>出退勤・売上管理（簡易版）</title>
+<title>イチバン売上&amp;時間管理アプリ</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="出退勤・売上（簡易）">
+<meta name="apple-mobile-web-app-title" content="イチバン売上&amp;時間管理">
 <meta name="mobile-web-app-capable" content="yes">
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -31,6 +31,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   background:var(--surface);border-bottom:1px solid var(--border);
   display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000}
 .hdr-title{font-size:31px;font-weight:700;letter-spacing:.3px;line-height:1.25}
+.hdr-title{max-width:calc(100% - 112px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr-title.app-name{font-size:clamp(16px,4.6vw,27px)}
+.hdr-help{position:absolute;right:6px;bottom:0;height:var(--hh);display:flex;align-items:center;
+  font-size:30px;text-decoration:none;padding:0 6px}
 .hdr-status{font-size:19px;color:var(--muted);margin-top:3px}
 .page{display:none}
 .page.active{display:block}
@@ -108,6 +112,39 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
 </head>
 <body>
 
+<!-- 利用申請（管理者の許可制）。setup-screenより手前に出す -->
+<div class="setup-screen" id="access-screen" style="z-index:6000">
+  <div class="setup-box">
+    <div id="acc-loading">
+      <h2>確認中…</h2>
+      <p>利用の許可を確認しています。しばらくお待ちください。</p>
+    </div>
+    <div id="acc-offline" style="display:none">
+      <h2>接続できません 📡</h2>
+      <p>利用の許可を確認するため、インターネットへの接続が必要です。電波の良い場所でもう一度お試しください。</p>
+      <button class="btn btn-p btn-full" onclick="checkAccess()">🔄 もう一度確認する</button>
+    </div>
+    <div id="acc-apply" style="display:none">
+      <h2>利用申請 📝</h2>
+      <p>このアプリは管理者の許可が必要です。名字・名前・メールアドレスを入力して申請してください。許可されると、自動で使えるようになります。</p>
+      <div id="acc-rejected-msg" style="display:none;font-size:22px;color:var(--red);margin-bottom:16px;line-height:1.6">前回の申請は許可されませんでした。内容を確認して、もう一度申請できます。</div>
+      <label>名字</label>
+      <input type="text" id="acc-last" maxlength="20" placeholder="例: 高橋" autocomplete="family-name">
+      <label>名前</label>
+      <input type="text" id="acc-first" maxlength="20" placeholder="例: 一郎" autocomplete="given-name">
+      <label>メールアドレス</label>
+      <input type="email" id="acc-email" maxlength="100" placeholder="例: taro@example.com" autocomplete="email" inputmode="email">
+      <button class="btn btn-p btn-full" id="acc-submit-btn" onclick="submitAccessRequest()">📨 申請する</button>
+    </div>
+    <div id="acc-pending" style="display:none">
+      <h2>許可待ちです ⏳</h2>
+      <p>申請を受け付けました。管理者が許可すると、自動でこの画面が切り替わります。アプリを閉じても大丈夫です。</p>
+      <div class="card" id="acc-pending-info" style="font-size:22px;line-height:1.7"></div>
+      <button class="btn btn-g btn-full" onclick="editAccessRequest()">✏️ 申請内容を修正する</button>
+    </div>
+  </div>
+</div>
+
 <div class="setup-screen" id="setup-screen">
   <div class="setup-box">
     <h2>ようこそ 👋</h2>
@@ -125,8 +162,9 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
 </div>
 
 <div class="hdr">
-  <div class="hdr-title" id="hdr-name">出退勤・売上管理</div>
+  <div class="hdr-title app-name" id="hdr-name">イチバン売上&amp;時間管理アプリ</div>
   <div class="hdr-status" id="hdr-status">休み中</div>
+  <a class="hdr-help" href="simple_manual.html" title="使い方ガイド">📖</a>
 </div>
 
 <div class="page active" id="page-duty">
@@ -302,7 +340,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20260825-1';
+const APP_BUILD='20261021-3';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -756,7 +794,8 @@ function renderAll(){
   renderDutyView();
   renderSalesTab();
   const name=localStorage.getItem('taxi_name');
-  document.getElementById('hdr-name').textContent=name?name+'さん':'出退勤・売上管理';
+  document.getElementById('hdr-name').textContent=name?name+'さん':'イチバン売上&時間管理アプリ';
+  document.getElementById('hdr-name').classList.toggle('app-name',!name);
 }
 
 // ===== 端末間同期（Firebaseバックアップ） =====
@@ -818,6 +857,139 @@ function restoreFromSync(){
     document.getElementById('sync-status').textContent='復元完了: '+new Date(v.updatedTs||Date.now()).toLocaleString('ja-JP');
     toast('✅ サーバーのデータを復元しました');
   });
+}
+
+// ===== 利用申請（管理者の許可制） =====
+// 端末ごとにIDを作り、simple_pending/{ID} に申請、管理者が本体アプリの管理者モードで
+// 許可すると simple_approved/{ID} が作られる。本体アプリの参加申請（users_pending /
+// users_approved）とは別の場所に保存し、管理者画面でも別々に管理する
+function simpleDeviceId(){
+  let id=localStorage.getItem('simple_device_id');
+  if(!id){
+    id='sd'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+    localStorage.setItem('simple_device_id',id);
+  }
+  return id;
+}
+let accessListening=false;
+function showAccess(state){
+  ['loading','offline','apply','pending'].forEach(k=>{
+    document.getElementById('acc-'+k).style.display=k===state?'block':'none';
+  });
+  document.getElementById('access-screen').classList.add('open');
+}
+function hideAccess(){document.getElementById('access-screen').classList.remove('open');}
+// 申請制を入れる前からこの端末で使っていた人は、申請なしでそのまま使えるようにする
+function isExistingUser(){
+  return localStorage.getItem('simple_setup_done')==='1'||!!localStorage.getItem('taxi_name')||!!localStorage.getItem('simple_daily_log');
+}
+function registerExistingUser(){
+  const id=simpleDeviceId();
+  db.ref('simple_approved/'+id).set({
+    lastName:localStorage.getItem('taxi_name')||'',firstName:'',email:'',ts:Date.now(),auto:true
+  }).then(()=>localStorage.setItem('simple_access_registered','1')).catch(()=>{});
+}
+function checkAccess(){
+  const okLocal=localStorage.getItem('simple_access_ok')==='1';
+  // 以前から使っている人の自動許可は、この端末で1回だけ（利用停止された人が再び自動許可されないように）
+  if(!okLocal&&isExistingUser()&&localStorage.getItem('simple_access_checked')!=='1'){
+    localStorage.setItem('simple_access_checked','1');
+    localStorage.setItem('simple_access_ok','1');
+    checkAccess();
+    return;
+  }
+  if(okLocal){hideAccess();checkFirstRun();}
+  else showAccess('loading');
+  if(!db){if(!okLocal)showAccess('offline');return;}
+  localStorage.setItem('simple_access_checked','1');
+  const id=simpleDeviceId();
+  db.ref('simple_approved/'+id).once('value').then(snap=>{
+    if(snap.val()){onAccessGranted(snap.val());return;}
+    if(okLocal){
+      // 許可の記録がサーバーに無い: 一度でも登録できていたなら管理者に利用停止されたもの、
+      // まだ登録できていない（以前から使っている人で、前回は送信できなかった等）なら登録し直す
+      if(localStorage.getItem('simple_access_registered')!=='1'){registerExistingUser();return;}
+      localStorage.removeItem('simple_access_ok');
+      localStorage.removeItem('simple_access_registered');
+      document.getElementById('setup-screen').classList.remove('open');
+      toast('⚠️ 管理者により利用が停止されました');
+    }
+    return db.ref('simple_pending/'+id).once('value').then(s2=>{
+      const p=s2.val();
+      if(p&&p.status==='pending'){showPendingAccess(p);listenAccess();}
+      else showApplyAccess(p);
+    });
+  }).catch(()=>{if(!okLocal)showAccess('offline');});
+}
+function showApplyAccess(prev){
+  if(prev){
+    document.getElementById('acc-last').value=prev.lastName||'';
+    document.getElementById('acc-first').value=prev.firstName||'';
+    document.getElementById('acc-email').value=prev.email||'';
+  }
+  document.getElementById('acc-rejected-msg').style.display=(prev&&prev.status==='rejected')?'block':'none';
+  showAccess('apply');
+}
+function showPendingAccess(p){
+  const el=document.getElementById('acc-pending-info');
+  el.textContent='';
+  [['お名前',(p.lastName||'')+' '+(p.firstName||'')],['メール',p.email||''],['申請日時',new Date(p.ts||Date.now()).toLocaleString('ja-JP')]].forEach(([k,v])=>{
+    const row=document.createElement('div');
+    row.textContent=k+'： '+v;
+    el.appendChild(row);
+  });
+  showAccess('pending');
+}
+function submitAccessRequest(){
+  const lastName=document.getElementById('acc-last').value.trim();
+  const firstName=document.getElementById('acc-first').value.trim();
+  const email=document.getElementById('acc-email').value.trim();
+  if(!lastName||!firstName){toast('⚠️ 名字と名前を入力してください');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠️ メールアドレスを正しく入力してください');return;}
+  if(!db){toast('⚠️ サーバーに接続できません。電波の良い場所でお試しください');return;}
+  const btn=document.getElementById('acc-submit-btn');
+  btn.disabled=true;
+  const req={lastName,firstName,email,ts:Date.now(),status:'pending'};
+  // 送信が確認できてから許可待ちに進む（届いていないのに待ち続けることを防ぐ）
+  db.ref('simple_pending/'+simpleDeviceId()).set(req).then(()=>{
+    btn.disabled=false;
+    showPendingAccess(req);
+    listenAccess();
+    toast('✅ 申請しました');
+  }).catch(()=>{
+    btn.disabled=false;
+    toast('⚠️ 申請の送信に失敗しました。電波状況を確認してもう一度お試しください');
+  });
+}
+function editAccessRequest(){
+  db.ref('simple_pending/'+simpleDeviceId()).once('value').then(s=>showApplyAccess(s.val()))
+    .catch(()=>showAccess('apply'));
+}
+function listenAccess(){
+  if(accessListening||!db)return;
+  accessListening=true;
+  const id=simpleDeviceId();
+  db.ref('simple_approved/'+id).on('value',snap=>{
+    if(snap.val()&&localStorage.getItem('simple_access_ok')!=='1'){
+      onAccessGranted(snap.val());
+      toast('✅ 利用が許可されました！');
+    }
+  });
+  db.ref('simple_pending/'+id+'/status').on('value',snap=>{
+    if(snap.val()==='rejected'&&localStorage.getItem('simple_access_ok')!=='1'){
+      db.ref('simple_pending/'+id).once('value').then(s=>showApplyAccess(s.val()));
+    }
+  });
+}
+function onAccessGranted(v){
+  const wasLocked=localStorage.getItem('simple_access_ok')!=='1';
+  localStorage.setItem('simple_access_ok','1');
+  localStorage.setItem('simple_access_registered','1');
+  if(!wasLocked)return;
+  // 申請した名字を、はじめの設定画面の名前欄に入れておく
+  if(v.lastName&&!document.getElementById('setup-name').value)document.getElementById('setup-name').value=v.lastName;
+  hideAccess();
+  checkFirstRun();
 }
 
 // ===== 初回起動時の設定画面（新規の人向け） =====
@@ -884,7 +1056,7 @@ function init(){
   loadSettingsInputs();
   loadDutyState();
   renderAll();
-  checkFirstRun();
+  checkAccess();
   setTimeout(checkForUpdate,4000);
   setInterval(checkForUpdate,5*60*1000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkForUpdate();});
