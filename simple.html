@@ -146,7 +146,7 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
 <div class="setup-screen" id="setup-screen">
   <div class="setup-box">
     <h2>ようこそ 👋</h2>
-    <p>出退勤の記録と個人の売上管理だけのシンプルなアプリです。まずは名前を入力してください。</p>
+    <p>出退勤の記録と個人の売上管理だけのシンプルなアプリです。まずは名前を入力してください。月の途中から使い始める方は、このあと「⚙️設定」の「🔄 月の途中から使い始める方へ」で、前日までの今月の実績を入れてください。</p>
     <label>名前</label>
     <input type="text" id="setup-name" placeholder="例: 高橋">
     <label>同期コード（任意）</label>
@@ -227,20 +227,27 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
       <button class="btn btn-p btn-full" onclick="saveTargetSettings()">✅ 保存</button>
     </div>
 
-    <div class="sec">繰越（前システム等からの引継ぎ分）</div>
+    <div class="sec">🔄 月の途中から使い始める方へ</div>
     <div class="card">
-      <label>繰越 売上（税抜・円）</label>
-      <input type="number" id="s-carry-fare" inputmode="numeric" placeholder="0">
-      <label>繰越 自腹高速代（円）</label>
+      <div style="font-size:20px;color:var(--muted);line-height:1.6;margin-bottom:16px">このアプリを使い始める<b style="color:var(--text)">前日までの、今月の実績</b>を入れてください。今月のまとめ・1日あたりの目標金額・日割り時間に足して計算されます。<b style="color:var(--text)">月が変わると自動で0に戻ります。</b></div>
+      <label>前日までの売上（税抜・円）</label>
+      <input type="number" id="s-carry-fare" inputmode="numeric" placeholder="例: 250000">
+      <label>前日までの自腹高速代（円）</label>
       <input type="number" id="s-carry-toll" inputmode="numeric" placeholder="0">
-      <label>繰越 時間（時:分。例 85:30）</label>
-      <input type="text" id="s-carry-hours" placeholder="0:00">
-      <label>繰越 日数</label>
-      <input type="number" id="s-carry-days" inputmode="numeric" placeholder="0">
+      <label>前日までの勤務時間</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <input type="number" id="s-carry-h" inputmode="numeric" placeholder="85" style="flex:1;margin-bottom:0">
+        <span style="font-size:24px">時間</span>
+        <input type="number" id="s-carry-m" inputmode="numeric" placeholder="30" min="0" max="59" style="flex:1;margin-bottom:0">
+        <span style="font-size:24px">分</span>
+      </div>
+      <label>前日までの出勤日数</label>
+      <input type="number" id="s-carry-days" inputmode="numeric" placeholder="例: 10">
       <div class="btn-row">
-        <button class="btn btn-p" onclick="saveCarrySettings()">✅ 保存</button>
+        <button class="btn btn-p" style="flex:1" onclick="saveCarrySettings()">✅ 保存</button>
         <button class="btn btn-g" onclick="clearCarrySettings()">🗑 クリア</button>
       </div>
+      <div class="sync-status" id="carry-status"></div>
     </div>
 
     <div class="sec">端末間同期・バックアップ</div>
@@ -338,7 +345,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20261021-4';
+const APP_BUILD='20261021-5';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -379,7 +386,18 @@ function switchTab(name){
 }
 
 // ===== 目標・繰越 =====
+// 「月の途中から使い始める方へ」で入れた実績は、入れた月の間だけ使う
+// （月が変わったら自動で0扱いにする。手で消し忘れて翌月に足され続けるのを防ぐ）
+function currentMonthKey(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1);}
+function hasCarryValues(){
+  return ['taxi_carry_fare','taxi_carry_toll','taxi_carry_hours','taxi_carry_days']
+    .some(k=>parseFloat(localStorage.getItem(k)||'0'));
+}
 function getCarryover(){
+  const month=localStorage.getItem('simple_carry_month');
+  // 月の記録が無い（この仕組みを入れる前に入力された）値は、今月に入れたものとして扱う
+  if(!month&&hasCarryValues())localStorage.setItem('simple_carry_month',currentMonthKey());
+  else if(month&&month!==currentMonthKey())return {fare:0,toll:0,hours:0,days:0};
   return {
     fare:parseInt(localStorage.getItem('taxi_carry_fare')||'0')||0,
     toll:parseInt(localStorage.getItem('taxi_carry_toll')||'0')||0,
@@ -387,40 +405,32 @@ function getCarryover(){
     days:parseInt(localStorage.getItem('taxi_carry_days')||'0')||0
   };
 }
-function parseClockHours(str){
-  str=(str||'').trim();
-  if(!str)return 0;
-  const m=str.match(/^(\d+)[:：](\d{1,2})$/);
-  if(m)return Math.round((parseInt(m[1],10)+parseInt(m[2],10)/60)*100)/100;
-  const f=parseFloat(str);
-  return isNaN(f)?0:f;
-}
-function formatClockHours(h){
-  h=h||0;
-  const hh=Math.floor(h);
-  const mm=Math.round((h-hh)*60);
-  return `${hh}:${pad(mm)}`;
-}
 function saveCarrySettings(){
   const fare=parseInt(document.getElementById('s-carry-fare').value)||0;
   const toll=parseInt(document.getElementById('s-carry-toll').value)||0;
-  const hours=parseClockHours(document.getElementById('s-carry-hours').value);
+  const hh=parseInt(document.getElementById('s-carry-h').value)||0;
+  const mm=parseInt(document.getElementById('s-carry-m').value)||0;
+  if(mm>59){toast('⚠️ 分は0〜59で入力してください');return;}
+  const hours=hh+mm/60;
   const days=parseInt(document.getElementById('s-carry-days').value)||0;
   localStorage.setItem('taxi_carry_fare',fare);
   localStorage.setItem('taxi_carry_toll',toll);
   localStorage.setItem('taxi_carry_hours',hours);
   localStorage.setItem('taxi_carry_days',days);
-  toast('✅ 繰越を保存しました');
+  localStorage.setItem('simple_carry_month',currentMonthKey());
+  loadSettingsInputs();
+  toast('✅ 前日までの実績を保存しました');
   renderAll();pushSync();
 }
 function clearCarrySettings(){
-  if(!confirm('繰越の設定をクリアしますか？'))return;
+  if(!confirm('前日までの実績をクリアしますか？'))return;
   localStorage.removeItem('taxi_carry_fare');
   localStorage.removeItem('taxi_carry_toll');
   localStorage.removeItem('taxi_carry_hours');
   localStorage.removeItem('taxi_carry_days');
+  localStorage.removeItem('simple_carry_month');
   loadSettingsInputs();
-  toast('🗑 繰越をクリアしました');
+  toast('🗑 前日までの実績をクリアしました');
   renderAll();pushSync();
 }
 function saveTargetSettings(){
@@ -436,10 +446,16 @@ function loadSettingsInputs(){
   document.getElementById('s-target-days').value=localStorage.getItem('taxi_target_days')||'';
   document.getElementById('s-target-hours').value=localStorage.getItem('simple_target_hours')||String(DEFAULT_TARGET_HOURS);
   document.getElementById('s-target-amount').value=localStorage.getItem('taxi_target_amount')||'';
-  document.getElementById('s-carry-fare').value=localStorage.getItem('taxi_carry_fare')||'';
-  document.getElementById('s-carry-toll').value=localStorage.getItem('taxi_carry_toll')||'';
-  document.getElementById('s-carry-hours').value=formatClockHours(parseFloat(localStorage.getItem('taxi_carry_hours'))||0);
-  document.getElementById('s-carry-days').value=localStorage.getItem('taxi_carry_days')||'';
+  const c=getCarryover();
+  const ch=Math.floor(c.hours),cm=Math.round((c.hours-ch)*60);
+  document.getElementById('s-carry-fare').value=c.fare||'';
+  document.getElementById('s-carry-toll').value=c.toll||'';
+  document.getElementById('s-carry-h').value=c.hours?ch+(cm===60?1:0):'';
+  document.getElementById('s-carry-m').value=c.hours?(cm===60?0:cm):'';
+  document.getElementById('s-carry-days').value=c.days||'';
+  document.getElementById('carry-status').textContent=(c.fare||c.toll||c.hours||c.days)
+    ?`入力済み（${new Date().getMonth()+1}月分）: ¥${c.fare.toLocaleString()} ／ ${fmtHM(c.hours)} ／ ${c.days}日`
+    :'入力なし';
   const code=localStorage.getItem('simple_sync_code');
   document.getElementById('sync-status').textContent=code?'同期コード設定済み: '+code:'同期コード未設定（この端末だけで記録されます）';
 }
@@ -823,6 +839,7 @@ function pushSync(cb){
     carryToll:localStorage.getItem('taxi_carry_toll')||'0',
     carryHours:localStorage.getItem('taxi_carry_hours')||'0',
     carryDays:localStorage.getItem('taxi_carry_days')||'0',
+    carryMonth:localStorage.getItem('simple_carry_month')||'',
     targetDays:localStorage.getItem('taxi_target_days')||'',
     targetHours:localStorage.getItem('simple_target_hours')||'',
     targetAmount:localStorage.getItem('taxi_target_amount')||'',
@@ -837,6 +854,7 @@ function applyRemoteSnapshot(v,fallbackName){
   localStorage.setItem('taxi_carry_toll',v.carryToll||'0');
   localStorage.setItem('taxi_carry_hours',v.carryHours||'0');
   localStorage.setItem('taxi_carry_days',v.carryDays||'0');
+  if(v.carryMonth)localStorage.setItem('simple_carry_month',v.carryMonth);else localStorage.removeItem('simple_carry_month');
   if(v.targetDays)localStorage.setItem('taxi_target_days',v.targetDays);
   if(v.targetHours)localStorage.setItem('simple_target_hours',v.targetHours);
   if(v.targetAmount)localStorage.setItem('taxi_target_amount',v.targetAmount);

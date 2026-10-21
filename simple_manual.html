@@ -246,7 +246,7 @@ kbd{font-family:inherit; font-weight:700; background:var(--surface2); border:1px
     <li><a href="#s6"><span class="n">06</span>退勤する</a></li>
     <li><a href="#s7"><span class="n">07</span>売上管理を見る・記録を直す</a></li>
     <li><a href="#s8"><span class="n">08</span>入力を忘れた日を追加する</a></li>
-    <li><a href="#s9"><span class="n">09</span>設定（目標・繰越・同期）</a></li>
+    <li><a href="#s9"><span class="n">09</span>設定（目標・月途中・同期）</a></li>
     <li><a href="#s10"><span class="n">10</span>困ったときは</a></li>
   </ol>
 </nav>
@@ -328,7 +328,7 @@ kbd{font-family:inherit; font-weight:700; background:var(--surface2); border:1px
   <ul class="steps">
     <li><div><b>🚕 出退勤</b> — 出勤・退勤のボタンと、勤務中の残り時間</div></li>
     <li><div><b>📊 売上管理</b> — 今月の売上・勤務時間のまとめ、記録の一覧、入力を忘れた日の追加</div></li>
-    <li><div><b>⚙️ 設定</b> — 今月の目標、前のシステムからの繰越、同期コード</div></li>
+    <li><div><b>⚙️ 設定</b> — 今月の目標、月の途中から使い始めた人の実績入力、同期コード</div></li>
   </ul>
   <p>画面上部の右上にある <kbd>📖</kbd> を押すと、いつでもこのガイドを開けます。</p>
 </section>
@@ -508,10 +508,10 @@ kbd{font-family:inherit; font-weight:700; background:var(--surface2); border:1px
 
   <h3 style="font-size:14.5px; margin-bottom:10px">今月のまとめ</h3>
   <ul class="steps">
-    <li><div><b>残り出勤日数</b> — 出勤予定日数 − 出勤した日数（繰越の日数を含む）</div></li>
+    <li><div><b>残り出勤日数</b> — 出勤予定日数 − 出勤した日数（「月の途中から使い始める方へ」で入れた日数を含む）</div></li>
     <li><div><b>1日あたりの目標金額</b> — 目標の残り金額 ÷ 残り出勤日数</div></li>
     <li><div><b>1日あたりの営業時間</b> — 出勤時の「日割り時間」と同じ計算です</div></li>
-    <li><div><b>平均金額</b>・<b>今月の売り上げ</b>・<b>自腹高速代</b>・<b>合計勤務時間</b> — 繰越の分も含めた今月の合計です</div></li>
+    <li><div><b>平均金額</b>・<b>今月の売り上げ</b>・<b>自腹高速代</b>・<b>合計勤務時間</b> — 「月の途中から使い始める方へ」で入れた分も含めた今月の合計です</div></li>
   </ul>
 
   <h3 style="font-size:14.5px; margin:26px 0 10px">記録を直す・消す</h3>
@@ -551,7 +551,7 @@ kbd{font-family:inherit; font-weight:700; background:var(--surface2); border:1px
   <div class="op-head">
     <div class="op-num">09</div>
     <div>
-      <h2>設定（目標・繰越・同期）</h2>
+      <h2>設定（目標・月途中・同期）</h2>
       <div class="sub">「⚙️ 設定」タブ</div>
     </div>
   </div>
@@ -564,11 +564,14 @@ kbd{font-family:inherit; font-weight:700; background:var(--surface2); border:1px
     <li><div>入れたら<b>「✅ 保存」</b>を押します</div></li>
   </ul>
 
-  <h3 style="font-size:14.5px; margin:26px 0 10px">繰越（月の途中から使い始めたとき）</h3>
-  <p>月の途中からこのアプリを使い始めたときは、それまでの分（前のシステムや紙で記録していた分）をここに入れます。今月のまとめや1日あたりの目安に足して計算されます。</p>
+  <h3 style="font-size:14.5px; margin:26px 0 10px">🔄 月の途中から使い始める方へ</h3>
+  <p>月の途中からこのアプリを使い始めたときは、<b>使い始める前日までの今月の実績</b>（紙の日報などで記録していた分）をここに入れます。今月のまとめ・1日あたりの目標金額・日割り時間に足して計算されます。</p>
   <ul class="steps">
-    <li><div><b>売上・自腹高速代</b>は円で、<b>時間</b>は「時:分」（例: <b>85:30</b>）で、<b>日数</b>は出勤した日数を入れて「✅ 保存」</div></li>
-    <li><div>翌月になったら<b>「🗑 クリア」</b>で消してください（自動では消えません）</div></li>
+    <li><div><b>売上（税抜）・自腹高速代</b>は円で入れます</div></li>
+    <li><div><b>勤務時間</b>は「時間」と「分」の欄に分けて入れます（例: 85時間30分 → <b>85</b> と <b>30</b>）</div></li>
+    <li><div><b>出勤日数</b>は、前日までに出勤した日数を入れます</div></li>
+    <li><div>入れたら<b>「✅ 保存」</b>。下に「入力済み（◯月分）」と表示されます</div></li>
+    <li><div><b>月が変わると自動で0に戻ります</b>（消す必要はありません）。入力を間違えたときは、直して保存し直すか「🗑 クリア」で消せます</div></li>
   </ul>
 
   <h3 style="font-size:14.5px; margin:26px 0 10px">端末間同期・バックアップ</h3>
