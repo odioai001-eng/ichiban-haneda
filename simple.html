@@ -126,14 +126,12 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
     </div>
     <div id="acc-apply" style="display:none">
       <h2>利用申請 📝</h2>
-      <p>このアプリは管理者の許可が必要です。名字・名前・メールアドレスを入力して申請してください。許可されると、自動で使えるようになります。</p>
+      <p>このアプリは管理者の許可が必要です。名字と名前を入力して申請してください。許可されると、自動で使えるようになります。</p>
       <div id="acc-rejected-msg" style="display:none;font-size:22px;color:var(--red);margin-bottom:16px;line-height:1.6">前回の申請は許可されませんでした。内容を確認して、もう一度申請できます。</div>
       <label>名字</label>
       <input type="text" id="acc-last" maxlength="20" placeholder="例: 高橋" autocomplete="family-name">
       <label>名前</label>
       <input type="text" id="acc-first" maxlength="20" placeholder="例: 一郎" autocomplete="given-name">
-      <label>メールアドレス</label>
-      <input type="email" id="acc-email" maxlength="100" placeholder="例: taro@example.com" autocomplete="email" inputmode="email">
       <button class="btn btn-p btn-full" id="acc-submit-btn" onclick="submitAccessRequest()">📨 申請する</button>
     </div>
     <div id="acc-pending" style="display:none">
@@ -340,7 +338,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20261021-3';
+const APP_BUILD='20261021-4';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -886,7 +884,7 @@ function isExistingUser(){
 function registerExistingUser(){
   const id=simpleDeviceId();
   db.ref('simple_approved/'+id).set({
-    lastName:localStorage.getItem('taxi_name')||'',firstName:'',email:'',ts:Date.now(),auto:true
+    lastName:localStorage.getItem('taxi_name')||'',firstName:'',ts:Date.now(),auto:true
   }).then(()=>localStorage.setItem('simple_access_registered','1')).catch(()=>{});
 }
 function checkAccess(){
@@ -925,7 +923,6 @@ function showApplyAccess(prev){
   if(prev){
     document.getElementById('acc-last').value=prev.lastName||'';
     document.getElementById('acc-first').value=prev.firstName||'';
-    document.getElementById('acc-email').value=prev.email||'';
   }
   document.getElementById('acc-rejected-msg').style.display=(prev&&prev.status==='rejected')?'block':'none';
   showAccess('apply');
@@ -933,7 +930,7 @@ function showApplyAccess(prev){
 function showPendingAccess(p){
   const el=document.getElementById('acc-pending-info');
   el.textContent='';
-  [['お名前',(p.lastName||'')+' '+(p.firstName||'')],['メール',p.email||''],['申請日時',new Date(p.ts||Date.now()).toLocaleString('ja-JP')]].forEach(([k,v])=>{
+  [['お名前',(p.lastName||'')+' '+(p.firstName||'')],['申請日時',new Date(p.ts||Date.now()).toLocaleString('ja-JP')]].forEach(([k,v])=>{
     const row=document.createElement('div');
     row.textContent=k+'： '+v;
     el.appendChild(row);
@@ -943,13 +940,11 @@ function showPendingAccess(p){
 function submitAccessRequest(){
   const lastName=document.getElementById('acc-last').value.trim();
   const firstName=document.getElementById('acc-first').value.trim();
-  const email=document.getElementById('acc-email').value.trim();
   if(!lastName||!firstName){toast('⚠️ 名字と名前を入力してください');return;}
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠️ メールアドレスを正しく入力してください');return;}
   if(!db){toast('⚠️ サーバーに接続できません。電波の良い場所でお試しください');return;}
   const btn=document.getElementById('acc-submit-btn');
   btn.disabled=true;
-  const req={lastName,firstName,email,ts:Date.now(),status:'pending'};
+  const req={lastName,firstName,ts:Date.now(),status:'pending'};
   // 送信が確認できてから許可待ちに進む（届いていないのに待ち続けることを防ぐ）
   db.ref('simple_pending/'+simpleDeviceId()).set(req).then(()=>{
     btn.disabled=false;
