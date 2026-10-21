@@ -846,18 +846,18 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <button class="btn btn-g" onclick="renderPendingList()" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
       <div id="pending-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
     </div>
-    <div class="sec">📱 簡易版アプリの利用申請</div>
+    <div class="sec">📱 イチバン売上&amp;時間管理アプリの利用申請</div>
     <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">簡易版（出退勤・売上管理）の利用申請です。上の「参加申請の承認」（本体アプリ）とは別に管理します。許可すると、申請した人の簡易版がすぐ使えるようになります。</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">イチバン売上&amp;時間管理アプリ（旧・簡易版）の利用申請です。上の「参加申請の承認」（本体アプリ）とは別に管理します。許可すると、申請した人がすぐ使えるようになります。</div>
       <button class="btn btn-g" onclick="renderSimpleAccessList()" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
       <div style="font-size:12px;font-weight:700;margin-bottom:4px">許可待ち</div>
       <div id="simple-pending-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
       <div style="font-size:12px;font-weight:700;margin:14px 0 4px">利用中（許可済み）</div>
       <div id="simple-approved-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
     </div>
-    <div class="sec">📧 簡易版の許可メール（EmailJS）</div>
+    <div class="sec">📧 売上&amp;時間管理アプリの許可メール（EmailJS）</div>
     <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">簡易版の申請を「許可」した時に、申請者が登録したメールアドレスへ許可のお知らせを送ります。メールの送信には無料サービス「EmailJS」を使います。EmailJSで発行した3つのIDを入れて保存してください（管理者の端末どれからでも共通で使われます）。空欄のままならメールは送りません。</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">イチバン売上&amp;時間管理アプリの申請を「許可」した時に、申請者が登録したメールアドレスへ許可のお知らせを送ります。メールの送信には無料サービス「EmailJS」を使います。EmailJSで発行した3つのIDを入れて保存してください（管理者の端末どれからでも共通で使われます）。空欄のままならメールは送りません。</div>
       <label style="font-size:12px;color:var(--muted)">Service ID</label>
       <input type="text" id="sm-service" placeholder="例: service_abc123" autocomplete="off">
       <label style="font-size:12px;color:var(--muted)">Template ID</label>
@@ -1453,7 +1453,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261021-2';
+const APP_BUILD='20261021-3';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -4955,7 +4955,7 @@ function connectFirebase(config){
       if((v.ts||0)<pendingInitTs)return;
       if(isAdmin)renderSimpleAccessList();
       if(localStorage.getItem('taxi_is_admin_device')!=='1')return;
-      sendNotif('📱 簡易版の利用申請',(v.lastName||'')+' '+(v.firstName||'')+'さんから利用申請がありました','simple_'+snap.key);
+      sendNotif('📱 売上&時間管理アプリの利用申請',(v.lastName||'')+' '+(v.firstName||'')+'さんから利用申請がありました','simple_'+snap.key);
     };
     db.ref('simple_pending').on('child_added',onSimplePending);
     db.ref('simple_pending').on('child_changed',onSimplePending);
@@ -10778,7 +10778,7 @@ function approveSimpleUser(id){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
   const v=simpleAccessCache.pending[id];
   if(!v)return;
-  if(!confirm(simpleAccessName(v)+'さんの簡易版の利用を許可しますか？'))return;
+  if(!confirm(simpleAccessName(v)+'さんのイチバン売上&時間管理アプリの利用を許可しますか？'))return;
   Promise.all([
     db.ref('simple_approved/'+id).set({lastName:v.lastName||'',firstName:v.firstName||'',email:v.email||'',ts:Date.now()}),
     db.ref('simple_pending/'+id+'/status').set('approved')
@@ -10834,7 +10834,7 @@ function simpleMailParams(v){
   const name=simpleAccessName(v).trim();
   return {
     to_email:v.email,to_name:name,app_url:SIMPLE_APP_URL,
-    message:name+' 様\n\n出退勤・売上管理（簡易版）の利用申請が許可されました。\n'
+    message:name+' 様\n\nイチバン売上&時間管理アプリの利用申請が許可されました。\n'
       +'アプリを開くと、そのまま使い始められます。\n\n'+SIMPLE_APP_URL
   };
 }
@@ -10857,7 +10857,7 @@ function resendSimpleApprovalMail(id){
   const v=simpleAccessCache.approved[id];
   if(!v)return;
   loadSimpleMailConfig().then(cfg=>{
-    if(!cfg||!cfg.serviceId||!cfg.templateId||!cfg.publicKey){toast('⚠️ 先に「簡易版の許可メール」の設定を保存してください');return;}
+    if(!cfg||!cfg.serviceId||!cfg.templateId||!cfg.publicKey){toast('⚠️ 先に「売上&時間管理アプリの許可メール」の設定を保存してください');return;}
     if(!confirm(v.email+' に許可メールを送りますか？'))return;
     sendSimpleApprovalMail(id,v);
   });
@@ -10898,7 +10898,7 @@ function revokeSimpleUser(id){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
   const v=simpleAccessCache.approved[id];
   if(!v)return;
-  if(!confirm(simpleAccessName(v)+'さんの簡易版の利用を停止しますか？\n（次にアプリを開いた時から使えなくなります。記録は消えません）'))return;
+  if(!confirm(simpleAccessName(v)+'さんのイチバン売上&時間管理アプリの利用を停止しますか？\n（次にアプリを開いた時から使えなくなります。記録は消えません）'))return;
   db.ref('simple_approved/'+id).remove().then(()=>{
     toast('⛔ '+simpleAccessName(v)+'さんの利用を停止しました');
     renderSimpleAccessList();

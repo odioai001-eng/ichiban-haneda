@@ -6,10 +6,10 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>出退勤・売上管理（簡易版）</title>
+<title>イチバン売上&amp;時間管理アプリ</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="出退勤・売上（簡易）">
+<meta name="apple-mobile-web-app-title" content="イチバン売上&amp;時間管理">
 <meta name="mobile-web-app-capable" content="yes">
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -31,6 +31,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   background:var(--surface);border-bottom:1px solid var(--border);
   display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000}
 .hdr-title{font-size:31px;font-weight:700;letter-spacing:.3px;line-height:1.25}
+.hdr-title{max-width:calc(100% - 112px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr-title.app-name{font-size:clamp(16px,4.6vw,27px)}
 .hdr-help{position:absolute;right:6px;bottom:0;height:var(--hh);display:flex;align-items:center;
   font-size:30px;text-decoration:none;padding:0 6px}
 .hdr-status{font-size:19px;color:var(--muted);margin-top:3px}
@@ -160,7 +162,7 @@ label{font-size:21px;color:var(--muted);display:block;margin-bottom:6px}
 </div>
 
 <div class="hdr">
-  <div class="hdr-title" id="hdr-name">出退勤・売上管理</div>
+  <div class="hdr-title app-name" id="hdr-name">イチバン売上&amp;時間管理アプリ</div>
   <div class="hdr-status" id="hdr-status">休み中</div>
   <a class="hdr-help" href="simple_manual.html" title="使い方ガイド">📖</a>
 </div>
@@ -338,7 +340,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "775194714893",
   appId: "1:775194714893:web:b89446b29ddbc8213a0644"
 };
-const APP_BUILD='20261021-2';
+const APP_BUILD='20261021-3';
 const DEFAULT_TARGET_HOURS=288;
 
 let db=null;
@@ -792,7 +794,8 @@ function renderAll(){
   renderDutyView();
   renderSalesTab();
   const name=localStorage.getItem('taxi_name');
-  document.getElementById('hdr-name').textContent=name?name+'さん':'出退勤・売上管理';
+  document.getElementById('hdr-name').textContent=name?name+'さん':'イチバン売上&時間管理アプリ';
+  document.getElementById('hdr-name').classList.toggle('app-name',!name);
 }
 
 // ===== 端末間同期（Firebaseバックアップ） =====
