@@ -852,23 +852,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <button class="btn btn-g" onclick="renderSimpleAccessList()" style="width:100%;margin-bottom:10px">🔄 申請リストを更新</button>
       <div style="font-size:12px;font-weight:700;margin-bottom:4px">許可待ち</div>
       <div id="simple-pending-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
-      <div style="font-size:12px;font-weight:700;margin:14px 0 4px">利用中（許可済み）</div>
+      <div style="font-size:12px;font-weight:700;margin:14px 0 4px">利用中（許可済み）<span id="simple-approved-count" style="color:var(--muted);font-weight:400"></span></div>
       <div id="simple-approved-list"><div style="font-size:12px;color:var(--muted)">上のボタンで読み込んでください</div></div>
-    </div>
-    <div class="sec">📧 売上&amp;時間管理アプリの許可メール（EmailJS）</div>
-    <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">イチバン売上&amp;時間管理アプリの申請を「許可」した時に、申請者が登録したメールアドレスへ許可のお知らせを送ります。メールの送信には無料サービス「EmailJS」を使います。EmailJSで発行した3つのIDを入れて保存してください（管理者の端末どれからでも共通で使われます）。空欄のままならメールは送りません。</div>
-      <label style="font-size:12px;color:var(--muted)">Service ID</label>
-      <input type="text" id="sm-service" placeholder="例: service_abc123" autocomplete="off">
-      <label style="font-size:12px;color:var(--muted)">Template ID</label>
-      <input type="text" id="sm-template" placeholder="例: template_xyz789" autocomplete="off">
-      <label style="font-size:12px;color:var(--muted)">Public Key</label>
-      <input type="text" id="sm-key" placeholder="例: AbCdEfGhIjKlMnOpQ" autocomplete="off">
-      <button class="btn btn-p" onclick="saveSimpleMailConfig()" style="width:100%;margin-bottom:10px">✅ 保存</button>
-      <label style="font-size:12px;color:var(--muted)">テスト送信先</label>
-      <input type="email" id="sm-test-to" placeholder="例: 自分のメールアドレス" autocomplete="email">
-      <button class="btn btn-g" onclick="testSimpleMail()" style="width:100%">📨 テストメールを送る</button>
-      <div id="sm-status" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
     </div>
     <div class="sec">🗑 アカウント管理</div>
     <div class="card">
@@ -1453,7 +1438,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261021-3';
+const APP_BUILD='20261021-4';
 
 let isDuty=false,currentStatus='kuusha',leafletMap=null,myMarker=null,gpsWatch=null;
 let testMode=false; // 管理者のテスト出勤中は、共有データ(Firebase)への書き込みを行わない
@@ -9466,7 +9451,7 @@ function adminLogin(){
     document.getElementById('admin-area').style.display='block';
     document.getElementById('admin-name').value=localStorage.getItem('taxi_name')||'';
     document.getElementById('admin-car').value=localStorage.getItem('taxi_car')||'';
-    renderCPs();renderRankingPage();renderSimpleAccessList();loadSimpleMailConfig();toast('🔓 管理者モード');
+    renderCPs();renderRankingPage();renderSimpleAccessList();toast('🔓 管理者モード');
     checkMonthStartDestsReset();
   }else{toast('⚠️ PINが違います');document.getElementById('pin-input').value='';}
 }
@@ -10750,22 +10735,22 @@ function renderSimpleAccessList(){
       <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:700">${esc(v.lastName)} ${esc(v.firstName)}</div>
-          <div style="font-size:11px;color:var(--cyan);word-break:break-all">${esc(v.email)}</div>
-          <div style="font-size:11px;color:var(--muted)">${new Date(v.ts).toLocaleString('ja-JP')}</div>
+          <div style="font-size:11px;color:var(--muted)">申請日時：${new Date(v.ts).toLocaleString('ja-JP')}</div>
         </div>
         <button class="btn btn-p" style="padding:5px 10px;font-size:12px" onclick="approveSimpleUser('${id}')">許可</button>
         <button class="btn btn-d" style="padding:5px 10px;font-size:12px" onclick="rejectSimpleUser('${id}')">拒否</button>
       </div>`).join(''):muted('許可待ちの申請はありません');
     const list=Object.entries(approved).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+    const cnt=document.getElementById('simple-approved-count');
+    if(cnt)cnt.textContent=list.length?' '+list.length+'人':'';
+    const ymd=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}):'-';
     aEl.innerHTML=list.length?list.map(([id,v])=>`
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700">${esc(v.lastName)} ${esc(v.firstName)}</div>
-          <div style="font-size:11px;color:var(--muted);word-break:break-all">${v.auto?'申請制の導入前から利用':esc(v.email)}</div>
-          ${v.auto||!v.email?'':v.mailSentTs
-            ?`<div style="font-size:11px;color:var(--green)">📧 許可メール送信済み（${new Date(v.mailSentTs).toLocaleString('ja-JP')}）</div>`
-            :`<div style="font-size:11px;color:var(--amber)">📧 許可メール未送信${v.mailError?'（'+esc(v.mailError)+'）':''} <a href="#" onclick="resendSimpleApprovalMail('${id}');return false" style="color:var(--accent)">送る</a></div>`}
+          <div style="font-size:13px;font-weight:700">${esc(v.lastName)} ${esc(v.firstName)||'<span style="color:var(--muted);font-weight:400">（名前未登録）</span>'}</div>
+          <div style="font-size:11px;color:var(--muted)">${v.auto?'登録日':'許可日'}：${ymd(v.ts)}${v.auto?'（申請制の導入前から利用）':''}</div>
         </div>
+        <button class="btn btn-g" style="padding:5px 8px;font-size:12px" onclick="editSimpleUserName('${id}')">✏️</button>
         <button class="btn btn-g" style="padding:5px 10px;font-size:12px;color:var(--red)" onclick="revokeSimpleUser('${id}')">利用停止</button>
       </div>`).join(''):muted('利用中の人はいません');
   }).catch(err=>{
@@ -10780,104 +10765,32 @@ function approveSimpleUser(id){
   if(!v)return;
   if(!confirm(simpleAccessName(v)+'さんのイチバン売上&時間管理アプリの利用を許可しますか？'))return;
   Promise.all([
-    db.ref('simple_approved/'+id).set({lastName:v.lastName||'',firstName:v.firstName||'',email:v.email||'',ts:Date.now()}),
+    db.ref('simple_approved/'+id).set({lastName:v.lastName||'',firstName:v.firstName||'',ts:Date.now(),appliedTs:v.ts||null}),
     db.ref('simple_pending/'+id+'/status').set('approved')
   ]).then(()=>{
     toast('✅ '+simpleAccessName(v)+'さんを許可しました');
     renderSimpleAccessList();
-    sendSimpleApprovalMail(id,v);
   }).catch(err=>{
     console.error('approveSimpleUser failed',err);
     toast('⚠️ 許可の反映に失敗しました。電波状況を確認してもう一度お試しください');
   });
 }
-// 許可メールはEmailJS（https://www.emailjs.com/）のREST APIで、管理者の端末から送る。
-// IDは simple_config/emailjs に保存し、どの管理者端末からでも同じ設定で送れるようにする
-const SIMPLE_APP_URL='https://odioai001-eng.github.io/ichiban-haneda/simple.html';
-let simpleMailConfig=null;
-function loadSimpleMailConfig(){
-  if(!db)return Promise.resolve(null);
-  return db.ref('simple_config/emailjs').once('value').then(snap=>{
-    simpleMailConfig=snap.val()||null;
-    const c=simpleMailConfig||{};
-    const set=(elId,v)=>{const el=document.getElementById(elId);if(el)el.value=v||'';};
-    set('sm-service',c.serviceId);set('sm-template',c.templateId);set('sm-key',c.publicKey);
-    const st=document.getElementById('sm-status');
-    if(st)st.textContent=(c.serviceId&&c.templateId&&c.publicKey)?'✅ 設定済み：許可するとメールが送られます':'未設定：許可してもメールは送られません';
-    return simpleMailConfig;
-  });
-}
-function saveSimpleMailConfig(){
-  if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
-  const cfg={
-    serviceId:document.getElementById('sm-service').value.trim(),
-    templateId:document.getElementById('sm-template').value.trim(),
-    publicKey:document.getElementById('sm-key').value.trim()
-  };
-  db.ref('simple_config/emailjs').set(cfg).then(()=>{
-    toast('✅ メールの設定を保存しました');
-    loadSimpleMailConfig();
-  }).catch(err=>{
-    console.error('saveSimpleMailConfig failed',err);
-    toast('⚠️ 保存に失敗しました');
-  });
-}
-function postSimpleMail(cfg,params){
-  return fetch('https://api.emailjs.com/api/v1.0/email/send',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({service_id:cfg.serviceId,template_id:cfg.templateId,user_id:cfg.publicKey,template_params:params})
-  }).then(async res=>{
-    if(!res.ok)throw new Error((await res.text().catch(()=>''))||('HTTP '+res.status));
-  });
-}
-function simpleMailParams(v){
-  const name=simpleAccessName(v).trim();
-  return {
-    to_email:v.email,to_name:name,app_url:SIMPLE_APP_URL,
-    message:name+' 様\n\nイチバン売上&時間管理アプリの利用申請が許可されました。\n'
-      +'アプリを開くと、そのまま使い始められます。\n\n'+SIMPLE_APP_URL
-  };
-}
-function sendSimpleApprovalMail(id,v){
-  if(!v||!v.email)return Promise.resolve();
-  return loadSimpleMailConfig().then(cfg=>{
-    if(!cfg||!cfg.serviceId||!cfg.templateId||!cfg.publicKey)return;
-    return postSimpleMail(cfg,simpleMailParams(v)).then(()=>{
-      toast('📧 '+v.email+' に許可メールを送りました');
-      return db.ref('simple_approved/'+id).update({mailSentTs:Date.now(),mailError:null});
-    },err=>{
-      console.error('sendSimpleApprovalMail failed',err);
-      toast('⚠️ 許可メールを送れませんでした（許可自体は完了しています）');
-      return db.ref('simple_approved/'+id).update({mailError:String(err.message||err).slice(0,80)});
-    });
-  }).then(()=>renderSimpleAccessList()).catch(err=>console.error('sendSimpleApprovalMail',err));
-}
-function resendSimpleApprovalMail(id){
+// 許可済みの人の名字・名前を直す（申請制の導入前から使っている人は名字だけのことがあるため）
+function editSimpleUserName(id){
   if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
   const v=simpleAccessCache.approved[id];
   if(!v)return;
-  loadSimpleMailConfig().then(cfg=>{
-    if(!cfg||!cfg.serviceId||!cfg.templateId||!cfg.publicKey){toast('⚠️ 先に「売上&時間管理アプリの許可メール」の設定を保存してください');return;}
-    if(!confirm(v.email+' に許可メールを送りますか？'))return;
-    sendSimpleApprovalMail(id,v);
-  });
-}
-function testSimpleMail(){
-  if(!isAdmin){toast('⚠️ 管理者モードでのみ使用できます');return;}
-  const to=document.getElementById('sm-test-to').value.trim();
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)){toast('⚠️ テスト送信先のメールアドレスを入力してください');return;}
-  const cfg={
-    serviceId:document.getElementById('sm-service').value.trim(),
-    templateId:document.getElementById('sm-template').value.trim(),
-    publicKey:document.getElementById('sm-key').value.trim()
-  };
-  if(!cfg.serviceId||!cfg.templateId||!cfg.publicKey){toast('⚠️ 3つのIDを入力してください');return;}
-  const st=document.getElementById('sm-status');
-  st.textContent='送信中…';
-  postSimpleMail(cfg,simpleMailParams({lastName:'テスト',firstName:'送信',email:to})).then(()=>{
-    st.textContent='✅ テストメールを送りました。届いたか確認してください（迷惑メールフォルダも）';
+  const last=prompt('名字',v.lastName||'');
+  if(last===null)return;
+  const first=prompt('名前',v.firstName||'');
+  if(first===null)return;
+  if(!last.trim()){toast('⚠️ 名字を入力してください');return;}
+  db.ref('simple_approved/'+id).update({lastName:last.trim(),firstName:first.trim()}).then(()=>{
+    toast('✅ 名前を更新しました');
+    renderSimpleAccessList();
   }).catch(err=>{
-    st.textContent='⚠️ 送信に失敗しました：'+String(err.message||err).slice(0,120);
+    console.error('editSimpleUserName failed',err);
+    toast('⚠️ 名前の更新に失敗しました');
   });
 }
 function rejectSimpleUser(id){
