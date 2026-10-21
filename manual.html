@@ -188,6 +188,16 @@ section.op + section.op{padding-top:36px; border-top:1px solid var(--border)}
 .flow-step span{font-size:10.5px; text-align:center; color:var(--muted); font-weight:600; line-height:1.3}
 .flow-arrow{flex-shrink:0; color:var(--border); font-size:16px}
 
+/* ---------- photo ---------- */
+figure.photo{margin:0 0 14px}
+figure.photo img{display:block; width:100%; height:auto; border-radius:12px; border:1px solid var(--border); background:#fff}
+figure.photo figcaption{font-size:12px; color:var(--muted); text-align:center; margin-top:6px}
+.map{margin:0 0 14px; padding:0; list-style:none; border:1px solid var(--border); border-radius:12px; overflow:hidden}
+.map li{display:grid; grid-template-columns:7.5em 1fr; gap:10px; padding:9px 12px; font-size:13.5px; border-top:1px solid var(--border); background:var(--surface)}
+.map li:first-child{border-top:none}
+.map li b{color:var(--fg)}
+.map li span{color:var(--muted)}
+
 /* ---------- footer ---------- */
 footer{margin-top:50px; padding-top:22px; border-top:1px solid var(--border); color:var(--muted); font-size:12.5px}
 
@@ -281,6 +291,35 @@ footer{margin-top:50px; padding-top:22px; border-top:1px solid var(--border); co
 
   <p>精算レポートには、支払い方法ごとの売上内訳（現金・クレジット・電子マネー・チケット・福祉券・QRコード）、燃料代・自腹高速代・無料高速代、差引合計、走行距離が自動でまとまって表示されます。過去の精算レポートは「設定」タブからいつでも見返せます。</p>
 
+  <h3 style="font-size:14.5px; margin:26px 0 10px">紙の納金票は「書き写すだけ」</h3>
+  <figure class="photo">
+    <img src="manual_nokinhyo.jpg" width="628" height="343" loading="lazy" alt="納金票の記入例。燃料・車両メーター・税込営収・クレジット・電子マネー・チケット/福祉券・QRコード・ETC・差引合計・未収金・納金額の欄がある">
+    <figcaption>納金票（記入例）</figcaption>
+  </figure>
+
+  <div class="note warn" style="margin:0 0 14px">
+    <span>✍️</span>
+    <div><b>営業中にすべての項目をアプリに打ち込んでおけば、最終的には、退勤後に表示される精算レポートの数値を、この納金票に書き写すだけで済みます。</b>精算レポートは、納金票と同じ項目・同じ並びで、計算まで済ませた状態で表示されます。</div>
+  </div>
+
+  <p>納金票の各欄は、アプリの次の操作から自動で集計されます。</p>
+  <ul class="map">
+    <li><b>燃料</b><span>地図画面の「GAS」ボタンで記録した給油量（リットル）</span></li>
+    <li><b>車両メーター</b><span>出勤時に入れた営業開始メーターが「前日」、退勤時に入れた営業終了メーターが「本日」。差引（走行距離）は自動計算</span></li>
+    <li><b>税込営収</b><span>降車ごとに入れた運賃の合計</span></li>
+    <li><b>障害者割引</b><span>運賃入力で割引にチェックを入れて入力した割引額</span></li>
+    <li><b>クレジット・電子マネー・QRコード</b><span>運賃入力で選んだ支払い方法ごとの合計</span></li>
+    <li><b>チケット・福祉券</b><span>運賃入力で「チケット」「福祉券」を選んだ回の合計と枚数</span></li>
+    <li><b>ETC</b><span>運賃入力で入れた高速代と、地図画面の「自腹高速」ボタンで記録した金額の合計</span></li>
+    <li><b>差引合計・納金額</b><span>自動計算（入力は不要）</span></li>
+    <li><b>未収金</b><span>精算レポートの画面で直接入力（入れると納金額に反映されます）</span></li>
+  </ul>
+
+  <div class="note">
+    <span>🔍</span>
+    <div>精算レポートの数値が実際と違う時は、元の記録（「待機/送先」タブの送り先カードの運賃・支払い方法など）を直してから、精算レポートの<b>「🔄 最新の運賃記録から再集計する」</b>を押してください（入力済みの未収金はそのまま残ります）。運賃の入れ忘れ・支払い方法の選び間違いがあると、その分だけ納金票と合わなくなります。</div>
+  </div>
+
   <div class="note">
     <span>🧾</span>
     <div>月の最終日に退勤すると、精算レポートに続けて「今月の乗務記録のCSV保存」の画面も表示されます。詳しくは「<a href="#s9">09 設定でできること</a>」をご覧ください。</div>
@@ -340,7 +379,7 @@ footer{margin-top:50px; padding-top:22px; border-top:1px solid var(--border); co
       </div>
     </li>
     <li><b>🎯 オートフォロー</b> — ONにしておくと、地図が常に自分の現在地を中心に自動で動きます。仲間のアイコンをタップして見ていた時も、これを押せば自分の位置に戻れます。<b>地図の一番下</b>（数字のすぐ上）には、オートフォロー中の人（自分、または「仲間の状況」の🎯で選んだ仲間）の<b>現在地の住所</b>が、地図が透けて見える表示で出ます（OFFの間は表示されません）</li>
-    <li><b>GAS</b> — 給油した量（リットル）を記録します。精算レポートには反映されず、確認用の記録です</li>
+    <li><b>GAS</b> — 給油した量（リットル）を記録します。精算レポート（納金票）の「燃料」欄に載ります（金額の計算には影響しません）</li>
     <li><b>無料高速</b> — 実質無料になる高速料金（会社負担・経費精算等）を記録します</li>
     <li><b>自腹高速</b> — 自分で立て替えて戻ってこない高速料金を記録します。こちらは精算レポートの差引合計に反映されます</li>
     <li><b>😔 あぶれ</b> — 乗り場などで待機したもののお客様を乗せられずに終わった場合に記録します。送り先の記録には「あぶれ」として残りますが、運賃としては計上されません</li>
