@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261023-2 -->
+<!-- v20261023-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -282,7 +282,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .swa-table td{height:38px;padding:2px 0;text-align:center;vertical-align:middle;line-height:1.2;border-radius:6px;background:var(--surface2)}
 .swa-table td.swa-none{background:none;color:var(--muted);opacity:.4}
 .swa-avg{display:block;font-size:15px;font-weight:800;color:var(--text)}
-.swa-cnt{display:block;font-size:10px;color:var(--text);opacity:.6}
+.swa-cnt{display:block;font-size:10px;color:var(--text);opacity:.95}
+.swa-legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin:0 0 8px}
+.swa-legend b{flex:1;height:10px;border-radius:5px}
 .swa-step{display:flex;gap:6px;margin-bottom:8px}
 .swa-step button{flex:1;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:14px;font-weight:700;font-family:inherit}
 .swa-step button.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -731,7 +733,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <button type="button" id="spotwait-step-30" onclick="setSpotWaitStep(30)">30分ごと</button>
     <button type="button" id="spotwait-step-60" onclick="setSpotWaitStep(60)">1時間ごと</button>
   </div>
-  <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px">プールに着いてから、お客様を乗せて出発するまでの平均時間（分）です。<br><span id="spotwait-slotnote"></span><br>大きい数字が平均、小さい数字が平均に使った記録の回数です。<br>金色が濃いほど、待ち時間が長くなります。<br>1〜9分と200分以上の記録は平均に含めません（下の一覧には残ります）。<span id="spotwait-approxnote"></span></div>
+  <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px">プールに着いてから、お客様を乗せて出発するまでの平均時間（分）です。<br><span id="spotwait-slotnote"></span><br>大きい数字が平均、小さい数字が平均に使った記録の回数です。<br>色は平均の長さで決まります（短いほど緑、長いほど赤）。<br>1〜9分と200分以上の記録は平均に含めません（下の一覧には残ります）。<span id="spotwait-approxnote"></span></div>
+  <div class="swa-legend"><span id="spotwait-legend-lo"></span><b id="spotwait-legend-bar"></b><span id="spotwait-legend-hi"></span></div>
   <div id="spotwait-avg"></div>
   <details class="swa-short" id="spotwait-short">
     <summary>1〜9分の記録の件数 <span id="spotwait-short-total"></span></summary>
@@ -1489,7 +1492,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261023-2';
+const APP_BUILD='20261023-3';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -8508,6 +8511,16 @@ function spotWaitArrivalHalf(hour,key,mins){
   return delta<=12?1:0;
 }
 
+// 平均待機時間の表の色分け。短いほど緑、長いほど赤。SPOT_WAIT_GREEN_MINS以下は緑、SPOT_WAIT_RED_MINS以上は赤、
+// その間は 緑→黄→赤 と連続的に変える（真ん中が黄）。記録の回数や、他のマスとの比較は色に反映しない
+const SPOT_WAIT_GREEN_MINS=30;
+const SPOT_WAIT_RED_MINS=90;
+function spotWaitAvgColor(avg){
+  const t=Math.min(1,Math.max(0,(avg-SPOT_WAIT_GREEN_MINS)/(SPOT_WAIT_RED_MINS-SPOT_WAIT_GREEN_MINS)));
+  const hue=Math.round(t<.5?140-95*(t/.5):45-45*((t-.5)/.5)); // 緑140 → 黄45 → 赤0
+  return `hsla(${hue},60%,31%,.75)`;
+}
+
 // 乗り場ごとの「曜日×時間帯」の平均待機時間（分）の表。元の記録は下の一覧（spotWaitStats）と同じ。
 // 時間帯は待機を始めた（プールに着いた）時刻で、30分ごと（spotWaitStep=30）か1時間ごと（60）。記録時と同じく
 // 200分以上の異常値と、10分未満（1〜9分）の記録は平均に含めない（一覧には残る）
@@ -8555,9 +8568,9 @@ function renderSpotWaitAvg(){
           const c=cells[r][day];
           if(!c)return '<td class="swa-none">–</td>';
           const avg=c.sum/c.n;
-          // 待機が長いほど金色を濃くする（120分で最大）
-          const a=(Math.min(avg/120,1)*0.4).toFixed(2);
-          return `<td style="background:linear-gradient(rgba(251,191,36,${a}),rgba(251,191,36,${a})),var(--surface2)"><span class="swa-avg">${Math.round(avg)}</span><span class="swa-cnt">${c.n}回</span></td>`;
+          // 待機が短いほど緑、長いほど赤（spotWaitAvgColor）
+          const col=spotWaitAvgColor(avg);
+          return `<td style="background:linear-gradient(${col},${col}),var(--surface2)"><span class="swa-avg">${Math.round(avg)}</span><span class="swa-cnt">${c.n}回</span></td>`;
         }).join('')+'</tr>';
       });
       html+='</tbody></table>';
@@ -8565,6 +8578,15 @@ function renderSpotWaitAvg(){
     html+='</div></div>';
   });
   el.innerHTML=html;
+  // 色の凡例（短い＝緑 → 長い＝赤）
+  const legendBar=document.getElementById('spotwait-legend-bar');
+  if(legendBar){
+    const stops=[0,.25,.5,.75,1].map(t=>spotWaitAvgColor(SPOT_WAIT_GREEN_MINS+(SPOT_WAIT_RED_MINS-SPOT_WAIT_GREEN_MINS)*t));
+    legendBar.style.background=`linear-gradient(90deg,${stops.join(',')}),var(--surface2)`;
+  }
+  const legendLo=document.getElementById('spotwait-legend-lo'),legendHi=document.getElementById('spotwait-legend-hi');
+  if(legendLo)legendLo.textContent=`短い（${SPOT_WAIT_GREEN_MINS}分以下）`;
+  if(legendHi)legendHi.textContent=`長い（${SPOT_WAIT_RED_MINS}分以上）`;
   // 切り替えボタンの選択状態と、時間帯の説明
   [30,60].forEach(n=>{
     const b=document.getElementById('spotwait-step-'+n);
