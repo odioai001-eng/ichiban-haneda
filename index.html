@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261023-3 -->
+<!-- v20261023-5 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -118,6 +118,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
+/* 地図の上の「いまの時間帯の平均待機時間」。タイトルは💡の行の左側、5つの札は乗り場ボタンと同じ5列
+   （札が、それぞれの乗り場ボタンの真下にそろう）。横向きなど低い画面では、地図を広く見せるため出さない */
+.swn-title{flex:1;min-width:0;background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
+  border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.swn-tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:100%}
+.swn-t{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;
+  padding:4px 0 5px;border-radius:10px;backdrop-filter:blur(6px);line-height:1.15;color:#fff}
+.swn-l{font-size:11px;font-weight:700}
+.swn-v{font-size:18px;font-weight:800}
+.swn-v small{font-size:10px;font-weight:700;margin-left:1px}
+.swn-none{background:rgba(13,13,26,.62)}
+.swn-none .swn-v{color:var(--muted)}
+@media (max-height:520px){.swn-title,.swn-tiles{display:none}}
+/* 列移動の表（💡）が出ている間は、ステータスバーの下端が札の分（約47px）だけ下がる。画面の高さが780px未満の端末では、
+   下から開く🚗パネル（取り消しボタンが出た状態で約360px）が表の最下行に被さってしまうため、表が出ている間だけ札とタイトルを
+   隠して、札を足す前と同じ高さに保つ（表が消えれば、札はまた出る）。780px ＝ 表の下端（355）＋ 画面下の余白（58）＋ 🚗パネル（約360）＋ 余裕 */
+@media (max-height:780px){#status-bar.has-pool-table .swn-title,#status-bar.has-pool-table .swn-tiles{display:none}}
 /* GPS状態は、駅アイコン（station-btn）と同じ行にその左隣として並べる
    （.map-btn-stack.left内の該当行を参照） */
 .gps-pill{background:rgba(13,13,26,.82);backdrop-filter:blur(6px);
@@ -481,12 +499,16 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <!-- 列移動表示（Row 4・Row 5）の手動オン/オフボタン。表自体が非表示の間も
          必ず操作できるよう、表とは別の行として常に表示しておく -->
-    <div style="display:flex;justify-content:flex-end;width:100%">
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;width:100%">
+      <!-- いまの曜日・時間帯の、乗り場ごとの平均待機時間（下の5つの札）のタイトル。renderSpotWaitNow()が更新する -->
+      <div id="spotwait-now-title" class="swn-title"></div>
       <button id="pool-table-toggle-btn" onclick="togglePoolTableVisible()"
         title="列移動表示のオン/オフ"
         style="background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
-        border-radius:8px;padding:2px 9px;font-size:13px;cursor:pointer;line-height:1.5">💡</button>
+        border-radius:8px;padding:2px 9px;font-size:13px;cursor:pointer;line-height:1.5;flex-shrink:0">💡</button>
     </div>
+    <!-- いまの曜日・時間帯の、乗り場ごとの平均待機時間。乗り場ボタン（Row 3）と同じ5列で、色は平均待機時間の表と同じ -->
+    <div id="spotwait-now-tiles" class="swn-tiles"></div>
     <!-- Row 4: 各乗り場の列移動間隔（前回の移動から何分で移動したか。1号・3号を上段、2号・4号を下段の2行2列、
          国際線はその下の行の左側に表記し、右側にプールへの到着時間を並べる。内容が
          入りきらない場合は折り返さず、そのセルだけ横スクロールできるようにする -->
@@ -1492,7 +1514,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261023-3';
+const APP_BUILD='20261023-5';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -2053,6 +2075,20 @@ function syncMapButtonStackLayout(){
   // 高さ。端末（画面サイズ・比率・横向き等）によってはボタンの数が多い
   // スタックが1列では収まらず、下端がはみ出して押せなくなることがあった
   const availableHeight=Math.max(0,mapRect.height-8-minTop);
+  // 仲間の状況パネル（👥）は、地図の下から開く（高さの上限は地図の6割）。列移動の表などでステータスバーが縦に
+  // 長くなっている間は、パネルの上端がステータスバーの最下行に被さらないよう、高さを抑える。小さくなりすぎないよう
+  // 地図の高さの45%を下限とし、地図が低い画面（560px未満）では従来どおりにする（その場合はパネルが上に被さる）
+  const driverPanel=document.getElementById('driver-panel');
+  if(driverPanel){
+    const room=mapRect.height-(statusBarBottom-mapRect.top)-8;
+    const cap=Math.max(room,mapRect.height*0.45);
+    if(mapRect.height>=560&&cap<mapRect.height*0.6){
+      const mh=Math.floor(cap)+'px';
+      if(driverPanel.style.maxHeight!==mh)driverPanel.style.maxHeight=mh;
+    }else if(driverPanel.style.maxHeight){
+      driverPanel.style.maxHeight='';
+    }
+  }
   stacks.forEach(stack=>{
     const nat=getStackNaturalHeight(stack);
     const naturalHeight=nat.height;
@@ -8480,6 +8516,7 @@ function setSpotWaitStep(n){
   spotWaitStep=n===60?60:30;
   try{localStorage.setItem('taxi_spotwait_step',String(spotWaitStep));}catch(e){}
   renderSpotWaitAvg();
+  renderSpotWaitNow();
 }
 
 // Firebaseのpush ID（20文字）の先頭8文字は、作成した時刻（ミリ秒）を表している
@@ -8509,6 +8546,22 @@ function spotWaitArrivalHalf(hour,key,mins){
   const delta=(est.getHours()-hour+24)%24;
   if(delta===0)return est.getMinutes()>=30?1:0;
   return delta<=12?1:0;
+}
+
+// 平均に使う記録の条件（10分以上200分未満）。平均待機時間の表と、地図の上の表示で共通
+function spotWaitUsable(v){return v>=SPOT_WAIT_AVG_MIN_MINS&&v<SPOT_WAIT_STAT_MAX_MINS;}
+// 乗り場spotの、曜日day・時hourの平均待機時間。halfが0/1ならその時の前半/後半だけ（30分ごと）、nullなら1時間まるごと。
+// 平均待機時間の表のマスと同じ記録・同じ条件。平均に使える記録が無ければnull
+function spotWaitSlotAvg(spot,day,hour,half){
+  const entries=(((spotWaitStats[spot]||{})[day]||{})[hour])||{};
+  let sum=0,n=0;
+  Object.keys(entries).forEach(key=>{
+    const v=entries[key];
+    if(!spotWaitUsable(v))return;
+    if(half!==null&&spotWaitArrivalHalf(hour,key,v)!==half)return;
+    sum+=v;n++;
+  });
+  return n?{avg:sum/n,n}:null;
 }
 
 // 平均待機時間の表の色分け。短いほど緑、長いほど赤。SPOT_WAIT_GREEN_MINS以下は緑、SPOT_WAIT_RED_MINS以上は赤、
@@ -8543,7 +8596,7 @@ function renderSpotWaitAvg(){
         const entries=hours[h]||{};
         Object.keys(entries).forEach(key=>{
           const v=entries[key];
-          if(!(v>=SPOT_WAIT_AVG_MIN_MINS&&v<SPOT_WAIT_STAT_MAX_MINS))return;
+          if(!spotWaitUsable(v))return;
           let half=0;
           if(step===30){
             half=spotWaitArrivalHalf(+h,key,v);
@@ -8606,6 +8659,28 @@ function renderSpotWaitAvg(){
   }
 }
 
+// 地図の上（乗り場ボタンの下）に出す、「いまの曜日・時間帯」の乗り場ごとの平均待機時間。平均待機時間の表と同じ記録・
+// 同じ刻み（30分ごと／1時間ごと。乗り場別タブの設定に合わせる）・同じ色で、現在時刻に当たるマスの値を出す。
+// 平均に使える記録が無い乗り場は「–」。時刻が進んでマスが変わるのに追従するため、15秒ごとにも更新する
+function renderSpotWaitNow(){
+  const box=document.getElementById('spotwait-now-tiles');
+  const title=document.getElementById('spotwait-now-title');
+  if(!box||!title)return;
+  const now=new Date();
+  const day=DOW_JP[now.getDay()],hour=now.getHours();
+  const half=spotWaitStep===30?(now.getMinutes()>=30?1:0):null;
+  const from=half===1?'30':'00',to=half===0?'29':'59';
+  title.textContent=`🕐 いま（${day}曜 ${hour}:${from}〜${hour}:${to}）の平均待機（分）`;
+  box.innerHTML=['1号','2号','3号','4号','国際線'].map(spot=>{
+    const r=spotWaitSlotAvg(spot,day,hour,half);
+    if(!r)return `<div class="swn-t swn-none"><span class="swn-l">${esc(spot)}</span><span class="swn-v">–</span></div>`;
+    const col=spotWaitAvgColor(r.avg);
+    return `<div class="swn-t" style="background:linear-gradient(${col},${col}),rgba(13,13,26,.82)"><span class="swn-l">${esc(spot)}</span><span class="swn-v">${Math.round(r.avg)}<small>分</small></span></div>`;
+  }).join('');
+}
+renderSpotWaitNow();
+setInterval(()=>{try{renderSpotWaitNow();}catch(e){}},15*1000);
+
 // 平均に含めていない1〜9分の記録が、分ごと・乗り場ごとに何件あるか（全期間・全曜日・全時間帯の合計）。
 // 記録そのものは消さずに残してあるため、ここで件数を確認できる
 function renderSpotShortCounts(){
@@ -8653,6 +8728,7 @@ function renderSpotShortCounts(){
 
 function renderSpotWaitStats(){
   renderSpotWaitAvg();
+  renderSpotWaitNow();
   renderSpotShortCounts();
   const el=document.getElementById('spotwait-table');
   if(!el)return;
@@ -10454,6 +10530,9 @@ function renderPoolChart(){
   const show=poolTableVisible&&(spotShow||intlShow);
   const row=document.getElementById('pool-info-row');
   if(row)row.style.display=show?'grid':'none';
+  // 表が出ている間だけ付ける印（低い画面で平均待機の札を隠すために、CSSが使う）
+  const statusBar=document.getElementById('status-bar');
+  if(statusBar)statusBar.classList.toggle('has-pool-table',!!show);
   if(!show)return;
   // 4つの乗り場のうち、一番新しい最終入力時刻から5分以上経過していたら、まとめてリセットする
   const allSpotTs=['1号','2号','3号','4号'].map(s=>(poolProgress[s]&&poolProgress[s].ts)||0);
@@ -11472,6 +11551,7 @@ function showPage(name,btn){
   if(name==='map'){
     setTimeout(()=>leafletMap.invalidateSize(),80);
     try{updateFollowAddrBar();}catch(e){}
+    try{renderSpotWaitNow();}catch(e){}
     // 他ページから戻った際に、号選択・総列数・入力開始時間の表示を最新状態で再描画する
     renderSpotRow();
   }
