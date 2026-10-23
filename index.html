@@ -711,7 +711,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span>📊 平均待機時間（分）</span>
     <span style="font-size:10px;color:var(--muted)">※月末リセット対象外・累計</span>
   </div>
-  <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px">プールに着いてから、お客様を乗せて出発するまでの平均時間（分）です。<br>時間帯は、プールに着いた時刻の「時」です（<span style="white-space:nowrap">16:00＝16:00〜16:59に着いた分</span>。0〜10時台は一番下に並びます）。<br>大きい数字が平均、小さい数字が記録の回数です。金色が濃いほど待ち時間が長くなります。</div>
+  <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px">プールに着いてから、お客様を乗せて出発するまでの平均時間（分）です。<br>時間帯は、プールに着いた時刻の「時」です（<span style="white-space:nowrap">16:00＝16:00〜16:59に着いた分</span>。0〜10時台は一番下に並びます）。<br>大きい数字が平均、小さい数字が平均に使った記録の回数です。<br>金色が濃いほど、待ち時間が長くなります。<br>1〜9分と200分以上の記録は平均に含めません（下の一覧には残ります）。</div>
   <div id="spotwait-avg"></div>
   <div class="sec" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center">
     <span>🕐 曜日・時間帯別待機時間（分）</span>
@@ -5492,6 +5492,9 @@ const DOW_JP=['日','月','火','水','木','金','土'];
 // 200分（約3時間20分）以上の待機時間は、実車ボタンの押し忘れ等によるGPS誤検知の
 // 異常値とみなし、乗り場別の待機時間統計には記録しない
 const SPOT_WAIT_STAT_MAX_MINS=200;
+// 平均待機時間の表（renderSpotWaitAvg）の集計には、10分未満（1〜9分）の記録を含めない。
+// 記録そのものと、曜日・時間帯別の一覧には、そのまま残す
+const SPOT_WAIT_AVG_MIN_MINS=10;
 // 曜日・時間帯別の待機時間統計に記録する（team_destsとは別パスのため月末リセットの対象外）
 // 時間帯は「待機を始めた時刻（実車ボタンを押した時刻から待機時間を差し引いた時刻）」の時を使う
 // 戻り値は記録した場所（後から値を置き換えるため）。記録しなかった場合はnull。
@@ -8442,7 +8445,8 @@ function cleanupBadSpotWaitStats(){
 function normHourForSort(h){return h<11?h+24:h;}
 
 // 乗り場ごとの「曜日×時間帯」の平均待機時間（分）の表。元の記録は下の一覧（spotWaitStats）と同じで、
-// 時間帯は待機を始めた（プールに着いた）時刻の「時」。記録時と同じく、200分以上の異常値は平均に含めない
+// 時間帯は待機を始めた（プールに着いた）時刻の「時」。記録時と同じく200分以上の異常値と、10分未満（1〜9分）の
+// 記録は平均に含めない（一覧には残る）
 function renderSpotWaitAvg(){
   const el=document.getElementById('spotwait-avg');
   if(!el)return;
@@ -8457,7 +8461,7 @@ function renderSpotWaitAvg(){
       const hours=dayData[day];
       if(!hours)return;
       Object.keys(hours).forEach(h=>{
-        const vals=Object.values(hours[h]||{}).filter(v=>v>0&&v<SPOT_WAIT_STAT_MAX_MINS);
+        const vals=Object.values(hours[h]||{}).filter(v=>v>=SPOT_WAIT_AVG_MIN_MINS&&v<SPOT_WAIT_STAT_MAX_MINS);
         if(!vals.length)return;
         (cells[h]=cells[h]||{})[day]={sum:vals.reduce((a,b)=>a+b,0),n:vals.length};
         total+=vals.length;
@@ -8466,7 +8470,7 @@ function renderSpotWaitAvg(){
     const hourKeys=Object.keys(cells).map(Number).sort((a,b)=>normHourForSort(a)-normHourForSort(b));
     html+=`<div class="swa-card"><div class="swa-head">${esc(spot)}<span>${total?`計${total}回`:''}</span></div><div class="swa-body">`;
     if(!hourKeys.length){
-      html+='<div style="text-align:center;color:var(--muted);font-size:12px;padding:10px">まだ記録がありません</div>';
+      html+='<div style="text-align:center;color:var(--muted);font-size:12px;padding:10px">平均に使える記録がまだありません</div>';
     }else{
       html+='<table class="swa-table"><thead><tr><th class="swa-h"></th>'+dayOrder.map(d=>`<th>${d}</th>`).join('')+'</tr></thead><tbody>';
       hourKeys.forEach(h=>{
