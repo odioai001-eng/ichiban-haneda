@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261023-5 -->
+<!-- v20261024-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -118,24 +118,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-/* 地図の上の「いまの時間帯の平均待機時間」。タイトルは💡の行の左側、5つの札は乗り場ボタンと同じ5列
-   （札が、それぞれの乗り場ボタンの真下にそろう）。横向きなど低い画面では、地図を広く見せるため出さない */
+/* 地図の上の「いまの時間帯の平均待機時間」。5つの札は、乗り場ボタンの真下に、同じ5列でそろえて並べる
+   （乗り場の名前は、真上の乗り場ボタンが示すので、札には書かない。高さはボタンの半分ほど）。タイトルは、その下の
+   💡の行の左側。横向きなど低い画面では、地図を広く見せるため出さない */
 .swn-title{flex:1;min-width:0;background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
   border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;color:var(--text);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .swn-tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:100%}
-.swn-t{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;
-  padding:4px 0 5px;border-radius:10px;backdrop-filter:blur(6px);line-height:1.15;color:#fff}
-.swn-l{font-size:11px;font-weight:700}
-.swn-v{font-size:18px;font-weight:800}
+.swn-t{display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;white-space:nowrap;
+  padding:2px 0;border-radius:8px;backdrop-filter:blur(6px);line-height:1.15;color:#fff}
+.swn-v{font-size:15px;font-weight:800}
 .swn-v small{font-size:10px;font-weight:700;margin-left:1px}
 .swn-none{background:rgba(13,13,26,.62)}
 .swn-none .swn-v{color:var(--muted)}
 @media (max-height:520px){.swn-title,.swn-tiles{display:none}}
-/* 列移動の表（💡）が出ている間は、ステータスバーの下端が札の分（約47px）だけ下がる。画面の高さが780px未満の端末では、
-   下から開く🚗パネル（取り消しボタンが出た状態で約360px）が表の最下行に被さってしまうため、表が出ている間だけ札とタイトルを
-   隠して、札を足す前と同じ高さに保つ（表が消えれば、札はまた出る）。780px ＝ 表の下端（355）＋ 画面下の余白（58）＋ 🚗パネル（約360）＋ 余裕 */
-@media (max-height:780px){#status-bar.has-pool-table .swn-title,#status-bar.has-pool-table .swn-tiles{display:none}}
+/* 列移動の表（💡）が出ている間は、ステータスバーの下端が札の分（約27px）だけ下がる。画面の高さが752px以下の端末では、
+   下から開く🚗パネル（取り消しボタンが出た状態で約353px）が表の最下行に被さってしまうため、表が出ている間だけ札とタイトルを
+   隠して、札を足す前と同じ高さに保つ（表が消えれば、札はまた出る）。752px ＝ 表の下端（335）＋ 画面下の余白（58）＋ 🚗パネル（約353）＋ 余裕 */
+@media (max-height:752px){#status-bar.has-pool-table .swn-title,#status-bar.has-pool-table .swn-tiles{display:none}}
 /* GPS状態は、駅アイコン（station-btn）と同じ行にその左隣として並べる
    （.map-btn-stack.left内の該当行を参照） */
 .gps-pill{background:rgba(13,13,26,.82);backdrop-filter:blur(6px);
@@ -497,18 +497,21 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
     </div>
+    <!-- いまの曜日・時間帯の、乗り場ごとの平均待機時間。乗り場ボタン（Row 3）の真下に、同じ5列でそろえて並べる
+         （名前は書かず、各乗り場ボタンの下の札が、その乗り場の値）。色は平均待機時間の表と同じ。
+         renderSpotWaitNow()が更新する -->
+    <div id="spotwait-now-tiles" class="swn-tiles"></div>
     <!-- 列移動表示（Row 4・Row 5）の手動オン/オフボタン。表自体が非表示の間も
-         必ず操作できるよう、表とは別の行として常に表示しておく -->
-    <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;width:100%">
-      <!-- いまの曜日・時間帯の、乗り場ごとの平均待機時間（下の5つの札）のタイトル。renderSpotWaitNow()が更新する -->
+         必ず操作できるよう、表とは別の行として常に表示しておく（左側には、上の札のタイトルを置く）。
+         この行は、右の🎯のボタン（このバーの右端にちょうど接する位置）と同じ高さに来るため、💡が🎯に
+         触れないよう、右側に4pxの余白を取る -->
+    <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding-right:4px">
       <div id="spotwait-now-title" class="swn-title"></div>
       <button id="pool-table-toggle-btn" onclick="togglePoolTableVisible()"
         title="列移動表示のオン/オフ"
         style="background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
         border-radius:8px;padding:2px 9px;font-size:13px;cursor:pointer;line-height:1.5;flex-shrink:0">💡</button>
     </div>
-    <!-- いまの曜日・時間帯の、乗り場ごとの平均待機時間。乗り場ボタン（Row 3）と同じ5列で、色は平均待機時間の表と同じ -->
-    <div id="spotwait-now-tiles" class="swn-tiles"></div>
     <!-- Row 4: 各乗り場の列移動間隔（前回の移動から何分で移動したか。1号・3号を上段、2号・4号を下段の2行2列、
          国際線はその下の行の左側に表記し、右側にプールへの到着時間を並べる。内容が
          入りきらない場合は折り返さず、そのセルだけ横スクロールできるようにする -->
@@ -1514,7 +1517,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261023-5';
+const APP_BUILD='20261024-1';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -8659,7 +8662,7 @@ function renderSpotWaitAvg(){
   }
 }
 
-// 地図の上（乗り場ボタンの下）に出す、「いまの曜日・時間帯」の乗り場ごとの平均待機時間。平均待機時間の表と同じ記録・
+// 地図の上（乗り場ボタンの真下）に出す、「いまの曜日・時間帯」の乗り場ごとの平均待機時間。平均待機時間の表と同じ記録・
 // 同じ刻み（30分ごと／1時間ごと。乗り場別タブの設定に合わせる）・同じ色で、現在時刻に当たるマスの値を出す。
 // 平均に使える記録が無い乗り場は「–」。時刻が進んでマスが変わるのに追従するため、15秒ごとにも更新する
 function renderSpotWaitNow(){
@@ -8673,9 +8676,11 @@ function renderSpotWaitNow(){
   title.textContent=`🕐 いま（${day}曜 ${hour}:${from}〜${hour}:${to}）の平均待機（分）`;
   box.innerHTML=['1号','2号','3号','4号','国際線'].map(spot=>{
     const r=spotWaitSlotAvg(spot,day,hour,half);
-    if(!r)return `<div class="swn-t swn-none"><span class="swn-l">${esc(spot)}</span><span class="swn-v">–</span></div>`;
+    // 札には平均だけを出す（乗り場は真上の乗り場ボタンが示す）。乗り場の名前は、読み上げ・長押し用に属性として持たせる
+    if(!r)return `<div class="swn-t swn-none" title="${esc(spot)}：記録なし" aria-label="${esc(spot)}：記録なし"><span class="swn-v">–</span></div>`;
     const col=spotWaitAvgColor(r.avg);
-    return `<div class="swn-t" style="background:linear-gradient(${col},${col}),rgba(13,13,26,.82)"><span class="swn-l">${esc(spot)}</span><span class="swn-v">${Math.round(r.avg)}<small>分</small></span></div>`;
+    const m=Math.round(r.avg);
+    return `<div class="swn-t" style="background:linear-gradient(${col},${col}),rgba(13,13,26,.82)" title="${esc(spot)}：${m}分" aria-label="${esc(spot)}：${m}分"><span class="swn-v">${m}<small>分</small></span></div>`;
   }).join('');
 }
 renderSpotWaitNow();
