@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261023-1 -->
+<!-- v20261023-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -283,6 +283,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .swa-table td.swa-none{background:none;color:var(--muted);opacity:.4}
 .swa-avg{display:block;font-size:15px;font-weight:800;color:var(--text)}
 .swa-cnt{display:block;font-size:10px;color:var(--text);opacity:.6}
+.swa-step{display:flex;gap:6px;margin-bottom:8px}
+.swa-step button{flex:1;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:14px;font-weight:700;font-family:inherit}
+.swa-step button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 /* 平均に含めていない1〜9分の記録の件数（タップで開く） */
 .swa-short{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
 .swa-short summary{padding:12px 14px;font-size:13px;font-weight:700;cursor:pointer}
@@ -724,7 +727,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span>📊 平均待機時間（分）</span>
     <span style="font-size:10px;color:var(--muted)">※月末リセット対象外・累計</span>
   </div>
-  <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px">プールに着いてから、お客様を乗せて出発するまでの平均時間（分）です。<br>時間帯は、プールに着いた時刻の「時」です（<span style="white-space:nowrap">16:00＝16:00〜16:59に着いた分</span>。0〜10時台は一番下に並びます）。<br>大きい数字が平均、小さい数字が平均に使った記録の回数です。<br>金色が濃いほど、待ち時間が長くなります。<br>1〜9分と200分以上の記録は平均に含めません（下の一覧には残ります）。</div>
+  <div class="swa-step" id="spotwait-step">
+    <button type="button" id="spotwait-step-30" onclick="setSpotWaitStep(30)">30分ごと</button>
+    <button type="button" id="spotwait-step-60" onclick="setSpotWaitStep(60)">1時間ごと</button>
+  </div>
+  <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px">プールに着いてから、お客様を乗せて出発するまでの平均時間（分）です。<br><span id="spotwait-slotnote"></span><br>大きい数字が平均、小さい数字が平均に使った記録の回数です。<br>金色が濃いほど、待ち時間が長くなります。<br>1〜9分と200分以上の記録は平均に含めません（下の一覧には残ります）。<span id="spotwait-approxnote"></span></div>
   <div id="spotwait-avg"></div>
   <details class="swa-short" id="spotwait-short">
     <summary>1〜9分の記録の件数 <span id="spotwait-short-total"></span></summary>
@@ -1482,7 +1489,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261023-1';
+const APP_BUILD='20261023-2';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -5524,9 +5531,12 @@ function recordSpotWaitStat(boardSpot,waitMins,boardTs,arrivalTsOverride){
   const day=DOW_JP[d.getDay()];
   const hour=d.getHours();
   const path=`spot_wait_stats/${boardSpot}/${day}/${hour}`;
-  const ref=db.ref(path).push(waitMins);
-  ref.catch(err=>console.error('spot_wait_stats push failed',err));
-  return {path,key:ref.key||null};
+  // キーの頭に、到着した「分」（m＋2桁）を付ける。30分ごとの表で、到着が前半（:00〜:29）か後半（:30〜:59）かを
+  // 正確に分けるため（spotWaitArrivalHalf参照）。キーの残りは従来と同じpush ID。古い版のアプリは、キーの中身を
+  // 見ずに値だけを読むので、そのまま動く
+  const key='m'+String(d.getMinutes()).padStart(2,'0')+db.ref(path).push().key;
+  db.ref(path+'/'+key).set(waitMins).catch(err=>console.error('spot_wait_stats push failed',err));
+  return {path,key};
 }
 // 実車ボタンを乗り場のエリア内で先に押した時に記録した暫定の値を、出発が確定した時間に置き換える
 // （暫定値を記録していなかった場合は、確定した時間で新しく記録する）
@@ -8461,38 +8471,88 @@ function cleanupBadSpotWaitStats(){
 // 営業時間帯（11時始まり〜翌1時）の並び順で時刻を比較するための正規化
 function normHourForSort(h){return h<11?h+24:h;}
 
-// 乗り場ごとの「曜日×時間帯」の平均待機時間（分）の表。元の記録は下の一覧（spotWaitStats）と同じで、
-// 時間帯は待機を始めた（プールに着いた）時刻の「時」。記録時と同じく200分以上の異常値と、10分未満（1〜9分）の
-// 記録は平均に含めない（一覧には残る）
+// 平均待機時間の表の時間帯の刻み（分）。30（30分ごと）か60（1時間ごと）。端末ごとに覚えておく。最初は30分ごと
+let spotWaitStep=(()=>{try{return localStorage.getItem('taxi_spotwait_step')==='60'?60:30;}catch(e){return 30;}})();
+function setSpotWaitStep(n){
+  spotWaitStep=n===60?60:30;
+  try{localStorage.setItem('taxi_spotwait_step',String(spotWaitStep));}catch(e){}
+  renderSpotWaitAvg();
+}
+
+// Firebaseのpush ID（20文字）の先頭8文字は、作成した時刻（ミリ秒）を表している
+const PUSH_ID_CHARS='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+function pushIdTime(id){
+  if(typeof id!=='string'||id.length!==20)return null;
+  let t=0;
+  for(let i=0;i<8;i++){
+    const c=PUSH_ID_CHARS.indexOf(id.charAt(i));
+    if(c<0)return null;
+    t=t*64+c;
+  }
+  return t;
+}
+// 待機の記録（キーkey・記録されている時hour・待機mins分）が、その時の前半（:00〜:29＝0）か後半（:30〜:59＝1）かを返す。
+// 判定できなければnull。
+//  ・新しい記録は、キーの頭「m＋分2桁」に到着した分を持つ（recordSpotWaitStat）ので、正確に分けられる
+//  ・従来の記録には到着した分が残っていないため、キー（push ID）の作成時刻（＝記録した時刻）から待機時間を引いて、
+//    到着した時刻を逆算する（概算）。実車ボタンを押した時刻と出発した時刻がずれた記録は、数分ずれることがある。
+//    逆算した時刻が、記録されている「時」から外れた場合は、その時の端（前の時なら前半、後の時なら後半）に寄せる
+function spotWaitArrivalHalf(hour,key,mins){
+  const m=/^m([0-5]\d)/.exec(key);
+  if(m)return +m[1]>=30?1:0;
+  const t=pushIdTime(key);
+  if(t===null||t<1577836800000)return null; // 2020年より前は、push IDではないとみなす
+  const est=new Date(t-mins*60000);
+  const delta=(est.getHours()-hour+24)%24;
+  if(delta===0)return est.getMinutes()>=30?1:0;
+  return delta<=12?1:0;
+}
+
+// 乗り場ごとの「曜日×時間帯」の平均待機時間（分）の表。元の記録は下の一覧（spotWaitStats）と同じ。
+// 時間帯は待機を始めた（プールに着いた）時刻で、30分ごと（spotWaitStep=30）か1時間ごと（60）。記録時と同じく
+// 200分以上の異常値と、10分未満（1〜9分）の記録は平均に含めない（一覧には残る）
 function renderSpotWaitAvg(){
   const el=document.getElementById('spotwait-avg');
   if(!el)return;
+  const step=spotWaitStep;
   const spots=['1号','2号','3号','4号','国際線'];
   const dayOrder=['月','火','水','木','金','土','日'];
   let html='';
+  let unknown=0; // 30分ごとの表で、前半・後半を判定できなかった記録の数
   spots.forEach(spot=>{
     const dayData=spotWaitStats[spot]||{};
-    const cells={}; // {時:{曜日:{sum,n}}}
+    const cells={}; // {行:{曜日:{sum,n}}}。行＝時×2＋（後半なら1）。1時間ごとの表は、時×2
     let total=0;
     dayOrder.forEach(day=>{
       const hours=dayData[day];
       if(!hours)return;
       Object.keys(hours).forEach(h=>{
-        const vals=Object.values(hours[h]||{}).filter(v=>v>=SPOT_WAIT_AVG_MIN_MINS&&v<SPOT_WAIT_STAT_MAX_MINS);
-        if(!vals.length)return;
-        (cells[h]=cells[h]||{})[day]={sum:vals.reduce((a,b)=>a+b,0),n:vals.length};
-        total+=vals.length;
+        const entries=hours[h]||{};
+        Object.keys(entries).forEach(key=>{
+          const v=entries[key];
+          if(!(v>=SPOT_WAIT_AVG_MIN_MINS&&v<SPOT_WAIT_STAT_MAX_MINS))return;
+          let half=0;
+          if(step===30){
+            half=spotWaitArrivalHalf(+h,key,v);
+            if(half===null){unknown++;return;}
+          }
+          const row=+h*2+half;
+          const rowCells=cells[row]||(cells[row]={});
+          const c=rowCells[day]||(rowCells[day]={sum:0,n:0});
+          c.sum+=v;c.n++;
+          total++;
+        });
       });
     });
-    const hourKeys=Object.keys(cells).map(Number).sort((a,b)=>normHourForSort(a)-normHourForSort(b));
+    const rowKeys=Object.keys(cells).map(Number).sort((a,b)=>normHourForSort(a>>1)*2+(a&1)-(normHourForSort(b>>1)*2+(b&1)));
     html+=`<div class="swa-card"><div class="swa-head">${esc(spot)}<span>${total?`計${total}回`:''}</span></div><div class="swa-body">`;
-    if(!hourKeys.length){
+    if(!rowKeys.length){
       html+='<div style="text-align:center;color:var(--muted);font-size:12px;padding:10px">平均に使える記録がまだありません</div>';
     }else{
       html+='<table class="swa-table"><thead><tr><th class="swa-h"></th>'+dayOrder.map(d=>`<th>${d}</th>`).join('')+'</tr></thead><tbody>';
-      hourKeys.forEach(h=>{
-        html+=`<tr><th class="swa-h">${h}:00</th>`+dayOrder.map(day=>{
-          const c=cells[h][day];
+      rowKeys.forEach(r=>{
+        html+=`<tr><th class="swa-h">${r>>1}:${r&1?'30':'00'}</th>`+dayOrder.map(day=>{
+          const c=cells[r][day];
           if(!c)return '<td class="swa-none">–</td>';
           const avg=c.sum/c.n;
           // 待機が長いほど金色を濃くする（120分で最大）
@@ -8505,6 +8565,23 @@ function renderSpotWaitAvg(){
     html+='</div></div>';
   });
   el.innerHTML=html;
+  // 切り替えボタンの選択状態と、時間帯の説明
+  [30,60].forEach(n=>{
+    const b=document.getElementById('spotwait-step-'+n);
+    if(b){b.classList.toggle('on',n===step);b.setAttribute('aria-pressed',String(n===step));}
+  });
+  const note=document.getElementById('spotwait-slotnote');
+  if(note){
+    note.innerHTML=step===30
+      ?'時間帯は、プールに着いた時刻です（<span style="white-space:nowrap">16:00＝16:00〜16:29</span>、<span style="white-space:nowrap">16:30＝16:30〜16:59</span>）。<span style="white-space:nowrap">0〜10時台は一番下に並びます。</span>'
+      :'時間帯は、プールに着いた時刻の「時」です（<span style="white-space:nowrap">16:00＝16:00〜16:59</span>）。<span style="white-space:nowrap">0〜10時台は一番下に並びます。</span>';
+  }
+  const approx=document.getElementById('spotwait-approxnote');
+  if(approx){
+    approx.innerHTML=step===30
+      ?'<br>※更新前の記録は逆算した概算で、数分ずれることがあります。'+(unknown?`<br>※${unknown}件は前半・後半を判定できず、この表に含めていません。`:'')
+      :'';
+  }
 }
 
 // 平均に含めていない1〜9分の記録が、分ごと・乗り場ごとに何件あるか（全期間・全曜日・全時間帯の合計）。
