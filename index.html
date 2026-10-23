@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261023-4 -->
+<!-- v20261023-5 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -132,6 +132,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .swn-none{background:rgba(13,13,26,.62)}
 .swn-none .swn-v{color:var(--muted)}
 @media (max-height:520px){.swn-title,.swn-tiles{display:none}}
+/* 列移動の表（💡）が出ている間は、ステータスバーの下端が札の分（約47px）だけ下がる。画面の高さが780px未満の端末では、
+   下から開く🚗パネル（取り消しボタンが出た状態で約360px）が表の最下行に被さってしまうため、表が出ている間だけ札とタイトルを
+   隠して、札を足す前と同じ高さに保つ（表が消えれば、札はまた出る）。780px ＝ 表の下端（355）＋ 画面下の余白（58）＋ 🚗パネル（約360）＋ 余裕 */
+@media (max-height:780px){#status-bar.has-pool-table .swn-title,#status-bar.has-pool-table .swn-tiles{display:none}}
 /* GPS状態は、駅アイコン（station-btn）と同じ行にその左隣として並べる
    （.map-btn-stack.left内の該当行を参照） */
 .gps-pill{background:rgba(13,13,26,.82);backdrop-filter:blur(6px);
@@ -1510,7 +1514,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261023-4';
+const APP_BUILD='20261023-5';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -2071,6 +2075,20 @@ function syncMapButtonStackLayout(){
   // 高さ。端末（画面サイズ・比率・横向き等）によってはボタンの数が多い
   // スタックが1列では収まらず、下端がはみ出して押せなくなることがあった
   const availableHeight=Math.max(0,mapRect.height-8-minTop);
+  // 仲間の状況パネル（👥）は、地図の下から開く（高さの上限は地図の6割）。列移動の表などでステータスバーが縦に
+  // 長くなっている間は、パネルの上端がステータスバーの最下行に被さらないよう、高さを抑える。小さくなりすぎないよう
+  // 地図の高さの45%を下限とし、地図が低い画面（560px未満）では従来どおりにする（その場合はパネルが上に被さる）
+  const driverPanel=document.getElementById('driver-panel');
+  if(driverPanel){
+    const room=mapRect.height-(statusBarBottom-mapRect.top)-8;
+    const cap=Math.max(room,mapRect.height*0.45);
+    if(mapRect.height>=560&&cap<mapRect.height*0.6){
+      const mh=Math.floor(cap)+'px';
+      if(driverPanel.style.maxHeight!==mh)driverPanel.style.maxHeight=mh;
+    }else if(driverPanel.style.maxHeight){
+      driverPanel.style.maxHeight='';
+    }
+  }
   stacks.forEach(stack=>{
     const nat=getStackNaturalHeight(stack);
     const naturalHeight=nat.height;
@@ -10512,6 +10530,9 @@ function renderPoolChart(){
   const show=poolTableVisible&&(spotShow||intlShow);
   const row=document.getElementById('pool-info-row');
   if(row)row.style.display=show?'grid':'none';
+  // 表が出ている間だけ付ける印（低い画面で平均待機の札を隠すために、CSSが使う）
+  const statusBar=document.getElementById('status-bar');
+  if(statusBar)statusBar.classList.toggle('has-pool-table',!!show);
   if(!show)return;
   // 4つの乗り場のうち、一番新しい最終入力時刻から5分以上経過していたら、まとめてリセットする
   const allSpotTs=['1号','2号','3号','4号'].map(s=>(poolProgress[s]&&poolProgress[s].ts)||0);
