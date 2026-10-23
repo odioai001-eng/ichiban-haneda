@@ -283,6 +283,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .swa-table td.swa-none{background:none;color:var(--muted);opacity:.4}
 .swa-avg{display:block;font-size:15px;font-weight:800;color:var(--text)}
 .swa-cnt{display:block;font-size:10px;color:var(--text);opacity:.6}
+/* 平均に含めていない1〜9分の記録の件数（タップで開く） */
+.swa-short{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.swa-short summary{padding:12px 14px;font-size:13px;font-weight:700;cursor:pointer}
+.swa-short summary span{font-weight:400;color:var(--muted)}
+.swa-short-body{padding:0 8px 10px}
+.swa-short-body table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px}
+.swa-short-body th:first-child,.swa-short-body th:last-child{width:56px}
+.swa-short-body th,.swa-short-body td{padding:6px 2px;text-align:center;border-bottom:1px solid var(--border)}
+.swa-short-body thead th{font-size:12px;font-weight:700;color:var(--accent)}
+.swa-short-body tbody th{font-weight:400;color:var(--muted)}
+.swa-short-body td.z{color:var(--muted);opacity:.4}
+.swa-short-body tr.tot th,.swa-short-body tr.tot td{font-weight:800;color:var(--text);border-bottom:none}
+.swa-short-note{font-size:11px;color:var(--muted);line-height:1.6;padding:8px 6px 0}
 /* ランキングタブは各項目のタイトルを大きく・金色にして目立たせる */
 #page-ranking .sec{font-size:16px;color:var(--gold);text-transform:none;letter-spacing:normal;margin-top:0}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
@@ -713,6 +726,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
   <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px">プールに着いてから、お客様を乗せて出発するまでの平均時間（分）です。<br>時間帯は、プールに着いた時刻の「時」です（<span style="white-space:nowrap">16:00＝16:00〜16:59に着いた分</span>。0〜10時台は一番下に並びます）。<br>大きい数字が平均、小さい数字が平均に使った記録の回数です。<br>金色が濃いほど、待ち時間が長くなります。<br>1〜9分と200分以上の記録は平均に含めません（下の一覧には残ります）。</div>
   <div id="spotwait-avg"></div>
+  <details class="swa-short" id="spotwait-short">
+    <summary>1〜9分の記録の件数 <span id="spotwait-short-total"></span></summary>
+    <div class="swa-short-body" id="spotwait-short-table"></div>
+  </details>
   <div class="sec" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center">
     <span>🕐 曜日・時間帯別待機時間（分）</span>
     <span style="font-size:10px;color:var(--muted)">※月末リセット対象外・累計</span>
@@ -8490,8 +8507,54 @@ function renderSpotWaitAvg(){
   el.innerHTML=html;
 }
 
+// 平均に含めていない1〜9分の記録が、分ごと・乗り場ごとに何件あるか（全期間・全曜日・全時間帯の合計）。
+// 記録そのものは消さずに残してあるため、ここで件数を確認できる
+function renderSpotShortCounts(){
+  const el=document.getElementById('spotwait-short-table');
+  if(!el)return;
+  const spots=['1号','2号','3号','4号','国際線'];
+  const mins=[1,2,3,4,5,6,7,8,9];
+  const cnt={}; // {分:{乗り場:件数}}
+  let all=0,short=0;
+  spots.forEach(spot=>{
+    const dayData=spotWaitStats[spot]||{};
+    Object.keys(dayData).forEach(day=>{
+      const hours=dayData[day]||{};
+      Object.keys(hours).forEach(h=>{
+        Object.values(hours[h]||{}).forEach(v=>{
+          if(!(v>0&&v<SPOT_WAIT_STAT_MAX_MINS))return;
+          all++;
+          if(!mins.includes(v))return;
+          short++;
+          (cnt[v]=cnt[v]||{})[spot]=(cnt[v][spot]||0)+1;
+        });
+      });
+    });
+  });
+  const total=document.getElementById('spotwait-short-total');
+  if(total)total.textContent=all?`計${short}件`:'';
+  if(!all){
+    el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:10px">まだ記録がありません</div>';
+    return;
+  }
+  const colTot={};
+  let html='<table><thead><tr><th></th>'+spots.map(s=>`<th>${esc(s)}</th>`).join('')+'<th>合計</th></tr></thead><tbody>';
+  mins.forEach(m=>{
+    let rowTot=0;
+    html+=`<tr><th>${m}分</th>`+spots.map(s=>{
+      const n=(cnt[m]&&cnt[m][s])||0;
+      rowTot+=n;colTot[s]=(colTot[s]||0)+n;
+      return n?`<td>${n}</td>`:'<td class="z">–</td>';
+    }).join('')+(rowTot?`<td><b>${rowTot}</b></td>`:'<td class="z">–</td>')+'</tr>';
+  });
+  html+='<tr class="tot"><th>合計</th>'+spots.map(s=>colTot[s]?`<td>${colTot[s]}</td>`:'<td class="z">–</td>').join('')+`<td>${short}</td></tr></tbody></table>`;
+  html+=`<div class="swa-short-note">全期間・全曜日・全時間帯の合計です。記録全体 ${all}件のうち、1〜9分は ${short}件（${Math.round(short/all*100)}%）です。</div>`;
+  el.innerHTML=html;
+}
+
 function renderSpotWaitStats(){
   renderSpotWaitAvg();
+  renderSpotShortCounts();
   const el=document.getElementById('spotwait-table');
   if(!el)return;
   const spots=['1号','2号','3号','4号','国際線'];
