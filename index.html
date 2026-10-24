@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261024-1 -->
+<!-- v20261024-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1517,7 +1517,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261024-1';
+const APP_BUILD='20261024-2';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -5359,33 +5359,155 @@ function resetWaitAndHistory(){
   toast('🔄 タイマーをリセット・履歴を削除しました');
 }
 
+// ===== 住所の表記: 「都道府県＋市区町村＋町名＋N丁目」にそろえる =====
+// 逆ジオコーディング（Nominatim）の返答から、空白を入れない次の形の住所を組み立てる。
+//   東京都大田区羽田空港2丁目 / 神奈川県横浜市港北区日吉2丁目 / 神奈川県葉山町一色
+// ・市区町村: 欄の名前ではなく、名前の終わり（市・区・町・村）で見分ける。政令指定都市は「市＋区」、郡は付けない
+// ・都道府県: 47都道府県の名前と完全に一致するものだけを採る（道路名の「埼玉県道…」などを拾わない）。
+//   東京の特別区・東京の市・政令指定都市のように、市区町村だけで都道府県が決まるなら、それを優先する。
+//   決まらなければ、欄（state）→ ISOコード（JP-13）→ 表示名の区切り、の順で探す
+// ・県境の道路などで欄が食い違った時（都道府県は埼玉県なのに区は板橋区、など）は、都道府県と矛盾しない市区町村を選ぶ
+// ・町名＋丁目: 丁目を含む欄を優先し、漢数字は算用数字にする（八丁堀・麻布十番などの町名は変えない）。道路名・施設名は使わない
+const JP_PREFECTURES=['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県',
+  '埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県',
+  '愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県',
+  '山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県']; // JISコード順（JP-13 = 13番目 = 東京都）
+const TOKYO_23_WARDS=['千代田区','中央区','港区','新宿区','文京区','台東区','墨田区','江東区',
+  '品川区','目黒区','大田区','世田谷区','渋谷区','中野区','杉並区','豊島区',
+  '北区','荒川区','板橋区','練馬区','足立区','葛飾区','江戸川区'];
+// 中央区・港区・北区は、政令指定都市にも同じ名前の区がある（市が付かない時だけ東京の区と見なす）
+const JP_WARD_AMBIGUOUS=['中央区','港区','北区'];
+// 東京都の市（府中市は広島県にもあるので除く）
+const JP_TOKYO_CITIES=['八王子市','立川市','武蔵野市','三鷹市','青梅市','昭島市','調布市','町田市','小金井市','小平市','日野市',
+  '東村山市','国分寺市','国立市','福生市','狛江市','東大和市','清瀬市','東久留米市','武蔵村山市','多摩市','稲城市','羽村市','あきる野市','西東京市'];
+const JP_DESIGNATED={'札幌市':'北海道','仙台市':'宮城県','さいたま市':'埼玉県','千葉市':'千葉県','横浜市':'神奈川県','川崎市':'神奈川県',
+  '相模原市':'神奈川県','新潟市':'新潟県','静岡市':'静岡県','浜松市':'静岡県','名古屋市':'愛知県','京都市':'京都府','大阪市':'大阪府',
+  '堺市':'大阪府','神戸市':'兵庫県','岡山市':'岡山県','広島市':'広島県','北九州市':'福岡県','福岡市':'福岡県','熊本市':'熊本県'};
+// 地名ではない名前（○○地区・道路名など）。区や町名として採らない
+const JP_NOT_NAME_RE=/(地区|街区|学区|校区|工区|分区|特区|行政区|選挙区)$|号線|街道|バイパス|高速|自動車道|有料道路|国道|県道|都道|府道|道道|首都高/;
+// Nominatimのaddressのうち、場所（行政区画・町）を表す欄。これ以外（road・施設名など）の値は、住所の部品に使わない
+const JP_PLACE_KEYS=new Set(['state','province','region','state_district','county','city','municipality','town','village',
+  'city_district','borough','district','suburb','quarter','neighbourhood','hamlet','city_block','postcode','country','country_code']);
+const jpClean=s=>typeof s==='string'?s.replace(/\s+/g,' ').trim():''; // \s は全角の空白も含む
+const jpIsPref=s=>JP_PREFECTURES.includes(s);
+const jpIsGun=s=>/^.{1,6}郡$/.test(s);
+const jpIsCity=s=>/^.{1,7}市$/.test(s);
+const jpIsWard=s=>/^.{1,6}区$/.test(s)&&!JP_NOT_NAME_RE.test(s);
+const jpIsTown=s=>/^.{1,6}[町村]$/.test(s);
+const jpTokyoOnly=s=>TOKYO_23_WARDS.includes(s)&&!JP_WARD_AMBIGUOUS.includes(s);
+// その市区町村（の組）だけで都道府県が1つに決まるなら、その都道府県。決まらなければ''
+const jpPrefOf=(city,ward)=>city?(JP_DESIGNATED[city]||(JP_TOKYO_CITIES.includes(city)?'東京都':'')):(jpTokyoOnly(ward)?'東京都':'');
+// 「横浜市港北区」「三浦郡葉山町」のようにつながった名前は分け、郡は捨てる
+function jpSplitMuni(v){
+  const p=JP_PREFECTURES.find(x=>v.startsWith(x)&&v.length>x.length);
+  if(p)v=v.slice(p.length);
+  let m=v.match(/^(.{1,7}市)(.{1,6}区)$/);
+  if(m)return [m[1],m[2]];
+  m=v.match(/^.{1,6}郡(.{1,6}[町村])$/);
+  return m?[m[1]]:[v];
+}
+// 丁目の数字を算用数字にする（二十三→23、十二→12、全角の２→2）。町名の中の数字（八丁堀・麻布十番・一番町）には触れない
+function jpToArabic(n){
+  const d={'〇':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+  if(/^[0-9]+$/.test(n))return String(parseInt(n,10));
+  if(/^[〇一二三四五六七八九]+$/.test(n))return n.split('').map(c=>d[c]).join('');
+  let total=0,cur=0;
+  for(const c of n){
+    if(c==='百'){total+=(cur||1)*100;cur=0;}
+    else if(c==='十'){total+=(cur||1)*10;cur=0;}
+    else if(c in d)cur=d[c];
+    else return n;
+  }
+  return String(total+cur);
+}
+const jpNormChome=s=>s.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+  .replace(/([0-9〇一二三四五六七八九十百]+)丁目/g,(m,n)=>jpToArabic(n)+'丁目');
+// Nominatimの返答 → {pref,city,ward,town,area,text}。textが組み立てた住所（市区町村が分からない時は空）
+function parseJpAddress(data){
+  const out={pref:'',city:'',ward:'',town:'',area:'',text:''};
+  const a=data&&data.address&&typeof data.address==='object'?data.address:{};
+  if(a.country_code&&String(a.country_code).toLowerCase()!=='jp')return out;
+  const val=k=>typeof a[k]==='string'?jpClean(a[k]):'';
+  // 表示名の区切り（細かい順）。郵便番号・国名と、道路や施設の名前を除いた、地名だけの並び
+  const poi=new Set(Object.keys(a).filter(k=>!JP_PLACE_KEYS.has(k)&&!k.startsWith('ISO3166')&&typeof a[k]==='string').map(k=>val(k)));
+  const chain=String((data&&data.display_name)||'').split(',').map(jpClean)
+    .filter(s=>s&&s!=='日本'&&!/^\d{3}-?\d{4}$/.test(s)&&!poi.has(s));
+  // --- 市区町村 ---
+  let city='',ward='',town='';
+  const take=(v,townOk)=>jpSplitMuni(v).forEach(s=>{
+    if(jpIsPref(s))return;
+    if(jpIsWard(s)){if(!ward)ward=s;}
+    else if(jpIsCity(s)){if(!city)city=s;}
+    else if(townOk&&jpIsTown(s)){if(!town)town=s;}
+  });
+  [['city_district',0],['city',1],['borough',0],['district',0],['municipality',1],['town',1],['village',1],['county',0],['state_district',0]]
+    .forEach(([k,t])=>take(val(k),t)); // 町・村は、市町村の欄にあるものだけ（町名と取り違えない）
+  if(!ward&&!city&&!town){ // 欄から分からない時は、表示名の区切りから探す
+    const i=chain.findIndex(jpIsWard);
+    if(i>=0)ward=chain[i];
+    else city=chain.find(jpIsCity)||'';
+    if(!ward&&!city){const j=chain.findIndex((s,k)=>jpIsTown(s)&&(jpIsPref(chain[k+1]||'')||jpIsGun(chain[k+1]||'')));if(j>=0)town=chain[j];}
+  }
+  // --- 都道府県の手がかり（欄 → ISOコード → 表示名の区切り） ---
+  let evid=['state','province','region'].map(val).find(jpIsPref)||'';
+  if(!evid){const m=String(a['ISO3166-2-lvl4']||'').match(/^JP-(\d{2})$/);if(m)evid=JP_PREFECTURES[+m[1]-1]||'';}
+  if(!evid)evid=chain.find(jpIsPref)||'';
+  // --- 市区町村の候補から、手がかりと矛盾しないものを選ぶ（全部矛盾するなら、先頭を採る） ---
+  const cands=[];
+  if(jpTokyoOnly(ward))cands.push({city:'',ward,town:''}); // 東京の特別区は、市に属さない
+  const wardOfCity=jpTokyoOnly(ward)?'':ward;
+  if(city||wardOfCity)cands.push({city,ward:wardOfCity,town:''});
+  if(town)cands.push({city:'',ward:'',town});
+  const pick={city:'',ward:'',town:'',...(cands.find(c=>!jpPrefOf(c.city,c.ward)||!evid||jpPrefOf(c.city,c.ward)===evid)||cands[0])};
+  if(pick.ward&&!pick.city&&!jpTokyoOnly(pick.ward)){ // 政令指定都市の区なのに市が無い → 区のすぐ後ろの市
+    const i=chain.indexOf(pick.ward);
+    if(i>=0&&jpIsCity(chain[i+1]||''))pick.city=chain[i+1];
+  }else if(pick.city&&!pick.ward&&JP_DESIGNATED[pick.city]){ // 政令指定都市なのに区が無い → 市のすぐ前の区
+    const i=chain.indexOf(pick.city);
+    if(i>0&&jpIsWard(chain[i-1])&&!jpTokyoOnly(chain[i-1]))pick.ward=chain[i-1];
+  }
+  ({city,ward,town}=pick);
+  const pref=jpPrefOf(city,ward)||evid||(ward&&!city&&TOKYO_23_WARDS.includes(ward)?'東京都':'');
+  // --- 町名＋丁目 ---
+  const skip=[pref,city,ward,town].filter(Boolean);
+  const bare=s=>{ // 空白を詰め、先頭に市区町村などが付いていたら外す
+    s=s.replace(/\s+/g,'');
+    for(let hit=true;hit;){hit=false;for(const w of skip)if(s.length>w.length&&s.startsWith(w)){s=s.slice(w.length);hit=true;}}
+    return s;
+  };
+  const okName=s=>!!s&&!jpIsPref(s)&&!jpIsCity(s)&&!jpIsWard(s)&&!jpIsGun(s)&&s!==town&&!JP_NOT_NAME_RE.test(s);
+  const names=keys=>keys.map(k=>bare(val(k))).filter(okName);
+  const hasChome=/^(.*?[0-9０-９〇一二三四五六七八九十百]+丁目)/;
+  // 丁目は、町名の欄から探す。見つからなければ、表示名の区切りのうち「丁目」で終わるもの
+  const chome=[...names(['neighbourhood','quarter','hamlet','suburb','city_block']).map(s=>(s.match(hasChome)||[])[1]),
+    ...chain.map(bare).filter(s=>okName(s)&&/丁目$/.test(s)).map(s=>(s.match(hasChome)||[])[1])].find(Boolean);
+  let area='';
+  if(chome){
+    area=chome;
+    if(/^[0-9０-９〇一二三四五六七八九十百]+丁目$/.test(chome)){ // 「二丁目」だけの時は、町名を前に付ける（町名が無ければ付けない）
+      const t=names(['suburb','quarter','hamlet','neighbourhood']).find(s=>!/丁目/.test(s));
+      area=t?t+chome:'';
+    }
+  }else{ // 丁目が無い場所は、町名だけ（町名の欄も無ければ、市区町村まで）
+    area=names(['suburb','quarter','hamlet','neighbourhood'])[0]||'';
+  }
+  area=jpNormChome(area);
+  const muni=city?city+ward:(ward||town);
+  return {pref,city,ward,town,area,text:muni?pref+muni+area:''};
+}
+const formatJpAddress=data=>parseJpAddress(data).text;
+// Nominatim（無料の逆ジオコーディングAPI）に問い合わせる。通信の失敗・エラー応答は例外で返す
+async function nominatimReverse(lat,lng){
+  const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+    {headers:{'Accept-Language':'ja'}});
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  return res.json();
+}
+// 現在地の住所（「東京都大田区羽田空港2丁目」の形）。取れなかった時は「緯度,経度」の文字列を返す
 async function reverseGeocode(lat,lng){
   try{
-    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-      {headers:{'Accept-Language':'ja'}});
-    if(res.ok){
-      const data=await res.json();
-      const a=data.address||{};
-      // state が空のことがある（東京都など）→ display_name から補完
-      let pref=a.state||a.province||'';
-      if(!pref){
-        const m=(data.display_name||'').match(/([^\s,]+(?:都|道|府|県))/);
-        if(m)pref=m[1];
-      }
-      const city=a.city||a.city_district||a.town||a.village||a.county||'';
-      // neighbourhood > quarter > suburb > road の順で丁目を含むものを優先
-      const candidates=[a.neighbourhood,a.quarter,a.hamlet,a.suburb,a.road].filter(Boolean);
-      let area=candidates.find(c=>c.includes('丁目')||c.includes('番地'))||candidates[0]||'';
-      // どの候補にも丁目が含まれない場合、display_nameの区切りの中から
-      // 丁目を含む部分をそのまま採用する（OSMの構造化データが手薄な地点向けの保険）
-      if(!area||!area.includes('丁目')){
-        const parts=(data.display_name||'').split(',').map(s=>s.trim());
-        const chomePart=parts.find(p=>p.includes('丁目'));
-        if(chomePart)area=chomePart;
-      }
-      const addr=[pref,city,area].filter(Boolean).join('');
-      return kanjiToNum(addr);
-    }
+    const addr=formatJpAddress(await nominatimReverse(lat,lng));
+    if(addr)return addr;
   }catch(e){}
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
 }
@@ -5483,16 +5605,6 @@ function updateFollowAddrBar(){
   if(row.style.display!=='flex')row.style.display='flex';
 }
 setInterval(()=>{try{updateFollowAddrBar();}catch(e){}},2000);
-
-function kanjiToNum(s){
-  const map={'〇':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
-  return s.replace(/[一二三四五六七八九〇]十?[一二三四五六七八九]?(?=[丁番町目])|十[一二三四五六七八九]?(?=[丁番町目])|[〇一二三四五六七八九](?=[丁番町目号])/g,m=>{
-    if(/^十/.test(m)){const r=m.slice(1);return r?(10+(map[r]||0)).toString():'10';}
-    if(/十$/.test(m)){return(map[m[0]]*10).toString();}
-    if(m.includes('十')){const p=m.indexOf('十');return((map[m[p-1]]||1)*10+(map[m[p+1]]||0)).toString();}
-    return (map[m]??m).toString();
-  });
-}
 
 async function createTripEntry(alightLat,alightLng,presetTs,fallbackBoardTs,skipSpotDestStat){
   const saved=boardInfo; // capture before async
@@ -8456,9 +8568,6 @@ function openSettlementFromLog(index){
 let teamSales={};
 let spotDestStats={}; // {spot:{ward:count}}。月末リセットの対象外で累計し続ける
 
-const TOKYO_23_WARDS=['千代田区','中央区','港区','新宿区','文京区','台東区','墨田区','江東区',
-  '品川区','目黒区','大田区','世田谷区','渋谷区','中野区','杉並区','豊島区',
-  '北区','荒川区','板橋区','練馬区','足立区','葛飾区','江戸川区'];
 function renderSpotDestTable(){
   const el=document.getElementById('spotdest-table');
   if(!el)return;
@@ -9160,31 +9269,14 @@ function detectStopAndTurn(lat,lng,speed,bearing,now){
   }
 }
 
-function truncateToChome(displayName){
-  if(!displayName)return displayName;
-  // 都道府県から始まる部分を抽出
-  const mPref=displayName.match(/([一-龥]+(?:都|道|府|県).+)/);
-  const rest=mPref?mPref[1]:displayName;
-  // 丁目まであれば丁目で切る
-  const mChome=rest.match(/^(.+?[〇一二三四五六七八九十百千万億兆\d]+丁目)/);
-  if(mChome)return mChome[1];
-  return rest.split(',')[0].trim();
-}
-
 async function autoRegisterDest(lat,lng,reason,tripMins=null){
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   let name=`${timeStr} 自動登録`,addr=`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   try{
-    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-      {headers:{'Accept-Language':'ja'}});
-    if(res.ok){
-      const data=await res.json();const a=data.address||{};
-      const parts=[a.road,a.suburb||a.neighbourhood,a.city||a.town||a.village].filter(Boolean);
-      if(parts.length){
-        name=parts.slice(0,2).join(' ')+` (${timeStr})`;
-        addr=truncateToChome(data.display_name)||addr;
-      }
-    }
+    const data=await nominatimReverse(lat,lng);const a=data.address||{};
+    const parts=[a.road,a.suburb||a.neighbourhood,a.city||a.town||a.village].filter(Boolean);
+    if(parts.length)name=parts.slice(0,2).join(' ')+` (${timeStr})`;
+    addr=formatJpAddress(data)||addr; // 「東京都大田区羽田空港2丁目」の形。組み立てられなければ座標のまま
   }catch(e){}
   const now=new Date();
   const dateStr=now.toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
@@ -11307,27 +11399,19 @@ async function debugGeocode(){
   if(myLat===null){out.textContent='⚠️ GPS未取得。地図タブでGPSを有効にしてから試してください。';return;}
   out.textContent=`GPS: ${myLat.toFixed(6)}, ${myLng.toFixed(6)}\n取得中...`;
   try{
-    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${myLat}&lon=${myLng}&format=json`,
-      {headers:{'Accept-Language':'ja'}});
-    const data=await res.json();
+    const data=await nominatimReverse(myLat,myLng);
     const a=data.address||{};
-    const parsed=await reverseGeocode(myLat,myLng);
+    const p=parseJpAddress(data);
     out.textContent=[
-      `✅ 解析結果: ${parsed}`,
+      p.text?`✅ 解析結果: ${p.text}`:`⚠️ 住所を組み立てられません（市区町村が分かりません）`,
+      `   都道府県: ${p.pref||'-'} / 市: ${p.city||'-'} / 区: ${p.ward||'-'} / 町村: ${p.town||'-'} / 町名・丁目: ${p.area||'-'}`,
       ``,
       `--- display_name ---`,
       data.display_name||'(なし)',
       ``,
       `--- address フィールド ---`,
-      `state: ${a.state||'-'}`,
-      `city: ${a.city||'-'}`,
-      `city_district: ${a.city_district||'-'}`,
-      `suburb: ${a.suburb||'-'}`,
-      `quarter: ${a.quarter||'-'}`,
-      `road: ${a.road||'-'}`,
-      `neighbourhood: ${a.neighbourhood||'-'}`,
-      `house_number: ${a.house_number||'-'}`,
-      `postcode: ${a.postcode||'-'}`,
+      ...['state','province','ISO3166-2-lvl4','city','city_district','town','village','county','municipality','suburb','quarter',
+        'neighbourhood','hamlet','road','house_number','postcode'].map(k=>`${k}: ${a[k]||'-'}`),
     ].join('\n');
   }catch(e){
     out.textContent='❌ エラー: '+e.message;
