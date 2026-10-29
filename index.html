@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261028-1 -->
+<!-- v20261029-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -118,9 +118,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
-/* 地図の上の「いまの時間帯の平均待機時間」。5つの札は、乗り場ボタンの真下に、同じ5列でそろえて並べる
-   （乗り場の名前は、真上の乗り場ボタンが示すので、札には書かない）。札の中は、上が平均（分）、その下が、平均の元になった
-   記録の回数（○回）。タイトルは、その下の💡の行の左側。横向きなど低い画面では、地図を広く見せるため出さない */
+/* 地図の上の「平均待機時間」。5つの札は、乗り場ボタンの真下に、同じ5列でそろえて2段に並べる（1段目＝いまの時間帯、
+   2段目＝1つ後の時間帯）。乗り場の名前は、真上の乗り場ボタンが示すので、札には書かない。札の中は、上が平均（分）、その下が、
+   平均の元になった記録の回数（○回）。タイトルは、その下の💡の行の左側（どの段がどの時間帯かを1行で示す）。
+   横向きなど低い画面では、地図を広く見せるため出さない */
 .swn-title{flex:1;min-width:0;background:rgba(13,13,26,.82);backdrop-filter:blur(6px);border:1px solid var(--border);
   border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;color:var(--text);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -137,6 +138,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
    下から開く🚗パネル（取り消しボタンが出た状態で約353px）が表の最下行に被さってしまうため、表が出ている間だけ札とタイトルを
    隠して、札を足す前と同じ高さに保つ（表が消えれば、札はまた出る）。762px ＝ 表の下端（345）＋ 画面下の余白（58）＋ 🚗パネル（約353）＋ 余裕 */
 @media (max-height:762px){#status-bar.has-pool-table .swn-title,#status-bar.has-pool-table .swn-tiles{display:none}}
+/* 2段目（1つ後の時間帯）は、2段にするとステータスバーが約37px（表を出している間は約36px）高くなるので、場所が足りない画面では隠して、
+   1段目だけにする（上の規則と同じ考え方）。表を出していない時は、🚗パネル（取り消しボタンが出た状態で約353px＋画面下の余白58px）が
+   ステータスバーの最下行（下端285）に被さり始める702px以下で隠す。列移動の表（💡）を出している間は、表の下端が381になるので、
+   799px以下で隠す。702px ＝ 下端（285）＋ 58 ＋ 約353 ＋ 余裕、799px ＝ 下端（381）＋ 58 ＋ 約353 ＋ 余裕 */
+@media (max-height:702px){.swn-next{display:none}}
+@media (max-height:799px){#status-bar.has-pool-table .swn-next{display:none}}
 /* GPS状態は、駅アイコン（station-btn）と同じ行にその左隣として並べる
    （.map-btn-stack.left内の該当行を参照） */
 .gps-pill{background:rgba(13,13,26,.82);backdrop-filter:blur(6px);
@@ -290,13 +297,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
    他のページより大きく・目立つ色にする */
 #page-settings .sec{font-size:16px;color:var(--accent);text-transform:none;letter-spacing:normal}
 #page-spotdest .sec{font-size:16px;color:var(--accent);text-transform:none;letter-spacing:normal}
-/* 乗り場別タブの「平均待機時間」の表。乗り場ごとのカードに、曜日（横）×時間帯（縦）の平均を並べる */
+/* 乗り場別タブの「平均待機時間」の表。乗り場ごとのカードに、曜日（横）×時間帯（縦）の平均を並べる。
+   「曜日なし」の時間軸は、全曜日をまとめた1つのカードに、乗り場（横）×時間帯（縦）の平均を並べる */
 .swa-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
 .swa-head{display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px;background:var(--surface2);font-weight:700;font-size:14px}
 .swa-head span{font-size:11px;font-weight:400;color:var(--muted)}
 .swa-body{padding:6px 6px 8px}
 .swa-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:2px}
 .swa-table thead th{padding:4px 0;font-size:13px;font-weight:700;color:var(--accent)}
+.swa-table thead th small{display:block;font-size:10px;font-weight:400;color:var(--muted)}
 .swa-table .swa-h{width:44px;padding:0;font-size:12px;font-weight:400;color:var(--muted);text-align:center}
 .swa-table td{height:38px;padding:2px 0;text-align:center;vertical-align:middle;line-height:1.2;border-radius:6px;background:var(--surface2)}
 .swa-table td.swa-none{background:none;color:var(--muted);opacity:.4}
@@ -304,7 +313,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .swa-cnt{display:block;font-size:10px;color:var(--text);opacity:.95}
 .swa-legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin:0 0 8px}
 .swa-legend b{flex:1;height:10px;border-radius:5px}
-.swa-step{display:flex;gap:6px;margin-bottom:8px}
+.swa-step{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
 .swa-step button{flex:1;min-height:40px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:14px;font-weight:700;font-family:inherit}
 .swa-step button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 /* 平均に含めていない1〜9分の記録の件数（タップで開く） */
@@ -498,10 +507,11 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div id="spot-chips-wrap" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;width:100%">
       <div id="spot-chips" style="display:contents"></div>
     </div>
-    <!-- いまの曜日・時間帯の、乗り場ごとの平均待機時間。乗り場ボタン（Row 3）の真下に、同じ5列でそろえて並べる
-         （名前は書かず、各乗り場ボタンの下の札が、その乗り場の値）。色は平均待機時間の表と同じ。
-         renderSpotWaitNow()が更新する -->
+    <!-- 乗り場ごとの平均待機時間。乗り場ボタン（Row 3）の真下に、同じ5列でそろえて2段に並べる。1段目＝いまの時間帯、
+         2段目＝1つ後の時間帯（名前は書かず、各乗り場ボタンの下の札が、その乗り場の値）。色は平均待機時間の表と同じ。
+         renderSpotWaitNow()が更新する。2段目は、場所が足りない画面では隠す（CSSの .swn-next） -->
     <div id="spotwait-now-tiles" class="swn-tiles"></div>
+    <div id="spotwait-next-tiles" class="swn-tiles swn-next"></div>
     <!-- 列移動表示（Row 4・Row 5）の手動オン/オフボタン。表自体が非表示の間も
          必ず操作できるよう、表とは別の行として常に表示しておく（左側には、上の札のタイトルを置く）。
          この行は、右の🎯のボタン（このバーの右端にちょうど接する位置）と同じ高さに来るため、💡が🎯に
@@ -756,8 +766,10 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="font-size:10px;color:var(--muted)">※月末リセット対象外・累計</span>
   </div>
   <div class="swa-step" id="spotwait-step">
-    <button type="button" id="spotwait-step-30" onclick="setSpotWaitStep(30)">30分ごと</button>
-    <button type="button" id="spotwait-step-60" onclick="setSpotWaitStep(60)">1時間ごと</button>
+    <button type="button" id="spotwait-step-30" onclick="setSpotWaitAxis(30,false)">30分</button>
+    <button type="button" id="spotwait-step-60" onclick="setSpotWaitAxis(60,false)">1時間</button>
+    <button type="button" id="spotwait-step-all30" onclick="setSpotWaitAxis(30,true)">曜日なし30分</button>
+    <button type="button" id="spotwait-step-all60" onclick="setSpotWaitAxis(60,true)">曜日なし1時間</button>
   </div>
   <div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px">プールに着いてから、お客様を乗せて出発するまでの平均時間（分）です。<br><span id="spotwait-slotnote"></span><br>大きい数字が平均、小さい数字が平均に使った記録の回数です。<br>色は平均の長さで決まります（短いほど緑、長いほど赤）。<br>1〜9分と200分以上の記録は平均に含めません（下の一覧には残ります）。<span id="spotwait-approxnote"></span></div>
   <div class="swa-legend"><span id="spotwait-legend-lo"></span><b id="spotwait-legend-bar"></b><span id="spotwait-legend-hi"></span></div>
@@ -1518,7 +1530,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261028-1';
+const APP_BUILD='20261029-1';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -8623,14 +8635,24 @@ function cleanupBadSpotWaitStats(){
 // 営業時間帯（11時始まり〜翌1時）の並び順で時刻を比較するための正規化
 function normHourForSort(h){return h<11?h+24:h;}
 
-// 平均待機時間の表の時間帯の刻み（分）。30（30分ごと）か60（1時間ごと）。端末ごとに覚えておく。最初は30分ごと
+// 平均待機時間の時間軸は、「時間帯の刻み」と「曜日を分けるか」の組み合わせの4通り:
+//   30分／1時間（曜日ごと）、曜日なし30分／曜日なし1時間（曜日を分けず、全曜日の記録をまとめる）。
+// 乗り場別タブの表と、地図の上の札が、同じ時間軸を使う。端末ごとに覚えておく。最初は「30分」
+//   spotWaitStep: 時間帯の刻み（分）。30か60（保存先 taxi_spotwait_step）
+//   spotWaitAllDays: 曜日なしならtrue（保存先 taxi_spotwait_alldays。無ければ曜日ごと）
 let spotWaitStep=(()=>{try{return localStorage.getItem('taxi_spotwait_step')==='60'?60:30;}catch(e){return 30;}})();
-function setSpotWaitStep(n){
-  spotWaitStep=n===60?60:30;
-  try{localStorage.setItem('taxi_spotwait_step',String(spotWaitStep));}catch(e){}
+let spotWaitAllDays=(()=>{try{return localStorage.getItem('taxi_spotwait_alldays')==='1';}catch(e){return false;}})();
+function setSpotWaitAxis(step,allDays){
+  spotWaitStep=step===60?60:30;
+  spotWaitAllDays=!!allDays;
+  try{
+    localStorage.setItem('taxi_spotwait_step',String(spotWaitStep));
+    localStorage.setItem('taxi_spotwait_alldays',spotWaitAllDays?'1':'0');
+  }catch(e){}
   renderSpotWaitAvg();
   renderSpotWaitNow();
 }
+function setSpotWaitStep(n){setSpotWaitAxis(n,spotWaitAllDays);}
 
 // Firebaseのpush ID（20文字）の先頭8文字は、作成した時刻（ミリ秒）を表している
 const PUSH_ID_CHARS='-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
@@ -8663,16 +8685,20 @@ function spotWaitArrivalHalf(hour,key,mins){
 
 // 平均に使う記録の条件（10分以上200分未満）。平均待機時間の表と、地図の上の表示で共通
 function spotWaitUsable(v){return v>=SPOT_WAIT_AVG_MIN_MINS&&v<SPOT_WAIT_STAT_MAX_MINS;}
-// 乗り場spotの、曜日day・時hourの平均待機時間。halfが0/1ならその時の前半/後半だけ（30分ごと）、nullなら1時間まるごと。
-// 平均待機時間の表のマスと同じ記録・同じ条件。平均に使える記録が無ければnull
+// 乗り場spotの、曜日day・時hourの平均待機時間。dayがnullなら、曜日を分けず全曜日の記録をまとめる（曜日なし）。
+// halfが0/1ならその時の前半/後半だけ（30分）、nullなら1時間まるごと。平均待機時間の表のマスと同じ記録・同じ条件。
+// 平均に使える記録が無ければnull
 function spotWaitSlotAvg(spot,day,hour,half){
-  const entries=(((spotWaitStats[spot]||{})[day]||{})[hour])||{};
+  const dayData=spotWaitStats[spot]||{};
   let sum=0,n=0;
-  Object.keys(entries).forEach(key=>{
-    const v=entries[key];
-    if(!spotWaitUsable(v))return;
-    if(half!==null&&spotWaitArrivalHalf(hour,key,v)!==half)return;
-    sum+=v;n++;
+  (day===null?DOW_JP:[day]).forEach(d=>{
+    const entries=((dayData[d]||{})[hour])||{};
+    Object.keys(entries).forEach(key=>{
+      const v=entries[key];
+      if(!spotWaitUsable(v))return;
+      if(half!==null&&spotWaitArrivalHalf(hour,key,v)!==half)return;
+      sum+=v;n++;
+    });
   });
   return n?{avg:sum/n,n}:null;
 }
@@ -8687,62 +8713,106 @@ function spotWaitAvgColor(avg){
   return `hsla(${hue},60%,31%,.75)`;
 }
 
-// 乗り場ごとの「曜日×時間帯」の平均待機時間（分）の表。元の記録は下の一覧（spotWaitStats）と同じ。
-// 時間帯は待機を始めた（プールに着いた）時刻で、30分ごと（spotWaitStep=30）か1時間ごと（60）。記録時と同じく
-// 200分以上の異常値と、10分未満（1〜9分）の記録は平均に含めない（一覧には残る）
+// 乗り場spotの、平均に使える記録（10分以上200分未満）を1件ずつ fn(曜日, 行, 待機の分) に渡す。行＝時×2＋（後半なら1）。
+// 1時間ごとは、時×2。30分で、前半・後半を判定できない記録は渡さず、その数を返す
+function eachSpotWaitRecord(spot,step,fn){
+  const dayData=spotWaitStats[spot]||{};
+  let unknown=0;
+  ['月','火','水','木','金','土','日'].forEach(day=>{
+    const hours=dayData[day];
+    if(!hours)return;
+    Object.keys(hours).forEach(h=>{
+      const entries=hours[h]||{};
+      Object.keys(entries).forEach(key=>{
+        const v=entries[key];
+        if(!spotWaitUsable(v))return;
+        let half=0;
+        if(step===30){
+          half=spotWaitArrivalHalf(+h,key,v);
+          if(half===null){unknown++;return;}
+        }
+        fn(day,+h*2+half,v);
+      });
+    });
+  });
+  return unknown;
+}
+
+// 乗り場別タブの「平均待機時間（分）」の表。時間軸（spotWaitStep・spotWaitAllDays）は4通り:
+//  ・30分／1時間: 乗り場ごとのカードに、曜日（横）×時間帯（縦）の平均を並べる
+//  ・曜日なし30分／曜日なし1時間: 曜日を分けず、全曜日の記録をまとめて、1つのカードに、乗り場（横）×時間帯（縦）の平均を並べる
+// 元の記録は下の一覧（spotWaitStats）と同じ。時間帯は待機を始めた（プールに着いた）時刻で、30分ごと（spotWaitStep=30）か
+// 1時間ごと（60）。記録時と同じく200分以上の異常値と、10分未満（1〜9分）の記録は平均に含めない（一覧には残る）
 function renderSpotWaitAvg(){
   const el=document.getElementById('spotwait-avg');
   if(!el)return;
-  const step=spotWaitStep;
+  const step=spotWaitStep,allDays=spotWaitAllDays;
   const spots=['1号','2号','3号','4号','国際線'];
   const dayOrder=['月','火','水','木','金','土','日'];
   let html='';
-  let unknown=0; // 30分ごとの表で、前半・後半を判定できなかった記録の数
-  spots.forEach(spot=>{
-    const dayData=spotWaitStats[spot]||{};
-    const cells={}; // {行:{曜日:{sum,n}}}。行＝時×2＋（後半なら1）。1時間ごとの表は、時×2
-    let total=0;
-    dayOrder.forEach(day=>{
-      const hours=dayData[day];
-      if(!hours)return;
-      Object.keys(hours).forEach(h=>{
-        const entries=hours[h]||{};
-        Object.keys(entries).forEach(key=>{
-          const v=entries[key];
-          if(!spotWaitUsable(v))return;
-          let half=0;
-          if(step===30){
-            half=spotWaitArrivalHalf(+h,key,v);
-            if(half===null){unknown++;return;}
-          }
-          const row=+h*2+half;
-          const rowCells=cells[row]||(cells[row]={});
-          const c=rowCells[day]||(rowCells[day]={sum:0,n:0});
-          c.sum+=v;c.n++;
-          total++;
-        });
+  let unknown=0; // 30分の表で、前半・後半を判定できなかった記録の数
+  // 表のマス（平均＋記録の回数）。待機が短いほど緑、長いほど赤（spotWaitAvgColor）
+  const cellHtml=c=>{
+    const avg=c.sum/c.n;
+    const col=spotWaitAvgColor(avg);
+    return `<td style="background:linear-gradient(${col},${col}),var(--surface2)"><span class="swa-avg">${Math.round(avg)}</span><span class="swa-cnt">${c.n}回</span></td>`;
+  };
+  const sortRows=cells=>Object.keys(cells).map(Number).sort((a,b)=>normHourForSort(a>>1)*2+(a&1)-(normHourForSort(b>>1)*2+(b&1)));
+  const rowLabel=r=>`${r>>1}:${r&1?'30':'00'}`;
+  const noRecords='<div style="text-align:center;color:var(--muted);font-size:12px;padding:10px">平均に使える記録がまだありません</div>';
+  if(allDays){
+    const cells={}; // {行:{乗り場:{sum,n}}}。行＝時×2＋（後半なら1）。1時間の表は、時×2
+    const totals={};
+    let all=0;
+    spots.forEach(spot=>{
+      totals[spot]=0;
+      unknown+=eachSpotWaitRecord(spot,step,(day,row,v)=>{
+        const rowCells=cells[row]||(cells[row]={});
+        const c=rowCells[spot]||(rowCells[spot]={sum:0,n:0});
+        c.sum+=v;c.n++;totals[spot]++;all++;
       });
     });
-    const rowKeys=Object.keys(cells).map(Number).sort((a,b)=>normHourForSort(a>>1)*2+(a&1)-(normHourForSort(b>>1)*2+(b&1)));
-    html+=`<div class="swa-card"><div class="swa-head">${esc(spot)}<span>${total?`計${total}回`:''}</span></div><div class="swa-body">`;
+    const rowKeys=sortRows(cells);
+    html+=`<div class="swa-card"><div class="swa-head">全曜日<span>${all?`計${all}回`:''}</span></div><div class="swa-body">`;
     if(!rowKeys.length){
-      html+='<div style="text-align:center;color:var(--muted);font-size:12px;padding:10px">平均に使える記録がまだありません</div>';
+      html+=noRecords;
     }else{
-      html+='<table class="swa-table"><thead><tr><th class="swa-h"></th>'+dayOrder.map(d=>`<th>${d}</th>`).join('')+'</tr></thead><tbody>';
+      html+='<table class="swa-table swa-all"><thead><tr><th class="swa-h"></th>'+spots.map(s=>`<th>${esc(s)}<small>${totals[s]?`計${totals[s]}回`:'–'}</small></th>`).join('')+'</tr></thead><tbody>';
       rowKeys.forEach(r=>{
-        html+=`<tr><th class="swa-h">${r>>1}:${r&1?'30':'00'}</th>`+dayOrder.map(day=>{
-          const c=cells[r][day];
-          if(!c)return '<td class="swa-none">–</td>';
-          const avg=c.sum/c.n;
-          // 待機が短いほど緑、長いほど赤（spotWaitAvgColor）
-          const col=spotWaitAvgColor(avg);
-          return `<td style="background:linear-gradient(${col},${col}),var(--surface2)"><span class="swa-avg">${Math.round(avg)}</span><span class="swa-cnt">${c.n}回</span></td>`;
+        html+=`<tr><th class="swa-h">${rowLabel(r)}</th>`+spots.map(spot=>{
+          const c=cells[r][spot];
+          return c?cellHtml(c):'<td class="swa-none">–</td>';
         }).join('')+'</tr>';
       });
       html+='</tbody></table>';
     }
     html+='</div></div>';
-  });
+  }else{
+    spots.forEach(spot=>{
+      const cells={}; // {行:{曜日:{sum,n}}}。行＝時×2＋（後半なら1）。1時間の表は、時×2
+      let total=0;
+      unknown+=eachSpotWaitRecord(spot,step,(day,row,v)=>{
+        const rowCells=cells[row]||(cells[row]={});
+        const c=rowCells[day]||(rowCells[day]={sum:0,n:0});
+        c.sum+=v;c.n++;total++;
+      });
+      const rowKeys=sortRows(cells);
+      html+=`<div class="swa-card"><div class="swa-head">${esc(spot)}<span>${total?`計${total}回`:''}</span></div><div class="swa-body">`;
+      if(!rowKeys.length){
+        html+=noRecords;
+      }else{
+        html+='<table class="swa-table"><thead><tr><th class="swa-h"></th>'+dayOrder.map(d=>`<th>${d}</th>`).join('')+'</tr></thead><tbody>';
+        rowKeys.forEach(r=>{
+          html+=`<tr><th class="swa-h">${rowLabel(r)}</th>`+dayOrder.map(day=>{
+            const c=cells[r][day];
+            return c?cellHtml(c):'<td class="swa-none">–</td>';
+          }).join('')+'</tr>';
+        });
+        html+='</tbody></table>';
+      }
+      html+='</div></div>';
+    });
+  }
   el.innerHTML=html;
   // 色の凡例（短い＝緑 → 長い＝赤）
   const legendBar=document.getElementById('spotwait-legend-bar');
@@ -8754,15 +8824,16 @@ function renderSpotWaitAvg(){
   if(legendLo)legendLo.textContent=`短い（${SPOT_WAIT_GREEN_MINS}分以下）`;
   if(legendHi)legendHi.textContent=`長い（${SPOT_WAIT_RED_MINS}分以上）`;
   // 切り替えボタンの選択状態と、時間帯の説明
-  [30,60].forEach(n=>{
-    const b=document.getElementById('spotwait-step-'+n);
-    if(b){b.classList.toggle('on',n===step);b.setAttribute('aria-pressed',String(n===step));}
+  [['30',30,false],['60',60,false],['all30',30,true],['all60',60,true]].forEach(([k,n,a])=>{
+    const b=document.getElementById('spotwait-step-'+k);
+    const on=n===step&&a===allDays;
+    if(b){b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));}
   });
   const note=document.getElementById('spotwait-slotnote');
   if(note){
-    note.innerHTML=step===30
+    note.innerHTML=(allDays?'曜日は分けず、全曜日の記録をまとめた平均です（乗り場を横に並べています）。':'')+(step===30
       ?'時間帯は、プールに着いた時刻です（<span style="white-space:nowrap">16:00＝16:00〜16:29</span>、<span style="white-space:nowrap">16:30＝16:30〜16:59</span>）。<span style="white-space:nowrap">0〜10時台は一番下に並びます。</span>'
-      :'時間帯は、プールに着いた時刻の「時」です（<span style="white-space:nowrap">16:00＝16:00〜16:59</span>）。<span style="white-space:nowrap">0〜10時台は一番下に並びます。</span>';
+      :'時間帯は、プールに着いた時刻の「時」です（<span style="white-space:nowrap">16:00＝16:00〜16:59</span>）。<span style="white-space:nowrap">0〜10時台は一番下に並びます。</span>');
   }
   const approx=document.getElementById('spotwait-approxnote');
   if(approx){
@@ -8772,29 +8843,46 @@ function renderSpotWaitAvg(){
   }
 }
 
-// 地図の上（乗り場ボタンの真下）に出す、「いまの曜日・時間帯」の乗り場ごとの平均待機時間。平均待機時間の表と同じ記録・
-// 同じ刻み（30分ごと／1時間ごと。乗り場別タブの設定に合わせる）・同じ色で、現在時刻に当たるマスの値を出す。
-// 平均に使える記録が無い乗り場は「–」。時刻が進んでマスが変わるのに追従するため、15秒ごとにも更新する
+// いまの時間帯と、1つ後の時間帯（時間軸＝spotWaitStep・spotWaitAllDays）。{day,hour,half,min}の2つ。
+// day＝曜日（曜日なしならnull。曜日ごとの時は、日付をまたぐと次の曜日）、half＝30分の前半0・後半1（1時間ならnull）、
+// min＝その日の0時からの分（時間帯の開始）。例: 金曜16:35 → 30分なら 16:30 と 17:00、1時間なら 16:00 と 17:00
+function spotWaitNowSlots(now){
+  const size=spotWaitStep;
+  const startMin=Math.floor((now.getHours()*60+now.getMinutes())/size)*size;
+  return [0,1].map(i=>{
+    const m=startMin+i*size,wrap=m>=1440,mm=wrap?m-1440:m;
+    return {day:spotWaitAllDays?null:DOW_JP[(now.getDay()+(wrap?1:0))%7],hour:Math.floor(mm/60),half:size===30?(mm%60>=30?1:0):null,min:mm};
+  });
+}
+// 地図の上（乗り場ボタンの真下）に2段で出す、乗り場ごとの平均待機時間。1段目＝いまの時間帯、2段目＝1つ後の時間帯。
+// 平均待機時間の表と同じ記録・同じ時間軸（30分／1時間・曜日ごと／曜日なし。乗り場別タブの設定に合わせる）・同じ色で、
+// 現在時刻に当たるマスの値を出す。平均に使える記録が無い乗り場は「–」。時刻が進んで時間帯が変わるのに追従するため、
+// 15秒ごとにも更新する
 function renderSpotWaitNow(){
-  const box=document.getElementById('spotwait-now-tiles');
+  const box=document.getElementById('spotwait-now-tiles'),box2=document.getElementById('spotwait-next-tiles');
   const title=document.getElementById('spotwait-now-title');
-  if(!box||!title)return;
-  const now=new Date();
-  const day=DOW_JP[now.getDay()],hour=now.getHours();
-  const half=spotWaitStep===30?(now.getMinutes()>=30?1:0):null;
-  const from=half===1?'30':'00',to=half===0?'29':'59';
-  title.textContent=`🕐 いま（${day}曜 ${hour}:${from}〜${hour}:${to}）の平均待機（分）`;
-  box.innerHTML=['1号','2号','3号','4号','国際線'].map(spot=>{
-    const r=spotWaitSlotAvg(spot,day,hour,half);
+  if(!box||!box2||!title)return;
+  const [s0,s1]=spotWaitNowSlots(new Date());
+  const from=s=>`${s.hour}:${s.min%60===30?'30':'00'}`;
+  // タイトルは1行で、どの段がどの時間帯かを示す（例「🕐 金曜 上＝いま 16:30〜／下＝次 17:00〜」）。2段目を隠す画面では、
+  // 2段目に関わる部分（上＝・／下＝次〜）も隠して、「🕐 金曜 いま 16:30〜」になる（CSSの .swn-next）
+  const dayTxt=s0.day===null?'全曜日 ':`${s0.day}曜 `;
+  const nextDayTxt=s1.day!==null&&s1.day!==s0.day?`${s1.day}曜 `:'';
+  title.innerHTML=`🕐 ${dayTxt}<span class="swn-next">上＝</span>いま ${from(s0)}〜<span class="swn-next">／下＝次 ${nextDayTxt}${from(s1)}〜</span>`;
+  const tiles=(slot,tag)=>['1号','2号','3号','4号','国際線'].map(spot=>{
+    const r=spotWaitSlotAvg(spot,slot.day,slot.hour,slot.half);
     // 札には、平均（分）と、その下に平均の元になった記録の回数（平均待機時間の表のマスと同じ数）を出す。乗り場は真上の
-    // 乗り場ボタンが示すので、名前は、読み上げ・長押し用に属性として持たせる。記録が無い札にも空の行（&nbsp;）を置いて、
-    // 記録の有無で札の高さが変わらないようにする
-    if(!r)return `<div class="swn-t swn-none" title="${esc(spot)}：記録なし" aria-label="${esc(spot)}：記録なし"><span class="swn-v">–</span><span class="swn-c">&nbsp;</span></div>`;
+    // 乗り場ボタンが示すので、名前は、読み上げ・長押し用に属性として持たせる（2段目は「（次の時間帯）」つき）。
+    // 記録が無い札にも空の行（&nbsp;）を置いて、記録の有無で札の高さが変わらないようにする
+    const name=`${esc(spot)}${tag}`;
+    if(!r)return `<div class="swn-t swn-none" title="${name}：記録なし" aria-label="${name}：記録なし"><span class="swn-v">–</span><span class="swn-c">&nbsp;</span></div>`;
     const col=spotWaitAvgColor(r.avg);
     const m=Math.round(r.avg);
-    const desc=`${esc(spot)}：${m}分（${r.n}回）`;
+    const desc=`${name}：${m}分（${r.n}回）`;
     return `<div class="swn-t" style="background:linear-gradient(${col},${col}),rgba(13,13,26,.82)" title="${desc}" aria-label="${desc}"><span class="swn-v">${m}<small>分</small></span><span class="swn-c">${r.n}回</span></div>`;
   }).join('');
+  box.innerHTML=tiles(s0,'');
+  box2.innerHTML=tiles(s1,'（次の時間帯）');
 }
 renderSpotWaitNow();
 setInterval(()=>{try{renderSpotWaitNow();}catch(e){}},15*1000);
