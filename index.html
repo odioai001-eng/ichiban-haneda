@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261029-1 -->
+<!-- v20261031-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1530,7 +1530,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261029-1';
+const APP_BUILD='20261031-1';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -8864,9 +8864,10 @@ function renderSpotWaitNow(){
   if(!box||!box2||!title)return;
   const [s0,s1]=spotWaitNowSlots(new Date());
   const from=s=>`${s.hour}:${s.min%60===30?'30':'00'}`;
-  // タイトルは1行で、どの段がどの時間帯かを示す（例「🕐 金曜 上＝いま 16:30〜／下＝次 17:00〜」）。2段目を隠す画面では、
-  // 2段目に関わる部分（上＝・／下＝次〜）も隠して、「🕐 金曜 いま 16:30〜」になる（CSSの .swn-next）
-  const dayTxt=s0.day===null?'全曜日 ':`${s0.day}曜 `;
+  // タイトルは1行で、どの段がどの時間帯かを示す（例「🕐 金曜 上＝いま 16:30〜／下＝次 17:00〜」。曜日なしの時間軸では、
+  // 曜日のかわりに「全ての曜日」と出る）。2段目を隠す画面では、2段目に関わる部分（上＝・／下＝次〜）も隠して、
+  // 「🕐 金曜 いま 16:30〜」になる（CSSの .swn-next）
+  const dayTxt=s0.day===null?'全ての曜日 ':`${s0.day}曜 `;
   const nextDayTxt=s1.day!==null&&s1.day!==s0.day?`${s1.day}曜 `:'';
   title.innerHTML=`🕐 ${dayTxt}<span class="swn-next">上＝</span>いま ${from(s0)}〜<span class="swn-next">／下＝次 ${nextDayTxt}${from(s1)}〜</span>`;
   const tiles=(slot,tag)=>['1号','2号','3号','4号','国際線'].map(spot=>{
