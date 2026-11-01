@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261101-1 -->
+<!-- v20261101-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -843,9 +843,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">アプリの再インストール等で自分のIDが変わってしまい、過去に送信済みだった記録が見えなくなった場合、氏名を手がかりにクラウド上に残っている過去の記録を探して、今のアカウントに取り込めます。</div>
     <button class="btn btn-g" onclick="recoverDataByName()" style="width:100%">🔎 氏名から過去のデータを復元する</button>
   </div>
-  <div class="sec">📥 月末リセット直後の自分のデータ保存</div>
+  <div class="sec">📥 送り先データの削除直後の、自分のデータ保存</div>
   <div class="card">
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">管理者が送り先データの月次リセットを行った直後から3日間だけ、リセット直前の自分の送り先データをCSVで保存できます（3日を過ぎると保存できなくなります）。</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">管理者が送り先データを全員分削除した直後から3日間だけ、削除直前の自分の送り先データをCSVで保存できます（3日を過ぎると保存できなくなります）。売り上げランキングの月次リセットでは、送り先データは削除されません。</div>
     <button class="btn btn-g" onclick="downloadMyBackedUpDests()" style="width:100%">📥 自分の送り先データを保存する</button>
   </div>
   <div id="admin-lock-area">
@@ -953,13 +953,21 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div id="account-list"></div>
       <button class="btn btn-g" onclick="loadAccountList()" style="width:100%;margin-top:4px">🔄 最新の一覧を取得</button>
     </div>
-    <div class="sec">🗑 送り先データの月次リセット</div>
+    <div class="sec">📊 売り上げランキングの月次リセット</div>
     <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">仲間全員分の待機/送り先データをCSVファイルとして保存してから、Firebase上のデータを削除してリセットします。毎月1日の朝9:00以降、全員が退勤している時に管理者の端末へ自動で案内が出ますが、ここから手動でも実行できます（1〜7日に実行すると前月分として保存されます）。</div>
-      <button class="btn btn-d" onclick="exportAndResetTeamDests(true)" style="width:100%">📥 CSV保存してリセットする</button>
-      <button class="btn btn-g" onclick="adminCheckTeamDestsRange()" style="width:100%;margin-top:8px">🔍 現在の記録範囲を確認する（削除しません）</button>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">「本日」「今月」の売り上げランキングを、CSVファイルとして保存してから、月が替わったのに前月の値のまま残っている行を、新しい月の0に戻します。毎月1日の朝9:00以降、全員が退勤している時に管理者の端末へ自動で案内が出ますが、ここから手動でも実行できます（1〜7日に実行すると前月分として保存されます）。<b>送り先データ（待機/送り先タブ・歴代送り先ランキング）は削除されません。</b></div>
+      <button class="btn btn-d" onclick="exportAndResetSalesRanking(true)" style="width:100%">📥 CSV保存してリセットする</button>
+    </div>
+    <div class="sec">🗂 送り先データの管理</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">待機/送り先タブの記録は、今月を含めて約6か月分が残ります。それより古い記録は、各自が記録を追加する時に自動で整理されます（運賃の高い記録は、歴代送り先ランキングに残ります）。</div>
+      <button class="btn btn-g" onclick="adminCheckTeamDestsRange()" style="width:100%">🔍 現在の記録範囲・データ量を確認する（削除しません）</button>
+      <div style="font-size:12px;color:var(--muted);margin-top:10px;margin-bottom:8px;line-height:1.6">以前の月次リセットで消えてしまった送り先データを、リセット直前のバックアップから戻します。今ある記録は変わらず、無い記録だけが戻ります（通常は、新しい版を開いた時に自動で行われます）。</div>
+      <button class="btn btn-g" onclick="restoreDestsFromBackup(true)" style="width:100%">🔄 消えた送り先データをバックアップから戻す</button>
       <div style="font-size:12px;color:var(--muted);margin-top:10px;margin-bottom:8px;line-height:1.6">アプリの再インストール等で同じ人が複数の端末IDを持ってしまい、「現在の記録範囲を確認する」で同じ氏名が複数回出てくる場合、ここでまとめられます（最新の記録があるIDに他をまとめ、古いIDは削除します）。</div>
       <button class="btn btn-g" onclick="mergeDuplicateTeamDests()" style="width:100%">🔗 同じ氏名の重複した記録をまとめる</button>
+      <div style="font-size:12px;color:var(--muted);margin-top:14px;margin-bottom:8px;line-height:1.6">⚠️ 仲間全員分の送り先データを、CSV保存したうえで全て削除します。通常は使いません（月次リセットでは削除されません）。</div>
+      <button class="btn btn-d" onclick="exportAndDeleteTeamDests()" style="width:100%">🗑 送り先データを全員分削除する</button>
     </div>
     <div class="sec">📡 Firebase接続</div>
     <div class="card">
@@ -1130,13 +1138,13 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <!-- 送り先データCSV保存モーダル -->
 <div class="overlay" id="csv-export-overlay">
   <div class="modal">
-    <h3>送り先データのCSV保存 <button class="mc" onclick="closeCsvExportModal()">✕</button></h3>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">下のボタンをタップしてCSVファイルを保存してください。保存が完了したら「削除する」を押すと、仲間全員分の送り先データがFirebase上から削除されます。</div>
-    <a id="csv-download-link" class="btn btn-p" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box" onclick="saveCsvFile(pendingCsvFilename,pendingCsvText);toast('📥 保存しました');return false;">📥 送り先データをダウンロード</a>
-    <a id="csv-sales-download-link" class="btn btn-g" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box" onclick="saveCsvFile(pendingSalesCsvFilename,pendingSalesCsvText);toast('📥 保存しました');return false;">📊 今月の売り上げランキングをダウンロード</a>
+    <h3><span id="csv-export-title-text">売り上げランキングのCSV保存とリセット</span> <button class="mc" onclick="closeCsvExportModal()">✕</button></h3>
+    <div id="csv-export-desc" style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6"></div>
+    <a id="csv-download-link" class="btn btn-g" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box" onclick="saveCsvFile(pendingCsvFilename,pendingCsvText);toast('📥 保存しました');return false;">📥 送り先データをダウンロード</a>
+    <a id="csv-sales-download-link" class="btn btn-p" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;box-sizing:border-box" onclick="saveCsvFile(pendingSalesCsvFilename,pendingSalesCsvText);toast('📥 保存しました');return false;">📊 売り上げランキングをダウンロード</a>
     <div style="display:flex;gap:10px">
       <button class="btn btn-g" onclick="closeCsvExportModal()" style="flex:1">キャンセル</button>
-      <button class="btn btn-d" onclick="confirmCsvExportDelete()" style="flex:1">🗑 削除する</button>
+      <button id="csv-confirm-btn" class="btn btn-d" onclick="confirmCsvExportDelete()" style="flex:1">🔄 リセットする</button>
     </div>
   </div>
 </div>
@@ -1530,7 +1538,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261101-1';
+const APP_BUILD='20261101-2';
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -1872,8 +1880,8 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   // 一時的に自分が消えてしまっていたため、乗務中は定期的にも送信し直す
   setInterval(()=>{if(isDuty)pushTeamSales();},60000);
   // 月初（1日の朝9:00以降）に管理者がアプリを開いたままでも、全員が退勤した時点で
-  // 送り先データの月次リセットを案内できるよう、定期的に確認する
-  setInterval(checkMonthStartDestsReset,5*60*1000);
+  // 売り上げランキングの月次リセットを案内できるよう、定期的に確認する
+  setInterval(checkMonthStartSalesReset,5*60*1000);
   // 上のpushTeamSales()は「自分のデータを他人の端末にも最新に見せる」ためのものだが、
   // 既に退勤した仲間（isDutyでなくpushが走らない人）の分は、朝9時の営業日区切りを
   // またいだ瞬間には自動で消えず、誰かのデータ更新やタブの切り替えなど、何か
@@ -1882,6 +1890,8 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   // 絞り込み直すだけ（通信は発生しない）なので、1分おきに再描画し直すことで、
   // 区切りをまたいだら他人の操作を待たずに自動的に消えるようにする
   setInterval(renderRankTodayGroup,60000);
+  // 今月のランキングも同じ。月が替わった瞬間に、前月の値のままの行を0に切り替える（通信は発生しない）
+  setInterval(renderRankMonthGroup,60000);
   // 同じ端末で複数タブ・ウィンドウを開いていた場合、あるタブで退勤しても
   // 開きっぱなしの別タブは「出勤中」のまま5秒おきに位置情報を送信し続けてしまい、
   // 仲間の地図・仲間リストからいつまでもアイコンが消えない原因になっていた。
@@ -1970,7 +1980,7 @@ function hideGpsUnavailableBanner(){
   const b=document.getElementById('gps-unavailable-banner');
   if(b)b.remove();
 }
-// 管理者が送り先データの月次リセットを行うと、そのリセット直前の自分のデータが
+// 管理者が送り先データを全員分削除すると、その削除直前の自分のデータが
 // 3日間だけダウンロード可能になる（downloadMyBackedUpDests参照）。設定タブに
 // 埋もれていて気づかれず期限切れになることが無いよう、リセット直後から3日間、
 // 残り時間のカウントダウン付きの目立つバナーを表示する
@@ -1999,7 +2009,7 @@ function showPostResetDataBanner(backupTs){
     const remain=backupTs+POST_RESET_DOWNLOAD_WINDOW_MS-Date.now();
     if(remain<=0){hidePostResetDataBanner();return;}
     const h=Math.floor(remain/3600000),m=Math.floor((remain%3600000)/60000);
-    textEl.textContent=`🗑 月次リセットが行われました。タップで自分の送り先データを保存（残り${h}時間${m}分）`;
+    textEl.textContent=`🗑 送り先データが削除されました。タップで自分の送り先データを保存（残り${h}時間${m}分）`;
   };
   update();
   if(postResetBannerInterval)clearInterval(postResetBannerInterval);
@@ -2014,6 +2024,7 @@ function hidePostResetDataBanner(){
 // 済みでなければバナーを表示する
 function checkPostResetOwnDataBanner(backup){
   if(!backup||!backup.ts){hidePostResetDataBanner();return;}
+  if(destsRestoredBackupTs&&destsRestoredBackupTs===backup.ts){hidePostResetDataBanner();return;} // 戻し済み
   const age=Date.now()-backup.ts;
   if(age>POST_RESET_DOWNLOAD_WINDOW_MS){hidePostResetDataBanner();return;}
   if(localStorage.getItem('taxi_reset_backup_downloaded_ts')===String(backup.ts))return;
@@ -3683,7 +3694,7 @@ function confirmEndDuty(){
   }else{
     document.getElementById('duty-end-modal').style.display='flex';
   }
-  checkMonthStartDestsReset();
+  checkMonthStartSalesReset();
   checkMonthEndOwnRecordCsv();
 }
 
@@ -3704,10 +3715,11 @@ function anyoneElseOnDuty(drivers){
     return d.dutyActive===true&&(now-(d.ts||0))<PEER_ALIVE_MS;
   });
 }
-// 送り先データの月次リセットは、月の最終日に出勤した人の夜勤（翌1日の朝まで）も
+// 売り上げランキング（本日・今月）の月次リセットは、月の最終日に出勤した人の夜勤（翌1日の朝まで）も
 // 前月分に含めるため、「1日の朝9:00以降、全員が退勤済み」のタイミングで行う。
 // 以前は月の最終日に管理者が退勤した時点で実行していたため、最終日の朝に夜勤明けで
 // 退勤すると、その日に出勤する人の分が前月のCSVに入らなかった。
+// （以前は、これと一緒に送り先データも全員分削除していたが、送り先データは削除しない。保存期間はDEST_KEEP_MONTHS_BACK）
 const MONTH_RESET_START_HOUR=9;   // 1日のこの時刻以降にリセットの案内を出す
 const MONTH_RESET_PROMPT_LAST_DAY=7; // 案内を自動で出すのは月の7日まで（それ以降は手動のみ）
 // リセットの対象月。月初（7日まで）に行う場合は前月分、月の最終日なら当月分。
@@ -3718,12 +3730,12 @@ function getResetTargetMonth(now){
   if(isLastDayOfMonth(now))return new Date(now.getFullYear(),now.getMonth(),1);
   return null;
 }
-// team_config/last_dests_reset_monthに保存する値（従来どおり"2026/10"形式）
+// team_config/last_sales_reset_monthに保存する値（従来どおり"2026/10"形式）
 function resetMonthFlagKey(d){return d.toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit'});}
 let monthResetPromptedThisSession=false;
-// 管理者の端末で、前月分のリセットがまだなら案内（CSV保存・削除の画面）を出す。
+// 管理者の端末で、前月分の売り上げランキングのリセットがまだなら案内（CSV保存・リセットの画面）を出す。
 // アプリ起動時・定期的・管理者の退勤時に呼ばれる。案内はアプリを開いている間1回だけ
-async function checkMonthStartDestsReset(){
+async function checkMonthStartSalesReset(){
   if(!db||monthResetPromptedThisSession)return;
   if(!isAdmin&&localStorage.getItem('taxi_is_admin_device')!=='1')return;
   if(isDuty)return;
@@ -3732,22 +3744,26 @@ async function checkMonthStartDestsReset(){
   if(now.getDate()===1&&now.getHours()<MONTH_RESET_START_HOUR)return;
   try{
     const flagKey=resetMonthFlagKey(getResetTargetMonth(now));
-    const flagSnap=await db.ref('team_config/last_dests_reset_month').once('value');
-    if(flagSnap.val()===flagKey)return; // 前月分は既にリセット済み
+    // 済んだ印は、新しい印（last_sales_reset_month）のほか、以前の版（送り先データも一緒に削除していた）の印
+    // （last_dests_reset_month）も、同じ月なら済みとみなす
+    const [doneNew,doneOld]=await Promise.all([
+      db.ref('team_config/last_sales_reset_month').once('value'),
+      db.ref('team_config/last_dests_reset_month').once('value')
+    ]);
+    if(doneNew.val()===flagKey||doneOld.val()===flagKey)return; // 前月分は既にリセット済み
     const drvSnap=await db.ref('drivers').once('value');
     if(anyoneElseOnDuty(drvSnap.val()||{}))return; // 勤務中の仲間がいる間は出さない（全員の退勤後に再確認）
     if(monthResetPromptedThisSession||isDuty)return;
     monthResetPromptedThisSession=true;
-    exportAndResetTeamDests(false,true);
+    exportAndResetSalesRanking(false,true);
   }catch(e){console.error('月初リセットの確認に失敗しました',e);}
 }
 
-// 待機/送先タブの記録（仲間全員分）をCSVで保存し、Firebase上のデータを削除してリセットする。
-// 自動・手動（設定タブの管理者ボタン）のどちらの経路からも必ずこの関数を通るため、
-// 権限チェック・勤務中チェックはここに集約する
+// 月次リセット（売り上げランキング）と、全員分の送り先データの削除は、同じCSV保存の画面（csv-export-overlay）を
+// 使い、csvModalModeで切り替える。どちらも権限チェック・勤務中チェックを必ず通す
 let pendingCsvText=null,pendingCsvFilename=null;
 let pendingSalesCsvText=null,pendingSalesCsvFilename=null;
-let pendingResetFlagKey=null; // 削除を確定した時にteam_config/last_dests_reset_monthへ記録する値
+let pendingResetFlagKey=null; // 売り上げランキングのリセットを確定した時にteam_config/last_sales_reset_monthへ記録する値
 // CSVファイルの保存処理。Android版アプリ（WebViewで仲間アプリを表示する
 // ネイティブアプリ）は、Blob URL + <a download>によるファイル保存に
 // 対応しておらず、ボタンを押しても無言で何も起きない。
@@ -3774,20 +3790,10 @@ function saveCsvFile(filename,csvText){
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
-// auto=true は月初の自動案内（checkMonthStartDestsReset）から。管理者モードに
-// ログインしていなくても、管理者として使われている端末なら案内を出す
-async function exportAndResetTeamDests(manual,auto){
-  if(!db){toast('⚠️ Firebase未接続');return;}
-  if(!isAdmin&&!(auto&&localStorage.getItem('taxi_is_admin_device')==='1')){toast('⚠️ 管理者のみ実行できます');return;}
-  const drvSnap=await db.ref('drivers').once('value').catch(()=>null);
-  if(anyoneElseOnDuty(drvSnap?(drvSnap.val()||{}):undefined)){
-    toast('⚠️ まだ勤務中の仲間がいるため実行できません。全員の退勤後に行ってください');
-    return;
-  }
-  const snap=await db.ref('team_dests').once('value');
-  const all=snap.val()||{};
+// 送り先データ（team_destsの中身）を、CSVの文字列にする。記録の件数も返す
+function buildTeamDestsCsv(all){
   const rows=[['氏名','日付','種別','乗車時刻','乗車地','降車時刻','降車地','待機時間','運賃(円)']];
-  Object.values(all).forEach(driverEntries=>{
+  Object.values(all||{}).forEach(driverEntries=>{
     Object.values(driverEntries||{}).forEach(e=>{
       if(e.type==='trip'){
         const boardDesc=e.boardSpot?`東京都大田区羽田空港${e.boardSpot}乗り場`:(e.boardAddr||'');
@@ -3797,23 +3803,78 @@ async function exportAndResetTeamDests(manual,auto){
       }
     });
   });
-  if(rows.length<=1){
-    toast('保存する送り先データがありません');
-    if(!manual)return;
+  return {text:rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n'),count:rows.length-1};
+}
+// CSV保存の画面を、リセットの種類（'sales'＝売り上げランキング／'dests'＝送り先データの全削除）に合わせて開く
+let csvModalMode=null;
+function openCsvExportModal(mode){
+  csvModalMode=mode;
+  const sales=mode==='sales';
+  document.getElementById('csv-export-title-text').textContent=sales?'売り上げランキングのCSV保存とリセット':'送り先データのCSV保存と全削除';
+  document.getElementById('csv-export-desc').textContent=sales
+    ?'下のボタンでCSVファイルを保存してください。保存が終わったら「リセットする」を押すと、月が替わったのに前月の値のまま残っている行が、新しい月の0に戻ります。送り先データ（待機/送り先タブ・歴代送り先ランキング）は削除されません。'
+    :'下のボタンをタップしてCSVファイルを保存してください。保存が完了したら「削除する」を押すと、仲間全員分の送り先データがFirebase上から削除されます（歴代送り先ランキングの上位は残ります）。通常の月次リセットでは使いません。';
+  const destsLink=document.getElementById('csv-download-link'),salesLink=document.getElementById('csv-sales-download-link');
+  destsLink.textContent=sales?'📥 送り先データをダウンロード（記録用・削除しません）':'📥 送り先データをダウンロード';
+  destsLink.className='btn '+(sales?'btn-g':'btn-p');
+  salesLink.className='btn '+(sales?'btn-p':'btn-g');
+  salesLink.textContent=sales?'📊 売り上げランキングをダウンロード':'📊 今月の売り上げランキングをダウンロード';
+  document.getElementById('csv-confirm-btn').textContent=sales?'🔄 リセットする':'🗑 削除する';
+  document.getElementById('csv-export-overlay').classList.add('open');
+}
+// 売り上げランキング（本日・今月）の月次リセット。ランキングをCSVで保存してから、月が替わったのに前月の値のまま
+// 残っている行（その人の端末がまだ新しい月の値に書き換えていない行）を、新しい月の0に戻す。
+// 送り先データ（待機/送り先タブ・歴代送り先ランキング）には触れない。
+// auto=true は月初の自動案内（checkMonthStartSalesReset）から。管理者モードに
+// ログインしていなくても、管理者として使われている端末なら案内を出す
+async function exportAndResetSalesRanking(manual,auto){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  if(!isAdmin&&!(auto&&localStorage.getItem('taxi_is_admin_device')==='1')){toast('⚠️ 管理者のみ実行できます');return;}
+  const drvSnap=await db.ref('drivers').once('value').catch(()=>null);
+  if(anyoneElseOnDuty(drvSnap?(drvSnap.val()||{}):undefined)){
+    toast('⚠️ まだ勤務中の仲間がいるため実行できません。全員の退勤後に行ってください');
+    return;
   }
   // ファイル名・ランキングの月は、データの対象月（月初に行う場合は前月）にする。
   // 以前は実行した日の月を使っていたため、1日に保存すると中身は前月分なのに
   // 新しい月の名前のファイルになってしまっていた
   const target=getResetTargetMonth();
   const monthStr=monthKeyOf(target||new Date());
-  pendingResetFlagKey=target?resetMonthFlagKey(target):null;
-  pendingCsvText=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  pendingCsvFilename=`送り先記録_${monthStr}.csv`;
-  // 送り先データのリセットと同じタイミングで、今月の売り上げランキング
-  // （team_sales）も、月が変わって数値が上書きされる前にCSVで残しておく
+  // 「その月のリセット済み」の印は、月が替わったあとに実際にリセットした時にだけ付ける
+  // （月末の当日に行っても、まだ今月のランキングなので、リセットの対象の行は無い）
+  pendingResetFlagKey=(target&&monthStr<monthKeyOf(new Date()))?resetMonthFlagKey(target):null;
   pendingSalesCsvText=buildMonthSalesRankingCsv(monthStr);
   pendingSalesCsvFilename=`今月の売り上げランキング_${monthStr}.csv`;
-  document.getElementById('csv-export-overlay').classList.add('open');
+  // 送り先データのCSVも、記録用に一緒に保存できるようにする（削除はしない）
+  let destsCsv={text:'',count:0};
+  try{destsCsv=buildTeamDestsCsv((await db.ref('team_dests').once('value')).val()||{});}catch(e){console.error('team_dests csv failed',e);}
+  pendingCsvText=destsCsv.text;
+  pendingCsvFilename=`送り先記録_${monthStr}.csv`;
+  openCsvExportModal('sales');
+  document.getElementById('csv-download-link').style.display=destsCsv.count?'block':'none';
+}
+// 送り先データを仲間全員分、CSVで保存してから削除する。月次リセットとは別の、管理者が手動で行う操作
+// （古い記録は保存期間を過ぎると自動で整理されるため、通常は使わない）
+async function exportAndDeleteTeamDests(){
+  if(!db){toast('⚠️ Firebase未接続');return;}
+  if(!isAdmin){toast('⚠️ 管理者のみ実行できます');return;}
+  const drvSnap=await db.ref('drivers').once('value').catch(()=>null);
+  if(anyoneElseOnDuty(drvSnap?(drvSnap.val()||{}):undefined)){
+    toast('⚠️ まだ勤務中の仲間がいるため実行できません。全員の退勤後に行ってください');
+    return;
+  }
+  const snap=await db.ref('team_dests').once('value');
+  const destsCsv=buildTeamDestsCsv(snap.val()||{});
+  if(!destsCsv.count){toast('保存する送り先データがありません');}
+  const target=getResetTargetMonth();
+  const monthStr=monthKeyOf(target||new Date());
+  pendingResetFlagKey=null;
+  pendingCsvText=destsCsv.text;
+  pendingCsvFilename=`送り先記録_${monthStr}.csv`;
+  pendingSalesCsvText=buildMonthSalesRankingCsv(monthStr);
+  pendingSalesCsvFilename=`今月の売り上げランキング_${monthStr}.csv`;
+  openCsvExportModal('dests');
+  document.getElementById('csv-download-link').style.display='block';
 }
 // 乗り場別送先リスト（spot_dest_stats）の再集計を検討する際の参考情報として、
 // team_destsに現在どれだけの期間・件数の記録が残っているかを、何も削除せず
@@ -3869,7 +3930,8 @@ async function adminCheckTeamDestsRange(){
     `うち乗り場からの記録: ${withBoardSpot}件\n`+
     `うち降車地が大田区: ${otaFromSpot}件（${withBoardSpot?Math.round(otaFromSpot/withBoardSpot*100):0}%）\n`+
     `最も古い記録: ${fmt(minTs)}\n`+
-    `最も新しい記録: ${fmt(maxTs)}\n\n`+
+    `最も新しい記録: ${fmt(maxTs)}\n`+
+    `データ量の目安: 約${(new Blob([JSON.stringify(all)]).size/1048576).toFixed(2)}MB（保存期間: 約${DEST_KEEP_MONTHS_BACK+1}か月。${fmt(destRetentionCutoffTs())}より前の記録は、各自が記録を追加する時に自動で整理されます）\n\n`+
     `【ドライバーごとの最新記録】\n${perDriverLines||'(記録なし)'}\n\n`+
     `⚠️重複：同じ氏名が複数の端末IDに分かれています（「🔗 同じ氏名の重複した記録をまとめる」で統合できます）\n`+
     `🔴7日以上記録なし：重複をまとめた上でなお記録が無ければ、直近7日間アプリで記録していない可能性があります`;
@@ -4024,24 +4086,66 @@ function closeHotelShuttleModal(){
   document.getElementById('hotel-shuttle-overlay').classList.remove('open');
 }
 
-// 月末リセットでteam_destsが削除されると、仲間（管理者以外）はそれまで自分の
+// 送り先データを全員分削除する（管理者の手動操作）と、仲間（管理者以外）はそれまで自分の
 // データをダウンロードする手段が無かった（CSV保存・削除の画面自体が管理者にしか
 // 開かれないため）。削除の直前の内容をここに控えておき、リセット後も3日間だけは
 // 各自が自分の分をダウンロードできるようにする（downloadMyBackedUpDests参照）
 const POST_RESET_DOWNLOAD_WINDOW_MS=3*24*3600*1000;
-async function confirmCsvExportDelete(){
-  if(!confirm('仲間全員分の送り先データを削除してリセットしますか？'))return;
+function confirmCsvExportDelete(){
+  return csvModalMode==='dests'?confirmDeleteAllTeamDests():confirmSalesRankingReset();
+}
+// 売り上げランキングのリセットを確定する。月が替わったのに前月の値のまま残っている行（今月ランキングに参加していて、
+// 月（monthKey）が今月より前の人）だけを、新しい月の0に戻し、前月の確定値はprevMonthに残す（CSVの再作成用）。
+// 既に新しい月の値になっている人・今月ランキングに参加していない人には触れない。送り先データは削除しない
+async function confirmSalesRankingReset(){
+  if(!confirm('売り上げランキングをリセットしますか？（月が替わったのに前月の値のままの行が、新しい月の0に戻ります。送り先データは削除されません）'))return;
   const flagKey=pendingResetFlagKey;
   closeCsvExportModal();
+  try{
+    const all=(await db.ref('team_sales').once('value')).val()||{};
+    const calKey=monthKeyOf(new Date());
+    const updates={};let n=0;
+    Object.entries(all).forEach(([uid,d])=>{
+      if(!d||d.monthDaysRaw==null)return;
+      const key=d.monthKey||(d.ts?monthKeyOf(new Date(d.ts)):null);
+      if(!key||key>=calKey)return;
+      const p='team_sales/'+uid+'/';
+      updates[p+'prevMonth']={monthKey:key,monthFare:d.monthFare||0,monthFareForAvg:d.monthFareForAvg!=null?d.monthFareForAvg:(d.monthFare||0),monthDays:d.monthDays||0};
+      updates[p+'monthFare']=0;updates[p+'monthFareForAvg']=0;updates[p+'monthDays']=0;
+      updates[p+'monthFareRaw']=0;updates[p+'monthDaysRaw']=0;
+      updates[p+'monthAdjust']=null;updates[p+'monthKey']=calKey;
+      n++;
+    });
+    if(n)await db.ref().update(updates);
+    // 「その月のリセット済み」の記録は、実際にリセットした時にだけ付ける（以前は案内を
+    // 出した時点で付けていたため、キャンセルするとその月は二度と案内されなかった）
+    if(flagKey)db.ref('team_config/last_sales_reset_month').set(flagKey).catch(err=>console.error('last_sales_reset_month set failed',err));
+    toast(n?`🔄 売り上げランキングをリセットしました（${n}人）`:'ℹ️ リセットが必要な行はありませんでした（月が替わると、自動で0になります）');
+  }catch(e){
+    console.error('confirmSalesRankingReset failed',e);
+    toast('⚠️ リセットに失敗しました。通信状況を確認してください');
+  }
+}
+// 送り先データを全員分削除する（管理者が手動で行う。月次リセットでは行わない）。
+// 削除の前に、歴代送り先ランキング用に各自の運賃上位を別の場所（team_alltime）へ移して残す
+async function confirmDeleteAllTeamDests(){
+  if(!confirm('仲間全員分の送り先データを全て削除しますか？（待機/送り先タブの記録も消えます。歴代送り先ランキングの上位は残ります）'))return;
+  closeCsvExportModal();
   const snap=await db.ref('team_dests').once('value');
-  await db.ref('team_dests_backup').set({ts:Date.now(),data:snap.val()||{}});
+  const backupTs=Date.now();
+  // manual:true は「管理者が手動で全員分を削除した時のバックアップ」の印（起動時の自動の復元の対象にしない）
+  await db.ref('team_dests_backup').set({ts:backupTs,manual:true,data:snap.val()||{}});
+  // 保管に失敗した時は、そのまま削除すると歴代ランキングが消えてしまうので、確認してから進める
+  let archived=true;
+  try{await archiveAllTimeTrips(snap.val()||{});}catch(e){archived=false;console.error('team_alltime archive failed',e);}
+  if(!archived&&!confirm('⚠️ 歴代送り先ランキングの保管に失敗しました。このまま削除すると、歴代ランキングが消えてしまいます。それでも削除しますか？')){
+    toast('⚠️ 削除を中止しました（送り先データは残っています）');
+    return;
+  }
   await db.ref('team_dests').remove();
   destinations=[];
   saveDests();renderDests();
-  // 「その月のリセット済み」の記録は、実際に削除した時にだけ付ける（以前は案内を
-  // 出した時点で付けていたため、キャンセルするとその月は二度と案内されなかった）
-  if(flagKey)db.ref('team_config/last_dests_reset_month').set(flagKey).catch(err=>console.error('last_dests_reset_month set failed',err));
-  toast('🗑 送り先データを全員分リセットしました');
+  toast('🗑 送り先データを全員分削除しました');
 }
 // リセット直後から3日間、自分の送り先データ（リセット直前の内容）をCSVで
 // ダウンロードできるようにする。管理者でなくても使える
@@ -4842,7 +4946,7 @@ function connectFirebase(config){
         // 値のまま取り残されてしまっていた。接続確立のたびに一度同期しておく
         // ことで、開き直しただけでも最新の月に更新されるようにする
         pushTeamSales();
-        checkMonthStartDestsReset();
+        checkMonthStartSalesReset();
         // 出庫時刻（dutyStartTs）も同じ理由（planFinishTsの下のコメント参照）で、
         // この機能の追加前から出勤していた人は一度も送信されていなかった。
         // dutyStart自体はリロードをまたいでも保存・復元されるため、出勤し直さず
@@ -4990,6 +5094,8 @@ function connectFirebase(config){
       try{renderTeamDests();}catch(e){console.error('renderTeamDests error',e);}
       // 起動直後にも、Firebaseに届いていない自分の送り先が残っていれば共有し直す
       autoResendUnsyncedOwnDests((snap.val()||{})[myId]);
+      // 以前の月次リセットで消えてしまった送り先データを、削除の直前のバックアップから戻す（1回だけ）
+      restoreDestsFromBackup(false);
     });
     // 上のドライバーごとのリアルタイムリスナーは、通常であれば誰かが記録を
     // 追加・再送した瞬間に即座に反映されるはずだが、特定の端末・回線状況では
@@ -5023,6 +5129,17 @@ function connectFirebase(config){
     },30000);
     db.ref('team_sales').on('value',snap=>{
       teamSales=snap.val()||{};
+      renderRankingPage();
+    });
+    // 歴代送り先ランキングの保管分。古い送り先データを整理しても、ここは残る
+    db.ref('team_alltime').on('value',snap=>{
+      teamAllTime=snap.val()||{};
+      teamAllTimeLoaded=true;teamAllTimeError=null;
+      renderRankingPage();
+    },err=>{
+      // 読み込めない（Firebaseのルール等）場合も「読み込み中」のままにせず、保管分なしで表示する
+      console.error('team_alltime read failed',err);
+      teamAllTimeLoaded=true;teamAllTimeError=(err&&err.code)||'error';
       renderRankingPage();
     });
     db.ref('spot_dest_stats').on('value',snap=>{
@@ -5107,7 +5224,13 @@ function connectFirebase(config){
     // 自分の分のダウンロード（downloadMyBackedUpDests）は、押した時にだけ読み込む
     db.ref('team_dests_backup/ts').on('value',snap=>{
       const ts=snap.val();
-      checkPostResetOwnDataBanner(ts?{ts}:null);
+      postResetBackupInfo=ts?{ts}:null;
+      checkPostResetOwnDataBanner(postResetBackupInfo);
+    });
+    // 消えた送り先データをバックアップから戻した（restoreDestsFromBackup）あとは、「自分のデータを保存」の案内は要らない
+    db.ref('team_config/dests_restored_backup_ts').on('value',snap=>{
+      destsRestoredBackupTs=snap.val();
+      checkPostResetOwnDataBanner(postResetBackupInfo);
     });
     // チャット全体の「削除」「リアクションの変更」の監視は、過去の全メッセージを対象にするため
     // データ量が大きい。画面に見せるデータ（上のチャット・仲間の送り先）より後に要求する
@@ -6105,6 +6228,17 @@ function renderRankTodayGroup(){
     +'<button class="btn btn-g" onclick="leaveGroupRanking(\'today\')" style="flex:1;font-size:11px">🔒 退出する</button>'
     +'</div>';
 }
+// 今月のランキングに出す、1人分の値。各自の今月の売上・出勤日数（team_sales）は、その人の端末が
+// アプリを開いた時などに新しい月の値へ書き換えるため、月が替わっても、その人がアプリを開くまでは
+// Firebase上に前月の値がそのまま残る。以前はそれを「今月」として表示し続けていたので、
+// 月（monthKey）が今月より前の行は、新しい月にまだ出勤していない人として、今月分は0にして表示する。
+// 月をまたぐ夜勤（月末に始めた出勤）の分は、シフトを始めた月＝前月の分として数えるため、今月分は0でよい
+function monthSalesEntryForNow(d,nowDate){
+  const calKey=monthKeyOf(nowDate||new Date());
+  const entryKey=d.monthKey||(d.ts?monthKeyOf(new Date(d.ts)):null);
+  if(entryKey&&entryKey<calKey)return Object.assign({},d,{monthFare:0,monthFareForAvg:0,monthDays:0,_staleMonth:true});
+  return d;
+}
 // ③ 今月の売り上げランキング（グループ・送先売上の合計）
 // ①月間・②本日は独立した参加選択のため、入室・退出ボタンもそれぞれの
 // ランキングに個別に表示する
@@ -6114,7 +6248,7 @@ function renderRankMonthGroup(){
   if(!isMonthRankingOptedIn()){el.innerHTML=rankingLockHtml('month');return;}
   // 「本日のみ参加」の人はmonthFare等のフィールドが送信されていないため、
   // 月間ランキングには表示しない（送信されていない=月間には未参加、と判定する）
-  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.monthDaysRaw!=null).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
+  const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid})).filter(d=>d.monthDaysRaw!=null).map(d=>monthSalesEntryForNow(d)).sort((a,b)=>(b.monthFare||0)-(a.monthFare||0));
   el.innerHTML=(list.length
     ?list.map((d,i)=>{
       // 手動修正(monthAdjust)は「その時点の自動集計値との差分」として保存されるため、
@@ -6157,7 +6291,11 @@ async function editTeamMemberMonthSales(uid,name){
   if(!isSelf&&!isAdmin){toast('⚠️ 管理者のみ他の人の記録を修正できます');return;}
   if(isSelf&&!isRankingOptedIn()){toast('⚠️ グループランキングに未参加です');return;}
   if(!db){toast('⚠️ Firebase未接続');return;}
-  const cur=(teamSales&&teamSales[uid])||{};
+  const stored=(teamSales&&teamSales[uid])||{};
+  // 月が替わってもその人が新しい月の値に書き換えていない間は、画面では今月分0と表示しているため、
+  // 修正の基準も0にそろえる（前月の値を基準にすると、修正後の値が画面と食い違う）
+  const stale=monthSalesEntryForNow(stored)._staleMonth===true;
+  const cur=stale?{monthDays:0,monthFare:0,monthFareForAvg:0,monthDaysRaw:0,monthFareRaw:0}:stored;
   const curDays=cur.monthDays||0;
   const curFare=cur.monthFare||0;
   const daysStr=await promptNumber(`${name||'この人'}の今月の出勤日数（正しい日数）`,curDays);
@@ -6173,12 +6311,14 @@ async function editTeamMemberMonthSales(uid,name){
   // （そうしないと次に自動集計が走るまで、平均だけ訂正前の値のままになってしまう）
   const curFareForAvg=cur.monthFareForAvg!=null?cur.monthFareForAvg:curFare;
   const monthFareForAvg=Math.max(0,curFareForAvg+(fare-curFare));
-  db.ref('team_sales/'+uid).update({monthAdjust,monthDays:days,monthFare:fare,monthFareForAvg}).catch(err=>console.error('team_sales monthAdjust update failed',err));
+  const upd={monthAdjust,monthDays:days,monthFare:fare,monthFareForAvg};
+  if(stale)Object.assign(upd,{monthKey:monthKeyOf(new Date()),monthDaysRaw:0,monthFareRaw:0}); // 前月の値のままの行は、新しい月の行として書き直す
+  db.ref('team_sales/'+uid).update(upd).catch(err=>console.error('team_sales monthAdjust update failed',err));
   toast('✅ 今月の出勤日数・売上を修正しました（自動計算は今後も継続します）');
 }
 // ④ 歴代送り先ランキング（本人・1回の送先ごと、日付含む）
 // 待機/送先タブと同じ表記（乗車地・降車地・乗り場移動履歴・待機時間）でランキングの1件を表示する
-function buildRankTripCardHtml(d,rank,driverLabel){
+function buildRankTripCardHtml(d,rank,driverLabel,delBtn){
   const {boardDesc,alightDesc,waitStr,isAbure,historyStr}=buildTripDesc(d);
   return `
   <div style="border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
@@ -6186,6 +6326,7 @@ function buildRankTripCardHtml(d,rank,driverLabel){
       <div style="font-size:15px;font-weight:800;color:${rank===1?'var(--gold)':'var(--accent)'}">${rank}位</div>
       ${driverLabel?`<div style="font-size:12px;font-weight:700;color:var(--cyan)">${esc(driverLabel)}</div>`:''}
       <div style="font-size:12px;font-weight:700;color:var(--cyan)">${esc(d.dateStr||'')}</div>
+      ${delBtn?`<div style="margin-left:auto">${delBtn}</div>`:''}
     </div>
     <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
       <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(d.boardTime||'--:--')}</span>
@@ -6200,12 +6341,143 @@ function buildRankTripCardHtml(d,rank,driverLabel){
     <div style="margin-top:5px;font-size:13px;font-weight:800;color:var(--green)">💰 ¥${exTax(d.fare).toLocaleString()}</div>
   </div>`;
 }
+// ----- 送り先データの保存期間と、歴代送り先ランキングの保管 -----
+// 送り先データ（team_dests）は、「今月＋その前のDEST_KEEP_MONTHS_BACKか月」だけを残し、それより古い記録は、
+// 各自の端末が記録を追加する時に自動で整理する（pushDestToFirebase）。月次リセット（売り上げランキング）とは関係しない。
+// 以前は「先月1日より前」（今月＋先月＝最大約2か月）だった。仲間全員の記録を起動のたびに読み込む作りのため、
+// 延ばすほど通信量と起動時間が増える（目安: 1人1か月で約0.1MB。設定画面の「現在の記録範囲を確認する」にデータ量が出る）
+const DEST_KEEP_MONTHS_BACK=5;
+function destRetentionCutoffTs(nowDate){const n=nowDate||new Date();return new Date(n.getFullYear(),n.getMonth()-DEST_KEEP_MONTHS_BACK,1).getTime();}
+// 整理する前に、各自の運賃の上位ALLTIME_KEEP_PER_DRIVER件を、歴代ランキングの保管（team_alltime/{driverId}/t{ts}）へ移す
+// （グループの上位10件は、その人自身の上位10件の中に必ず入っているので、これで足りる）。
+// 表示は「保管分＋今ある分（team_dests）」を合わせた上位10件
+const ALLTIME_KEEP_PER_DRIVER=10;
+const ALLTIME_FIELDS=['type','ts','dateStr','boardTime','boardAddr','boardSpot','spotHistory','alightTime','alightAddr','waitMins','waitMinsStr','fare','driverName','driverId','manual'];
+function allTimeKeyOf(ts){return 't'+ts;}
+// 保管の対象にする記録（運賃が入った送迎。テスト出勤の記録は除く）
+function isAllTimeTrip(e){return !!e&&e.type==='trip'&&e.fare>0&&!!e.ts&&!e.test;}
+function pickAllTimeFields(e,driverId){
+  const o={};
+  ALLTIME_FIELDS.forEach(k=>{if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];});
+  if(!o.driverId)o.driverId=driverId;
+  return JSON.parse(JSON.stringify(o));
+}
+// 運賃の高い順。同額なら先に記録した方を上にする
+function compareAllTimeTrips(a,b){return (b.fare||0)-(a.fare||0)||(a.ts||0)-(b.ts||0);}
+// 保管（stored）に、送り先データ（dests）の運賃上位を加えて、各自の上位だけを残すための書き込み内容を作る。
+// 戻り値は team_alltime への update() にそのまま渡せる形（'driverId/t{ts}'→記録、不要になった記録はnull）。
+// 同じ記録（同じts）は1件にまとめ、送り先データ側（新しい方）の内容を優先する。何度実行しても結果は同じ
+function buildAllTimeArchiveUpdates(stored,dests){
+  const updates={};
+  const ids=new Set(Object.keys(stored||{}).concat(Object.keys(dests||{})));
+  ids.forEach(id=>{
+    const have=(stored&&stored[id])||{};
+    const cand=new Map();
+    Object.values(have).forEach(e=>{if(isAllTimeTrip(e))cand.set(e.ts,e);});
+    Object.values((dests&&dests[id])||{}).forEach(e=>{if(isAllTimeTrip(e))cand.set(e.ts,pickAllTimeFields(e,id));});
+    const keep={};
+    Array.from(cand.values()).sort(compareAllTimeTrips).slice(0,ALLTIME_KEEP_PER_DRIVER).forEach(e=>{keep[allTimeKeyOf(e.ts)]=e;});
+    Object.keys(keep).forEach(k=>{if(JSON.stringify(have[k])!==JSON.stringify(keep[k]))updates[id+'/'+k]=keep[k];});
+    Object.keys(have).forEach(k=>{if(!(k in keep))updates[id+'/'+k]=null;});
+  });
+  return updates;
+}
+// 送り先データ（dests＝{driverId:{キー:記録}}）の運賃上位を、歴代ランキングの保管（team_alltime）へ移す。
+// 古い送り先データを整理する直前に使う。書き込んだ件数を返す（失敗した時は例外。呼び出し側は、その場合は削除しない）
+async function archiveAllTimeTrips(dests){
+  const ids=Object.keys(dests||{});
+  const stored={};
+  await Promise.all(ids.map(async id=>{stored[id]=(await db.ref('team_alltime/'+id).once('value')).val()||{};}));
+  const updates=buildAllTimeArchiveUpdates(stored,dests||{});
+  const n=Object.keys(updates).length;
+  if(n)await db.ref('team_alltime').update(updates);
+  return n;
+}
+// 歴代ランキングに出す記録の一覧（運賃の高い順）。今ある分（team_dests）と保管分（team_alltime）を合わせ、
+// 同じ記録（同じ人・同じts）は1件にする。driverIdFilterを渡すと、その人の分だけにする
+function collectAllTimeTrips(driverIdFilter){
+  const seen=new Set(),list=[];
+  // _dKeyは、その記録が入っている場所のキー（保管分の削除ボタンが、実際の場所を指すようにするため）
+  const add=(id,e,archived,key)=>{
+    if(!e||e.type!=='trip'||!(e.fare>0))return;
+    if(e.ts){const k=id+'_'+e.ts;if(seen.has(k))return;seen.add(k);}
+    list.push(Object.assign({},e,{_id:id,_archived:archived,_dKey:key}));
+  };
+  Object.keys(teamDests||{}).forEach(id=>{
+    if(driverIdFilter&&id!==driverIdFilter)return;
+    Object.entries(teamDests[id]||{}).forEach(([k,e])=>add(id,e,false,k));
+  });
+  Object.keys(teamAllTime||{}).forEach(id=>{
+    if(driverIdFilter&&id!==driverIdFilter)return;
+    Object.entries(teamAllTime[id]||{}).forEach(([k,e])=>add(id,e,true,k));
+  });
+  return list.sort(compareAllTimeTrips);
+}
+// 管理者が、保管分のうち誤った記録（運賃の入力間違い等）をランキングから削除する
+function adminDeleteAllTimeTrip(driverId,key){
+  if(!isAdmin){toast('⚠️ 管理者のみ操作できます');return;}
+  if(!confirm('この記録を歴代送り先ランキングから削除しますか？（元に戻せません）'))return;
+  if(!db)return;
+  db.ref('team_alltime/'+driverId+'/'+key).remove().catch(err=>console.error('team_alltime remove failed',err));
+  toast('🗑 歴代ランキングから削除しました');
+}
+// 以前の月次リセットは、売り上げランキングだけでなく送り先データも全員分削除していた（歴代送り先ランキングや、
+// 待機/送り先タブの記録まで消えてしまっていた）。その削除の直前に控えたバックアップ（team_dests_backup）から、
+// 消えた送り先データを戻す。今ある記録は触らず、無い記録（同じ人・同じtsが無いもの）だけを足すので、何度実行しても
+// 重複しない。保存期間より古い記録は戻さない。自動では、バックアップ1件につき1回だけ戻す（済んだ印は
+// team_config/dests_restored_backup_ts）。管理者が手動で全員分を削除した時のバックアップ（manual:true）は、
+// 意図した削除を取り消してしまわないよう、自動では戻さない。manualは管理者が設定画面のボタンで戻す場合
+async function restoreDestsFromBackup(manual){
+  if(!db||testMode)return;
+  try{
+    const backupTs=(await db.ref('team_dests_backup/ts').once('value')).val();
+    if(!backupTs){if(manual)toast('⚠️ 戻せるバックアップがありません');return;}
+    if(!manual){
+      if((await db.ref('team_config/dests_restored_backup_ts').once('value')).val()===backupTs)return;
+      if((await db.ref('team_dests_backup/manual').once('value')).val())return;
+    }
+    const data=(await db.ref('team_dests_backup/data').once('value')).val()||{};
+    const cur=(await db.ref('team_dests').once('value')).val()||{};
+    const cutoff=destRetentionCutoffTs();
+    const updates={};let n=0;
+    Object.entries(data).forEach(([id,entries])=>{
+      const mine=cur[id]||{};
+      const haveTs=new Set(Object.values(mine).map(e=>e&&e.ts).filter(Boolean));
+      Object.entries(entries||{}).forEach(([k,e])=>{
+        if(!e||(k in mine))return;
+        if(e.ts&&haveTs.has(e.ts))return;
+        if(e.ts&&e.ts<cutoff)return;
+        updates[id+'/'+k]=e;n++;
+      });
+    });
+    // まとめて1回で送ると大きすぎるため、分けて書き込む
+    const keys=Object.keys(updates);
+    for(let i=0;i<keys.length;i+=300){
+      const chunk={};
+      keys.slice(i,i+300).forEach(k=>{chunk[k]=updates[k];});
+      await db.ref('team_dests').update(chunk);
+    }
+    await db.ref('team_config/dests_restored_backup_ts').set(backupTs);
+    if(manual)toast(n?`🔄 送り先データを${n}件戻しました`:'🔄 戻す記録はありませんでした（すべて残っています）');
+  }catch(e){
+    console.error('restoreDestsFromBackup failed',e);
+    if(manual)toast('⚠️ 戻せませんでした。通信状況を確認してください');
+  }
+}
 function renderRankAllTimePersonal(){
   const el=document.getElementById('rank-alltime-personal');
   if(!el)return;
-  const trips=destinations.filter(d=>d.type==='trip'&&d.fare>0).slice().sort((a,b)=>(b.fare||0)-(a.fare||0)).slice(0,10);
+  // この端末の記録に、保管分（整理した古い記録）を合わせる。同じ記録（同じts）は1件にする
+  const seen=new Set(),trips=[];
+  destinations.forEach(d=>{
+    if(d.type==='trip'&&d.fare>0){if(d.ts)seen.add(d.ts);trips.push(d);}
+  });
+  Object.values((teamAllTime&&teamAllTime[myId])||{}).forEach(e=>{
+    if(e&&e.type==='trip'&&e.fare>0&&!(e.ts&&seen.has(e.ts))){if(e.ts)seen.add(e.ts);trips.push(e);}
+  });
+  trips.sort(compareAllTimeTrips);
   el.innerHTML=trips.length
-    ?trips.map((d,i)=>buildRankTripCardHtml(d,i+1,null)).join('')
+    ?trips.slice(0,10).map((d,i)=>buildRankTripCardHtml(d,i+1,null)).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
 }
 // ⑤ 歴代送り先ランキング（グループ・1回の送先ごと、日付含む）
@@ -6219,20 +6491,17 @@ function renderRankAllTimeGroup(){
   // team_destsは仲間全員分の送り先データをまとめて読み込むため、電波状況等に
   // よっては表示までに数秒かかることがある。読み込みが終わる前に「記録が
   // ありません」と表示すると、データが消えたと誤解されてしまうため、
-  // 初回の読み込みが完了するまでは「読み込み中」と表示する
-  if(!teamDestsLoaded){
+  // 初回の読み込みが完了するまでは「読み込み中」と表示する（保管分も同じ）
+  if(!teamDestsLoaded||!teamAllTimeLoaded){
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">読み込み中...</div>';
     return;
   }
-  let allTrips=[];
-  Object.keys(teamDests||{}).forEach(driverId=>{
-    const entries=Object.values(teamDests[driverId]||{}).filter(e=>e.type==='trip'&&e.fare>0);
-    entries.forEach(e=>allTrips.push(e));
-  });
-  allTrips.sort((a,b)=>(b.fare||0)-(a.fare||0));
+  const allTrips=collectAllTimeTrips();
   el.innerHTML=allTrips.length
-    ?allTrips.slice(0,10).map((d,i)=>buildRankTripCardHtml(d,i+1,d.driverName||'不明')).join('')
+    ?allTrips.slice(0,10).map((d,i)=>buildRankTripCardHtml(d,i+1,d.driverName||'不明',
+        d._archived?adminDelBtnHtml(`adminDeleteAllTimeTrip('${d._id}','${d._dKey}')`):'')).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
+  if(teamAllTimeError&&isAdmin)el.innerHTML+='<div style="font-size:11px;color:var(--red);margin-top:6px;line-height:1.5">⚠️ 歴代ランキングの保管先（team_alltime）を読み込めませんでした（'+esc(String(teamAllTimeError))+'）。Firebaseのルールで team_alltime の読み書きを許可してください。</div>';
 }
 // 端末の入れ替え・localStorageクリア等でuidが変わると、同じ人の重複した行が
 // ランキングに残ってしまうため、削除ボタンでは今日・今月分をまとめて完全に削除する
@@ -8595,6 +8864,11 @@ function openSettlementFromLog(index){
 }
 
 let teamSales={};
+// 歴代送り先ランキングの保管（Firebaseのteam_alltime/{driverId}/t{ts}）。送り先データ（team_dests）は、保存期間を
+// 過ぎた古い記録が自動で整理される（pushDestToFirebase）ため、整理する前に、各自の運賃上位をここへ移して残す
+let teamAllTime={},teamAllTimeLoaded=false,teamAllTimeError=null;
+// バックアップから送り先データを戻した（restoreDestsFromBackup）印と、「自分のデータを保存」案内の元になるバックアップの情報
+let destsRestoredBackupTs=null,postResetBackupInfo=null;
 let spotDestStats={}; // {spot:{ward:count}}。月末リセットの対象外で累計し続ける
 
 function renderSpotDestTable(){
@@ -9441,13 +9715,20 @@ function pushDestToFirebase(entry,retryCount){
     }
   });
   if(retryCount>0)return; // 古いエントリの掃除は初回のみでよい
-  // 前月1日より古いエントリを削除
-  const _n=new Date();const cutoff=new Date(_n.getFullYear(),_n.getMonth()-1,1).getTime();
+  // 保存期間（今月＋前のDEST_KEEP_MONTHS_BACKか月）より古いエントリを整理する。
+  // 運賃の高い記録は、先に歴代ランキングの保管（team_alltime）へ移してから削除する。
+  // 保管に失敗した時は、歴代ランキングから消えてしまわないよう、削除せずに残す
+  const cutoff=destRetentionCutoffTs();
   db.ref('team_dests/'+myId).once('value',snap=>{
+    const old=[];
     snap.forEach(child=>{
       const v=child.val();
-      if(v&&(v.ts||0)<cutoff)child.ref.remove();
+      if(v&&(v.ts||0)<cutoff)old.push({ref:child.ref,v});
     });
+    if(!old.length)return;
+    archiveAllTimeTrips({[myId]:old.map(o=>o.v)})
+      .then(()=>old.forEach(o=>o.ref.remove()))
+      .catch(err=>console.error('team_alltime archive failed; old team_dests entries kept',err));
   }).catch(err=>{console.error('team_dests cleanup read failed',err);});
 }
 
@@ -9462,20 +9743,18 @@ async function resendUnsyncedDestsToFirebase(){
   if(testMode){toast('🧪 テストモード中は使用できません');return;}
   const allTargets=destinations.filter(d=>(d.type==='trip'||d.type==='cp')&&!d.synced);
   if(!allTargets.length){alert('未送信と思われる記録は見つかりませんでした。');return;}
-  // 「仲間の送り先」一覧（renderTeamDests）・通常送信時の自動掃除（pushDestToFirebase）
-  // のいずれも、前月1日より古い記録は対象外（表示されない・自動削除される）にしている。
-  // 古い記録をここで送信しても、一覧には表示されず、次に通常の送り先を記録した時に
+  // 通常送信時の自動掃除（pushDestToFirebase）は、保存期間（今月＋前のDEST_KEEP_MONTHS_BACKか月）より
+  // 古い記録を自動で削除する。古い記録をここで送信しても、次に通常の送り先を記録した時に
   // 掃除処理でまた削除されてしまい、「再送したのに反映されない」ように見えるだけの
   // 無駄な通信になるため、対象から除外し、件数を分けて案内する
-  const _now=new Date();
-  const cutoff=new Date(_now.getFullYear(),_now.getMonth()-1,1).getTime();
+  const cutoff=destRetentionCutoffTs();
   const targets=allTargets.filter(d=>(d.ts||0)>=cutoff);
   const tooOldCount=allTargets.length-targets.length;
   if(!targets.length){
-    alert(`未送信の記録が${allTargets.length}件見つかりましたが、すべて先月より古いため送信を見送りました。\n（古い記録は仲間の送り先一覧に表示されない仕様のため、送信しても意味がありません）`);
+    alert(`未送信の記録が${allTargets.length}件見つかりましたが、すべて保存期間（約${DEST_KEEP_MONTHS_BACK+1}か月）より古いため送信を見送りました。\n（古い記録は自動で整理される仕様のため、送信しても残りません）`);
     return;
   }
-  const oldNote=tooOldCount>0?`\n（うち${tooOldCount}件は先月より古いため対象外にしました）`:'';
+  const oldNote=tooOldCount>0?`\n（うち${tooOldCount}件は保存期間より古いため対象外にしました）`:'';
   if(!confirm(`${targets.length}件の記録を、仲間と共有するデータベースへ再送します。よろしいですか？${oldNote}`))return;
   toast(`🔄 ${targets.length}件を確認・再送しています...`);
   const driverName=localStorage.getItem('taxi_name')||'自分';
@@ -9499,7 +9778,7 @@ async function resendUnsyncedDestsToFirebase(){
   }
   saveDests();
   alert(`再送結果\n\n新たに送信: ${sentCount}件\n既に届いていた: ${skippedCount}件\n失敗: ${failCount}件`+
-    (tooOldCount>0?`\n対象外（先月より古い）: ${tooOldCount}件`:''));
+    (tooOldCount>0?`\n対象外（保存期間より古い）: ${tooOldCount}件`:''));
 }
 
 // 上のcleanForFirebaseのコメントにある送信不具合で、この端末には記録されているのに
@@ -9508,7 +9787,7 @@ async function resendUnsyncedDestsToFirebase(){
 // ・syncedフラグ（Firebase側に一度でも存在を確認できた記録に付く）が無い記録だけが対象。
 //   管理者の削除・月次リセットでFirebase側から消された記録（synced済み）は再送しない
 // ・作成から2分以内の記録と送信中の記録は対象外（通常の送信と二重にならないように）
-// ・前月1日より古い記録は、共有しても表示・保持されない仕様のため対象外
+// ・保存期間（destRetentionCutoffTs）より古い記録は、共有しても自動で整理される仕様のため対象外
 // 送信前に、呼び出し元が既に持っているFirebase上の自分の記録（ownFbObj）と
 // 突き合わせ、既に届いている記録は送らずsyncedを付けるだけにする。複数件は
 // 1回のupdate（まとめて1つの書き込み）で送り、1件ずつ問い合わせて通信量が
@@ -9519,8 +9798,7 @@ async function autoResendUnsyncedOwnDests(ownFbObj){
   autoResendRunning=true;
   try{
     const fbTsSet=new Set(Object.values(ownFbObj||{}).map(e=>e&&e.ts).filter(Boolean));
-    const _n=new Date();
-    const cutoff=new Date(_n.getFullYear(),_n.getMonth()-1,1).getTime();
+    const cutoff=destRetentionCutoffTs();
     const now=Date.now();
     let markedSynced=false;
     const targets=[];
@@ -9983,7 +10261,7 @@ function adminLogin(){
     document.getElementById('admin-name').value=localStorage.getItem('taxi_name')||'';
     document.getElementById('admin-car').value=localStorage.getItem('taxi_car')||'';
     renderCPs();renderRankingPage();renderAllAccessLists();toast('🔓 管理者モード');
-    checkMonthStartDestsReset();
+    checkMonthStartSalesReset();
   }else{toast('⚠️ PINが違います');document.getElementById('pin-input').value='';}
 }
 
