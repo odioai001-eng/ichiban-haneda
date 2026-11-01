@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261101-2 -->
+<!-- v20261101-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1538,7 +1538,12 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261101-2';
+const APP_BUILD='20261101-3';
+// 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
+// 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
+// 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
+//     直す前の計算のまま共有データ（Firebase）に残る。その行を見分け、管理者の「修正」が更新後にずれないようにするために使う
+const SALES_CALC_VER=2;
 // 個人用アプリ（売上&時間管理アプリ・売上時間管理アプリ）の利用申請の一覧。Firebase接続時に
 // 申請の通知を登録するため、接続処理（tryFirebase）より前に定義しておく
 const ACCESS_APPS={
@@ -6181,6 +6186,13 @@ function renderRankTodayPersonal(){
     </div>`).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">本日の記録がありません</div>';
 }
+// 管理者にだけ、「旧版のアプリのスマホが送った値」の行に注意書きを出す。仲間の売上は各自のスマホが計算して
+// 送った値をそのまま表示するため、アプリを更新していない人の分は、直す前の計算のままの金額が残る
+// （calcVerを送るのは新しい版だけ。自分の行は、この端末で計算し直すので対象外）
+function staleBuildNoteHtml(d){
+  if(!isAdmin||d.uid===myId||(d.calcVer||0)>=SALES_CALC_VER)return '';
+  return '<div class="rank-stale-note" style="font-size:10px;color:var(--amber);line-height:1.4;margin-top:1px">⚠️ 旧版アプリの値です（その人が更新すると直ります）</div>';
+}
 // ② 本日の売り上げランキング（グループ・送先売上の合計）
 function renderRankTodayGroup(){
   const el=document.getElementById('rank-today-group');
@@ -6220,7 +6232,7 @@ function renderRankTodayGroup(){
         sub=`出庫${outStr}、帰庫予定${backStr}`;
       }
       const btns=adminResetBtnHtml(`adminResetTodaySales('${d.uid}')`)+adminDelBtnHtml(`adminDeleteTeamSalesEntry('${d.uid}')`);
-      return rankRowHtml(i,esc(d.name||'不明'),sub,d.todayFare,btns);
+      return rankRowHtml(i,esc(d.name||'不明'),sub+staleBuildNoteHtml(d),d.todayFare,btns);
     }).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>';
   el.innerHTML+='<div style="display:flex;gap:6px;margin-top:8px">'
@@ -6263,7 +6275,7 @@ function renderRankMonthGroup(){
       if(d.uid===myId||isAdmin){
         btns+=`<button onclick="editTeamMemberMonthSales('${d.uid}','${esc(d.name||'不明')}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--accent);cursor:pointer;margin-left:4px;flex-shrink:0">✏️ 修正</button>`;
       }
-      return rankRowHtml(i,esc(d.name||'不明'),sub,fare,btns);
+      return rankRowHtml(i,esc(d.name||'不明'),sub+staleBuildNoteHtml(d),fare,btns);
     }).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">まだ記録がありません</div>')
     +'<div style="display:flex;gap:6px;margin-top:8px">'
@@ -6306,7 +6318,9 @@ async function editTeamMemberMonthSales(uid,name){
   const fare=Math.max(0,parseInt(fareStr)||0);
   const rawDays=cur.monthDaysRaw!=null?cur.monthDaysRaw:curDays;
   const rawFare=cur.monthFareRaw!=null?cur.monthFareRaw:curFare;
-  const monthAdjust={days:days-rawDays,fare:fare-rawFare,ts:Date.now(),monthKey:currentSalesMonthKey()};
+  // 差分の基にした自動集計値が、どの計算方法の版のものか（calcVerを送らない旧版のスマホの値は1）を残す。
+  // 前月の値のままの行は、0を基準に書き直すため、計算方法に左右されない（今の版）
+  const monthAdjust={days:days-rawDays,fare:fare-rawFare,ts:Date.now(),monthKey:currentSalesMonthKey(),calcVer:stale?SALES_CALC_VER:(cur.calcVer||1)};
   // 平均の分子(monthFareForAvg)も、今回の訂正額の分だけ一緒にずらしておく
   // （そうしないと次に自動集計が走るまで、平均だけ訂正前の値のままになってしまう）
   const curFareForAvg=cur.monthFareForAvg!=null?cur.monthFareForAvg:curFare;
@@ -7644,7 +7658,12 @@ function currentSalesMonthKey(){return monthKeyOf(getEffectiveMonthRefDate());}
 function isMonthAdjustCurrent(adj){
  if(!adj)return false;
  const key=adj.monthKey||(adj.ts?monthKeyOf(new Date(adj.ts)):null);
- return key===currentSalesMonthKey();
+ if(key!==currentSalesMonthKey())return false;
+ // 修正は「その時点の自動集計値との差分」。更新前の（直す前の計算の）値を基に修正した場合、スマホが更新されて
+ // 自動集計値が変わると、差分が合わなくなり、金額がずれる（マイナスにもなる）。そのため、直す前の計算を基にした修正
+ // （calcVerが今の版と違う）は使わない。calcVerの無い修正（この仕組みより前に作られたもの）は、直す前の計算（版1）を基にしたものとして扱う
+ if((adj.calcVer||1)!==SALES_CALC_VER)return false;
+ return true;
 }
 // offsetを指定すると、その分だけ月をずらして取得できる（-1で先月分）。
 // 「今月」の基準は月をまたぐ夜勤で分断されないようgetEffectiveMonthRefDate()を
@@ -9409,7 +9428,8 @@ function pushTeamSales(){
   const storedAdjust=stored.monthAdjust;
   const adjustIsCurrent=isMonthAdjustCurrent(storedAdjust);
   const adjust=adjustIsCurrent?storedAdjust:{days:0,fare:0};
-  const monthFare=monthFareRaw+(adjust.fare||0);
+  // 修正の差分を足した結果がマイナスになることがある（実際の売上はマイナスにならないため、0未満にはしない）
+  const monthFare=Math.max(0,monthFareRaw+(adjust.fare||0));
   // monthAdjust.daysは「修正した時点の自動集計値との差分」を保持しているだけなので、
   // 差分を足した結果がマイナスになることがある。実際の出勤日数はマイナスに
   // ならないため、0未満にはしない
@@ -9419,7 +9439,7 @@ function pushTeamSales(){
   // 送信する（参加していない方は.update()で触れないため、既存の値があればそのまま
   // 残ってしまう点に注意。退出時はleaveGroupRanking側で該当フィールドを明示的に
   // nullにして非公開にしている）
-  const payload={name,ts:Date.now()};
+  const payload={name,ts:Date.now(),calcVer:SALES_CALC_VER};
   if(isTodayRankingOptedIn())Object.assign(payload,{todayFare,todayBizStart});
   if(isMonthRankingOptedIn()){
    Object.assign(payload,{monthFare,monthFareForAvg,monthDays,monthFareRaw,monthDaysRaw,monthKey});
