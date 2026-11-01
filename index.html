@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261101-3 -->
+<!-- v20261101-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -134,16 +134,35 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .swn-none{background:rgba(13,13,26,.62)}
 .swn-none .swn-v{color:var(--muted)}
 @media (max-height:520px){.swn-title,.swn-tiles{display:none}}
-/* 列移動の表（💡）が出ている間は、ステータスバーの下端が札の分（約37px）だけ下がる。画面の高さが762px以下の端末では、
+/* 乗り場ボタン（1号〜国際線）の2行目に出す、羽田空港の到着便の数。「前30分＋後1時間」の便数（到着便ビューアーの赤い数字と同じ）。
+   暗い小さな枠に金色の字で、選んでいる（青い）ボタンの上でも、選んでいない（半透明の）ボタンの上でも読める。
+   データが来ていない間は「–」、古くなったら（2分半以上）薄くする。横向きなど低い画面では、地図を広く見せるため出さない */
+.chip-arr{display:flex;align-items:center;justify-content:center;height:15px;margin:1px auto 0;width:max-content;max-width:100%;box-sizing:border-box;padding:0 3px;border-radius:7px;overflow:hidden;
+  background:rgba(13,13,26,.62);color:#ffd166;font-size:12px;font-weight:800;line-height:15px;
+  font-variant-numeric:tabular-nums;white-space:nowrap;text-shadow:none}
+.chip-arr .arr-ic{font-size:10px;margin-right:1px}
+.chip-arr.none{color:var(--muted)}
+.chip-arr.old{opacity:.5}
+/* 幅が411px以下の端末（アプリは、幅400pxより狭い端末を412pxに拡大して表示するため、400〜411pxが最小）は、✈を省いて数字を優先する */
+@media (max-width:411px){.chip-arr .arr-ic{display:none}}
+/* 乗り場ボタンは、2行（名前＋到着便の数字）になる分、上下の余白を詰めて、高さを約43px（以前は約37px）にする。
+   低い画面（横向き等）、および、列移動の表（💡）が出ている画面で高さが768px以下の端末（下の札・タイトルを隠す規則と同じ）では、
+   到着便の数字を隠して、ボタンを以前と同じ高さ（余白8px）に戻す（🚗パネルとの重なりの余裕が、以前と同じになる） */
+.spot-chip{padding:3px 2px;min-width:0} /* min-width:0＝数字の枠が広くても、5つのボタンの幅は均等のまま（下の札の列とそろう） */
+@media (max-height:520px){.chip-arr{display:none}.spot-chip{padding:8px 2px}}
+@media (max-height:768px){#status-bar.has-pool-table .chip-arr{display:none}#status-bar.has-pool-table .spot-chip{padding:8px 2px}}
+/* 列移動の表（💡）が出ている間は、ステータスバーの下端が札の分（約37px）だけ下がる。画面の高さが768px以下の端末では、
    下から開く🚗パネル（取り消しボタンが出た状態で約353px）が表の最下行に被さってしまうため、表が出ている間だけ札とタイトルを
-   隠して、札を足す前と同じ高さに保つ（表が消えれば、札はまた出る）。762px ＝ 表の下端（345）＋ 画面下の余白（58）＋ 🚗パネル（約353）＋ 余裕 */
-@media (max-height:762px){#status-bar.has-pool-table .swn-title,#status-bar.has-pool-table .swn-tiles{display:none}}
+   隠して、札を足す前と同じ高さに保つ（表が消えれば、札はまた出る）。768px ＝ 表の下端（351）＋ 画面下の余白（58）＋ 🚗パネル（約353）＋ 余裕
+   （表の下端は、乗り場ボタンが2行になった分の6px下がっている。以前は345・762px） */
+@media (max-height:768px){#status-bar.has-pool-table .swn-title,#status-bar.has-pool-table .swn-tiles{display:none}}
 /* 2段目（1つ後の時間帯）は、2段にするとステータスバーが約37px（表を出している間は約36px）高くなるので、場所が足りない画面では隠して、
    1段目だけにする（上の規則と同じ考え方）。表を出していない時は、🚗パネル（取り消しボタンが出た状態で約353px＋画面下の余白58px）が
-   ステータスバーの最下行（下端285）に被さり始める702px以下で隠す。列移動の表（💡）を出している間は、表の下端が381になるので、
-   799px以下で隠す。702px ＝ 下端（285）＋ 58 ＋ 約353 ＋ 余裕、799px ＝ 下端（381）＋ 58 ＋ 約353 ＋ 余裕 */
-@media (max-height:702px){.swn-next{display:none}}
-@media (max-height:799px){#status-bar.has-pool-table .swn-next{display:none}}
+   ステータスバーの最下行（下端291）に被さり始める708px以下で隠す。列移動の表（💡）を出している間は、表の下端が387になるので、
+   805px以下で隠す。708px ＝ 下端（291）＋ 58 ＋ 約353 ＋ 余裕、805px ＝ 下端（387）＋ 58 ＋ 約353 ＋ 余裕
+   （下端は、乗り場ボタンが2行になった分の6px下がっている。以前は285・381で、702px・799px） */
+@media (max-height:708px){.swn-next{display:none}}
+@media (max-height:805px){#status-bar.has-pool-table .swn-next{display:none}}
 /* GPS状態は、駅アイコン（station-btn）と同じ行にその左隣として並べる
    （.map-btn-stack.left内の該当行を参照） */
 .gps-pill{background:rgba(13,13,26,.82);backdrop-filter:blur(6px);
@@ -1538,7 +1557,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261101-3';
+const APP_BUILD='20261101-4';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -7290,14 +7309,15 @@ function renderSpotRow(){
 
   const chipHtml=s=>{
     const sel=currentSpotSelection===s;
-    return `<div onclick="selectSpot('${s.replace(/'/g,"\\'")}') "
-      style="text-align:center;padding:8px 2px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
+    return `<div class="spot-chip" onclick="selectSpot('${s.replace(/'/g,"\\'")}') "
+      style="text-align:center;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
       background:${sel?'var(--accent)':'rgba(79,142,247,.18)'};
       color:${sel?'#fff':'var(--accent)'};
       border:2px solid ${sel?'var(--accent)':'transparent'};
-      backdrop-filter:blur(6px);transition:all .2s">${esc(s)}</div>`;
+      backdrop-filter:blur(6px);transition:all .2s"><div style="line-height:17px">${esc(s)}</div><div class="chip-arr none" data-spot="${esc(s)}"><span class="arr-n">–</span></div></div>`;
   };
   el.innerHTML=(hCp.spots||[]).map(chipHtml).join('')+chipHtml('国際線');
+  renderArrivalCounts(); // 作り直したボタンに、取得済みの到着便の数字を入れ直す
 }
 
 async function recordAbure(){
@@ -9204,6 +9224,78 @@ function renderSpotWaitNow(){
 }
 renderSpotWaitNow();
 setInterval(()=>{try{renderSpotWaitNow();}catch(e){}},15*1000);
+
+// ---- 羽田空港の到着便の数（乗り場ボタンの2行目） ----
+// 「羽田空港 乗り場別到着便ビューアー」の、各乗り場の「前30分-後1h」の赤い数字（前30分の便＋後1時間の便）を、
+// 1分ごとに取得して、地図の乗り場ボタン（1号〜4号・国際線）の下に出す。数字の計算は、ビューアーのサーバー側（/api/counts）で行う
+// （日本時間・7:00-29:00軸・ビューアーの画面と同じ計算）。国際線のボタンには、4号乗り場の「内国際線」の数を出す。
+// ・取得できない時（ビューアーが止まっている・通信できない）は、前回の数字をそのまま出し続けず、2分半で薄く、10分で「–」にする
+// ・連続3回失敗したら、取得を5分おきに減らす（つながれば1分おきに戻る）。アプリが見えている間だけ取得する
+const ARRIVAL_COUNTS_URL='https://haneda-arrival-app.onrender.com/api/counts';
+let arrivalCounts=null;      // {gates, receivedAt, serverStale}
+let arrivalFetching=false,arrivalFailStreak=0,arrivalLastTry=0;
+async function fetchArrivalCounts(){
+  if(arrivalFetching)return;
+  arrivalFetching=true;arrivalLastTry=Date.now();
+  // 空港の到着便サーバーが休止中だと、最初の応答に1分近くかかることがある。長く待ちすぎない（次の回に任せる）
+  const ctrl=typeof AbortController==='function'?new AbortController():null;
+  const timer=setTimeout(()=>{try{if(ctrl)ctrl.abort();}catch(e){}},30000);
+  try{
+    const res=await fetch(ARRIVAL_COUNTS_URL,{cache:'no-store',signal:ctrl?ctrl.signal:undefined});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const j=await res.json();
+    if(!j||j.ok!==true||!j.gates||typeof j.gates!=='object')throw new Error('bad response');
+    arrivalCounts={gates:j.gates,receivedAt:Date.now(),serverStale:!!j.stale};
+    arrivalFailStreak=0;
+  }catch(e){arrivalFailStreak++;}
+  clearTimeout(timer);arrivalFetching=false;
+  try{renderArrivalCounts();}catch(e){}
+}
+// 乗り場ボタン（'1号'〜'4号'・'国際線'）に出す数。{a:前30分の便(到着済みを含む), b:後1時間の便}。数が無い時は null
+function arrivalCountFor(spot){
+  const c=arrivalCounts;
+  if(!c)return null;
+  const num=v=>typeof v==='number'&&isFinite(v)&&v>=0?Math.floor(v):null;
+  if(spot==='国際線'){
+    const g=c.gates['4号乗り場'];
+    if(!g)return null;
+    const a=num(g.intlBefore),b=num(g.intlAfter);
+    return a===null||b===null?null:{a,b};
+  }
+  const m=/^([1-4])号$/.exec(spot);
+  if(!m)return null;
+  const g=c.gates[m[1]+'号乗り場'];
+  if(!g)return null;
+  const a=num(g.beforeDisplay),b=num(g.after);
+  return a===null||b===null?null:{a,b};
+}
+function renderArrivalCounts(){
+  const age=arrivalCounts?Date.now()-arrivalCounts.receivedAt:Infinity;
+  document.querySelectorAll('.chip-arr[data-spot]').forEach(el=>{
+    const spot=el.getAttribute('data-spot');
+    const v=age>10*60*1000?null:arrivalCountFor(spot);
+    if(!v){
+      el.className='chip-arr none';
+      el.innerHTML='<span class="arr-n">–</span>';
+      el.title=`${spot}の到着便：取得できていません`;
+      return;
+    }
+    const old=age>150*1000||(arrivalCounts&&arrivalCounts.serverStale);
+    el.className='chip-arr'+(old?' old':'');
+    el.innerHTML=`<span class="arr-ic">✈</span><span class="arr-n">${v.a}+${v.b}</span>`;
+    el.title=`${spot==='国際線'?'国際線（4号乗り場の内）':spot+'乗り場'}の到着便：前30分 ${v.a}便＋後1時間 ${v.b}便${old?'（古い数字です）':''}`;
+  });
+}
+function arrivalTick(){
+  if(document.hidden)return;
+  const interval=arrivalFailStreak>=3?5*60*1000:60*1000;
+  if(Date.now()-arrivalLastTry>=interval-3000)fetchArrivalCounts();
+  else renderArrivalCounts(); // 古さ（薄くする・「–」にする）を更新
+}
+setInterval(()=>{try{arrivalTick();}catch(e){}},5000);
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&Date.now()-arrivalLastTry>20*1000){try{fetchArrivalCounts();}catch(e){}}
+});
 
 // 平均に含めていない1〜9分の記録が、分ごと・乗り場ごとに何件あるか（全期間・全曜日・全時間帯の合計）。
 // 記録そのものは消さずに残してあるため、ここで件数を確認できる
