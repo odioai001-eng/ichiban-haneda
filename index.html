@@ -6190,7 +6190,7 @@ function renderRankTodayGroup(){
   // 自分の行は、Firebaseへの送信待ち等で古い値が残っていても売上管理と同じ金額が
   // 出るよう、端末内の記録から計算した最新値で表示する（テスト出勤中は除く）
   const list=Object.entries(teamSales||{}).map(([uid,d])=>({...d,uid}))
-    .map(d=>(d.uid===myId&&!testMode)?{...d,todayFare:getMyTodayFareExTax(),todayBizStart:bizStart}:d)
+    .map(d=>(d.uid===myId&&!testMode)?{...d,todayFare:getMyBizDayFareExTax(),todayBizStart:bizStart}:d)
     .filter(d=>d.todayBizStart===bizStart).sort((a,b)=>(b.todayFare||0)-(a.todayFare||0));
   // 出庫（出勤）・帰庫予定（上がり予定）時刻は、各自がdrivers/{uid}に共有している
   // dutyStartTs・planFinishTsから取得する（出勤中の人のみ分かるため、既に退勤済みの
@@ -7840,6 +7840,14 @@ function getMonthFareDays(offset){
  if(isDuty&&dutyStart){
   log.filter(e=>(e.ts||0)>=dutyStart.getTime()).forEach(e=>used.add(e));
  }
+ // 他の月に始めた勤務（月をまたぐ夜勤の、日付が替わったあとの記録など）に属する記録も、「どの勤務にも
+ // 属さない記録」としては数えない。以前は、月末に始めた夜勤の、日付が替わったあとの記録が、新しい月の
+ // 「勤務に属さない売上」として今月に加算され、出勤日数は0日のまま、今月の売上（ランキングの金額）だけが
+ // 増えていた（その勤務は、始めた月＝前月の分として、前月に全額数える）
+ JSON.parse(localStorage.getItem('taxi_shift_log')||'[]').forEach(s=>{
+  if(!s.endTs)return;
+  log.forEach(e=>{if((e.ts||0)>=s.startTs&&(e.ts||0)<=s.endTs)used.add(e);});
+ });
  const byDate={};
  // どの勤務にも属さない記録だけ、月の範囲で絞り込んでdateStrでまとめる
  log.filter(e=>(e.ts||0)>=monthStart&&(e.ts||0)<monthEnd&&!used.has(e)).forEach(e=>{
@@ -9340,6 +9348,19 @@ function getBusinessDayStart(refTs){
 function getMyTodayFareExTax(){
  return exTax(getTodayShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0));
 }
+// グループの「本日の売り上げランキング」に出す、自分の本日の売上（税抜）。ランキングの「本日」は、朝9:00〜翌朝9:00の
+// 営業日（getBusinessDayStart）で区切る。出勤中は、出勤してからの累計（getMyTodayFareExTax）。退勤後は、今の営業日に
+// かかっている出退勤（今の営業日の開始以降に退勤した出退勤）の売上だけにする。以前は、退勤後は直近の出退勤の売上を、
+// それが前の営業日のもの（例: 昨夜の夜勤が明け方に終わり、昼にアプリを開いた時）でも「本日」として出していたため、
+// 本日出勤していない人にも、前日の売上が本日のランキングに出ていた（売上管理の「本日の売上」は、これまでどおり）
+function getMyBizDayFareExTax(){
+ if(isDuty&&dutyStart)return getMyTodayFareExTax();
+ const bizStart=getBusinessDayStart();
+ const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+ const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+ const ranges=shiftLog.filter(s=>s.endTs&&s.endTs>=bizStart).map(s=>({start:s.startTs,end:s.endTs}));
+ return exTax(log.filter(e=>ranges.some(r=>(e.ts||0)>=r.start&&(e.ts||0)<=r.end)).reduce((a,e)=>a+(e.fare||0),0));
+}
 // 出勤中でまだtaxi_shift_logに入っていない、今回のシフトの記録
 function getOngoingShiftFareEntries(){
  if(!(isDuty&&dutyStart))return [];
@@ -9365,7 +9386,7 @@ function pushTeamSales(){
  const todayBizStart=getBusinessDayStart(now.getTime());
  // 本日・今月とも、設定の「💰 売上管理（税抜）」の日別一覧と同じ計算式
  // （税込の合計をまとめて税抜換算）で集計する
- const todayFare=getMyTodayFareExTax();
+ const todayFare=getMyBizDayFareExTax();
  const monthFareRaw=getMonthFareExTax(0)+carry.fare;
  const monthDaysRaw=getMonthShifts().length+carry.days;
  // 1日平均は「退勤して1日分として確定した」売上・日数だけで計算する。
