@@ -90,10 +90,12 @@ section.op + section.op{padding-top:36px; border-top:1px solid var(--border)}
 .op-head .sub{color:var(--muted); font-size:13px; margin-top:3px}
 
 .steps{margin:0 0 18px; padding:0; list-style:none; display:grid; gap:10px}
-.steps li{display:flex; gap:11px; align-items:flex-start}
+/* 箇条書きの中身は、太字（<b>）と文章が混ざるものが多い。li自体を横並び（flex）にすると、太字と文章が別々の列に
+   分かれ、それぞれが極端に狭い幅に押し込まれて、文字が縦に並んで（縦書きのように）読みにくくなる。
+   li は通常の文章の流れ（横書き）にして、行頭の丸だけを左に出す */
+.steps li{position:relative; padding-left:18px}
 .steps li::before{
-  content:""; width:7px; height:7px; border-radius:50%; background:var(--accent);
-  margin-top:8px; flex-shrink:0;
+  content:""; position:absolute; left:0; top:8px; width:7px; height:7px; border-radius:50%; background:var(--accent);
 }
 .steps b{font-weight:700}
 
