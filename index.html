@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261101-5 -->
+<!-- v20261101-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -845,7 +845,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <div class="pc">
   <div class="sec">🧾 本日の納金額</div>
   <div class="card">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">退勤のたびに自動で作成される精算表（燃料・メーター・運賃の内訳等）の一覧です。タップすると内容を再表示できます。</div>
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">退勤のたびに自動で作成される精算表（燃料・メーター・運賃の内訳等）の一覧です。タップすると内容を再表示できます。月が替わると、前の月までに退勤した分は自動で削除されます。</div>
    <div id="settlement-log-list"></div>
   </div>
   <div class="sec">🛰 バックグラウンドのGPS診断</div>
@@ -1560,7 +1560,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261101-5';
+const APP_BUILD='20261101-6';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -1909,6 +1909,9 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   // 月初（1日の朝9:00以降）に管理者がアプリを開いたままでも、全員が退勤した時点で
   // 売り上げランキングの月次リセットを案内できるよう、定期的に確認する
   setInterval(checkMonthStartSalesReset,5*60*1000);
+  // 設定の「本日の納金額」の一覧は、月が替わったら前の月までの分を消す（起動して少したってから確認し、開いたままの間も5分おきに確認する）
+  setTimeout(()=>{try{resetSettlementLogForNewMonth();}catch(e){console.error(e);}},3000);
+  setInterval(()=>{try{resetSettlementLogForNewMonth();}catch(e){console.error(e);}},5*60*1000);
   // 上のpushTeamSales()は「自分のデータを他人の端末にも最新に見せる」ためのものだが、
   // 既に退勤した仲間（isDutyでなくpushが走らない人）の分は、朝9時の営業日区切りを
   // またいだ瞬間には自動で消えず、誰かのデータ更新やタブの切り替えなど、何か
@@ -4515,6 +4518,9 @@ let fuelEntries=[];       // 燃料の給油記録 [{amount(リットル), ts}]
 let highwayEntries=[];    // 無料高速（実質無料・差引合計から差し引く）の記録 [{amount(円), ts}]
 let jibaraHighwayEntries=[]; // 自腹高速（戻ってこない高速代・ETCに加算する）の記録 [{amount(円), ts}]
 let settlementLog=JSON.parse(localStorage.getItem('taxi_settlement_log')||'[]'); // 日次精算の保存履歴（退勤ごとに1件）
+// 月初に納金額の記録を消す（resetSettlementLogForNewMonth）時に、その記録が持っていた燃料・無料高速・自腹高速の内訳だけは、送り先タブに
+// 差し込んで表示している分（buildExtraEntriesForDests）に使っているため、ここに控えて残す（納金額の一覧だけをリセットし、送り先タブの表示は変えない）
+let settlementExtrasArchive=(()=>{try{const a=JSON.parse(localStorage.getItem('taxi_settlement_extras')||'[]');return Array.isArray(a)?a:[];}catch(e){return [];}})();
 function loadShiftExtras(){
   try{return JSON.parse(localStorage.getItem('taxi_shift_extras')||'null');}catch(e){return null;}
 }
@@ -8912,6 +8918,47 @@ function openSettlementFromLog(index){
   if(!record)return;
   showSettlementReport(record,null);
 }
+// 設定の「🧾 本日の納金額」の一覧は、月が替わったら、前の月までに退勤した分を自動で削除する（月初のリセット）。
+// ・退勤した時刻（shiftEndTs）で判断する。月をまたぐ夜勤を月初の朝に退勤した分は、新しい月の分として残る（退勤直後に消えない）。
+//   日時が分からない記録は消さない
+// ・精算レポートを開いている間は、開いている記録の番号（currentSettlementIndex）がずれるため行わない（閉じた後の次の確認で行う）
+// ・送り先タブに差し込んでいる燃料・無料高速・自腹高速の内訳は、消さずに控えとして残す（settlementExtrasArchive。200日より古い控えは捨てる）。
+//   控えを保存できない時は、記録も消さない（次の確認でやり直す）
+// ・済んだ月は taxi_settlement_reset_month に残し、同じ月の間は何もしない。消した件数を返す
+const SETTLEMENT_EXTRAS_KEEP_MS=200*24*3600*1000;
+function resetSettlementLogForNewMonth(now){
+  now=now||new Date();
+  const calKey=monthKeyOf(now);
+  if(localStorage.getItem('taxi_settlement_reset_month')===calKey)return 0;
+  const modal=document.getElementById('settlement-report-modal');
+  if(modal&&modal.style.display==='flex')return 0;
+  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+  const keep=[],drop=[];
+  settlementLog.forEach(r=>{
+    const t=r&&(r.shiftEndTs||r.shiftStartTs);
+    ((t&&t<monthStart)?drop:keep).push(r);
+  });
+  if(drop.length){
+    const hasExtras=r=>(r.fuelEntries&&r.fuelEntries.length)||(r.highwayEntries&&r.highwayEntries.length)||(r.jibaraHighwayEntries&&r.jibaraHighwayEntries.length);
+    const archived=drop.filter(hasExtras).map(r=>({ts:r.shiftEndTs||r.shiftStartTs,fuelEntries:r.fuelEntries||[],highwayEntries:r.highwayEntries||[],jibaraHighwayEntries:r.jibaraHighwayEntries||[]}));
+    const cutoff=now.getTime()-SETTLEMENT_EXTRAS_KEEP_MS;
+    const nextArchive=settlementExtrasArchive.concat(archived).filter(a=>a&&(a.ts||0)>=cutoff);
+    try{
+      localStorage.setItem('taxi_settlement_extras',JSON.stringify(nextArchive));
+      localStorage.setItem('taxi_settlement_log',JSON.stringify(keep));
+    }catch(e){
+      console.error('納金額の月初リセットに失敗しました',e);
+      try{localStorage.setItem('taxi_settlement_extras',JSON.stringify(settlementExtrasArchive));}catch(e2){} // 控えだけが増えた状態を残さない
+      return 0;
+    }
+    settlementExtrasArchive=nextArchive;
+    settlementLog=keep;
+    renderSettlementLogList();
+    toast(`🧾 先月までの納金額の記録（${drop.length}件）を削除しました`);
+  }
+  localStorage.setItem('taxi_settlement_reset_month',calKey);
+  return drop.length;
+}
 
 let teamSales={};
 // 歴代送り先ランキングの保管（Firebaseのteam_alltime/{driverId}/t{ts}）。送り先データ（team_dests）は、保存期間を
@@ -10692,6 +10739,8 @@ function buildExtraEntriesForDests(){
   };
   if(isDuty)pushSet(fuelEntries,highwayEntries,jibaraHighwayEntries);
   settlementLog.forEach(r=>pushSet(r.fuelEntries,r.highwayEntries,r.jibaraHighwayEntries));
+  // 月初に消した納金額の記録の内訳（控え）も、送り先タブの表示は今までどおり出す
+  settlementExtrasArchive.forEach(r=>pushSet(r.fuelEntries,r.highwayEntries,r.jibaraHighwayEntries));
   return out;
 }
 // 高速代（ETC）を送り先の記録にも保持するようにする以前に記録されたトリップは、
