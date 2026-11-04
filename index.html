@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261101-8 -->
+<!-- v20261104-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -206,7 +206,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
      右端だけが大きく空いて見えた。右下の🚗ボタンは、数字に重ならないようバーの真上に置く
    ・横向きなど画面が低い時だけは、右側の＋/−・🎯・👥ボタン（上から固定位置）が数字バーに
      重なるため、右も58px空ける
-   ・ラベルは折り返さず1行にして、同じ段の数字が同じ高さに揃うようにする */
+   ・ラベルは折り返さず1行にして、同じ段の数字が同じ高さに揃うようにする
+   ・項目名（ラベル）の文字は、すべて白にする（数字の色は項目ごとに別の色のまま） */
 #daily-bar{padding:4px 6px 4px 58px}
 @media (max-height:520px){#daily-bar{padding-right:58px}}
 .daily-row{display:flex;justify-content:space-evenly;align-items:flex-start}
@@ -233,7 +234,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .follow-addr-text.muted{color:rgba(255,255,255,.75);font-weight:600}
 @media (max-height:520px){#follow-addr{display:none!important}}
 .daily-cell{text-align:center;flex:0 0 auto}
-.daily-lbl{color:var(--muted);white-space:nowrap;line-height:1.3}
+.daily-lbl{color:#fff;white-space:nowrap;line-height:1.3}
 .daily-val{white-space:nowrap;font-weight:800;line-height:1.25}
 /* ボタンを縮小限度（syncMapButtonStackLayout内のMIN_BTN_SCALE）まで縮めても
    縦の表示領域に収まらない端末では、このクラスとmax-heightを付け外しする。
@@ -598,7 +599,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div id="daily-target-amount" class="daily-val" style="font-size:13px;color:var(--text)">-</div>
      </div>
      <div class="daily-cell">
-      <div class="daily-lbl" style="font-size:9px">目標時間単価</div>
+      <div class="daily-lbl" style="font-size:9px">目標時間単価（税込）</div>
       <div id="daily-target-hourly-rate" class="daily-val" style="font-size:13px;color:var(--text)">-</div>
      </div>
     </div>
@@ -612,7 +613,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <div id="daily-amount-left" class="daily-val" style="font-size:16px;color:var(--cyan)">-</div>
      </div>
      <div class="daily-cell">
-      <div class="daily-lbl" style="font-size:10px">現在時間単価</div>
+      <div class="daily-lbl" style="font-size:10px">現在時間単価（税込）</div>
       <div id="daily-hourly-rate" class="daily-val" style="font-size:16px;color:var(--gold)">-</div>
      </div>
     </div>
@@ -1479,7 +1480,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 
 <!-- 日次精算レポート（退勤後に自動表示、設定タブの履歴からも再表示できる） -->
 <div id="settlement-report-modal" style="position:fixed;inset:0;z-index:9600;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:16px">
- <div style="background:var(--surface);border-radius:20px;padding:22px 18px calc(18px + var(--sab));width:100%;max-width:380px;max-height:calc(100vh - 32px);overflow-y:auto">
+ <div id="settlement-report-scroll" style="background:var(--surface);border-radius:20px;padding:22px 18px calc(18px + var(--sab));width:100%;max-width:380px;max-height:calc(100vh - 32px);overflow-y:auto">
   <div style="text-align:center;font-size:17px;font-weight:700;margin-bottom:2px">🧾 本日の納金額</div>
   <div id="settlement-date-label" style="text-align:center;font-size:12px;color:var(--text);margin-bottom:16px"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
@@ -1541,6 +1542,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <span style="font-weight:800">納金額</span><span id="settlement-payment-amount" style="font-weight:800;color:var(--gold);font-size:17px">¥0</span>
    </div>
   </div>
+  <div id="settlement-metrics" style="margin-bottom:14px"></div>
   <button onclick="recomputeSettlementFromFareLog()" class="btn btn-g" style="width:100%;padding:10px;font-size:12px;margin-bottom:8px">🔄 最新の運賃記録から再集計する</button>
   <button onclick="closeSettlementReport()" class="btn btn-p" style="width:100%;padding:12px;font-size:15px;font-weight:700">閉じる</button>
  </div>
@@ -1560,7 +1562,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261101-8';
+const APP_BUILD='20261104-3';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -7637,18 +7639,21 @@ function updateDailyBar(){
  }else{
   amtEl.textContent='¥'+todaySales.toLocaleString();
  }
- // 目標単価 = 出勤時に設定した本日の予定労働時間で、本日の目標金額を割った金額
+ // 時間単価（「目標時間単価」「現在時間単価」）だけは、税込で表示する（本日の目標・目標まであとは、これまでどおり税抜）。
+ // 目標金額は税抜で入力されているため、目標時間単価は×1.1で税込に直す。売上は、運賃（税込）の合計をそのまま使う
+ // 目標時間単価 = 出勤時に設定した本日の予定労働時間で、本日の目標金額（税込に直したもの）を割った金額
  if(targetHourlyEl){
   targetHourlyEl.textContent=(dailyTarget>0&&perDayHours>0)
-   ?`¥${Math.round(dailyTarget/perDayHours).toLocaleString()}`:'-';
+   ?`¥${Math.round(dailyTarget*1.1/perDayHours).toLocaleString()}`:'-';
  }
  // 現在の時間単価 = 出庫（出勤）からの経過時間で、売上が確定した送りのみの
- // 合計額（todaySales）を割った金額。出勤直後は分母が小さすぎて金額が
+ // 運賃（税込）の合計額を割った金額。出勤直後は分母が小さすぎて金額が
  // 跳ね上がるため、最初の1時間が経過するまでは表示しない
  if(hourlyEl){
   const elapsedHoursForRate=(Date.now()-dutyStart.getTime())/3600000;
+  const todaySalesInclTax=getTodayShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0);
   hourlyEl.textContent=elapsedHoursForRate>=1
-   ?`¥${Math.round(todaySales/elapsedHoursForRate).toLocaleString()}`:'-';
+   ?`¥${Math.round(todaySalesInclTax/elapsedHoursForRate).toLocaleString()}`:'-';
  }
 }
 setInterval(updateDailyBar,1000);
@@ -8704,7 +8709,80 @@ let currentSettlementIndex=-1;
 let currentSettlementOnClose=null;
 let currentSettlementRecord=null;
 function fmtYen(n){return '¥'+Math.round(n||0).toLocaleString();}
+// ===== 精算レポートの表の下（欄外）に出す指標 =====
+// 時給・高速差引売上・営業回数・空港発の本数・空港での待機時間の合計・1本あたり単価・羽田1本あたり単価・羽田待ち1時間あたり売上
+// 羽田空港から乗せた記録か: 乗り場（1〜4号・国際線）から出発した記録、または乗車地が羽田空港の住所の記録
+function isHanedaTrip(d){return !!(d&&(d.boardSpot||/羽田空港/.test(d.boardAddr||'')));}
+// 待機時間（分）。あぶれの記録は分数ではなく「1時間20分」のような文字（waitMinsStr）だけを持つため、そちらも読む
+function tripWaitMinutes(d){
+  if(!d)return 0;
+  if(d.waitMins>0)return d.waitMins;
+  const str=d.waitMinsStr||'';
+  const h=str.match(/(\d+)\s*時間/),m=str.match(/(\d+)\s*分/);
+  return (h?parseInt(h[1],10)*60:0)+(m?parseInt(m[1],10):0);
+}
+// 分を「2:30」の形に（時:分）
+function fmtHM(mins){
+  const m=Math.max(0,Math.round(mins||0));
+  return Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
+}
+// 精算の記録（1回の勤務）1件分の指標。金額は精算レポートと同じ税込。
+// ・売上は「税込営収（割引後）」（＝運賃の合計。record.revenueAfterDiscount）。自腹高速は、地図の「自腹高速」ボタンの記録（record.jibaraHighwayTotal）と、運賃記録の高速代(toll)
+// ・拘束時間は、出勤から退勤まで（設定の「乗務記録CSV」の稼働時間と同じ）
+// ・営業回数・1本あたり単価は、運賃が記録された実車の数（手動で記録した1日の合計は除く）。空港（羽田）発は isHanedaTrip の記録
+// ・羽田待ち1時間あたり売上は、羽田での待機が合計15分以上の時だけ。計算できない時は null
+function computeSettlementMetrics(record){
+  const start=record.shiftStartTs,end=record.shiftEndTs;
+  const fareLog=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
+  const inRange=ts=>ts>=start&&ts<=end;
+  const entries=fareLog.filter(e=>inRange(e.ts||0));
+  const rides=entries.filter(e=>(e.fare||0)>0&&!e.manual);
+  const tripByTs=new Map();
+  destinations.forEach(d=>{if(d&&d.type==='trip'&&!d.test&&d.ts!=null&&!tripByTs.has(d.ts))tripByTs.set(d.ts,d);});
+  const airportRides=rides.filter(e=>e.tripTs&&isHanedaTrip(tripByTs.get(e.tripTs)));
+  const sumFare=arr=>arr.reduce((a,e)=>a+(e.fare||0),0);
+  const sales=record.revenueAfterDiscount||0;
+  const ridesSales=sumFare(rides),airportSales=sumFare(airportRides);
+  const tolls=(record.jibaraHighwayTotal||0)+entries.reduce((a,e)=>a+(e.toll||0),0);
+  const boundMs=end>start?end-start:0;
+  let waitMin=0;
+  destinations.forEach(d=>{if(d&&d.type==='trip'&&!d.test&&inRange(d.ts||0)&&isHanedaTrip(d))waitMin+=tripWaitMinutes(d);});
+  return {
+    sales,tolls,net:sales-tolls,boundMs,
+    rides:rides.length,ridesSales,airportRides:airportRides.length,airportSales,waitMin,
+    hourly:boundMs>0?sales/(boundMs/3600000):null,
+    perRide:rides.length?ridesSales/rides.length:null,
+    perAirportRide:airportRides.length?airportSales/airportRides.length:null,
+    perWaitHour:waitMin>=15?airportSales/(waitMin/60):null
+  };
+}
+function renderSettlementMetrics(record){
+  const el=document.getElementById('settlement-metrics');
+  if(!el)return;
+  const m=computeSettlementMetrics(record);
+  const dash='<span style="color:var(--muted)">–</span>';
+  const yen=v=>v==null?dash:(v<0?'−'+fmtYen(-v):fmtYen(v));
+  const cell=(k,label,value,sub)=>`<div class="sm-cell" data-k="${k}" style="border:1px solid var(--border);border-radius:10px;padding:8px 9px;min-width:0">
+   <div class="sm-l" style="font-size:11px;color:var(--text);font-weight:700;line-height:1.3">${label}</div>
+   <div class="sm-v" style="font-size:16px;font-weight:800;margin-top:2px;white-space:nowrap">${value}</div>
+   ${sub?`<div class="sm-sub" style="font-size:9.5px;color:var(--muted);line-height:1.35;margin-top:1px">${sub}</div>`:''}
+  </div>`;
+  el.innerHTML=`<div style="font-size:12px;color:var(--text);font-weight:700;margin-bottom:6px">📊 この日の指標<span style="font-weight:600;color:var(--muted)">（金額は税込）</span></div>
+   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    ${cell('hourly','時給',yen(m.hourly),m.hourly==null?'':`${fmtYen(m.sales)} ÷ 拘束 ${fmtHM(m.boundMs/60000)}`)}
+    ${cell('net','高速差引売上',yen(m.net),`${fmtYen(m.sales)} − 自腹高速 ${fmtYen(m.tolls)}`)}
+    ${cell('rides','営業回数',m.rides+'回','')}
+    ${cell('airportRides','空港発の本数',m.airportRides+'本','')}
+    ${cell('wait','空港での待機時間の合計',fmtHM(m.waitMin),'')}
+    ${cell('perRide','1本あたり単価',yen(m.perRide),m.rides?`${fmtYen(m.ridesSales)} ÷ ${m.rides}回`:'')}
+    ${cell('perAirportRide','羽田1本あたり単価',yen(m.perAirportRide),m.airportRides?`羽田発 ${fmtYen(m.airportSales)} ÷ ${m.airportRides}本`:'')}
+    ${cell('perWaitHour','羽田待ち1時間あたり売上',yen(m.perWaitHour),m.perWaitHour==null?'羽田での待機が合計15分以上で表示':`羽田発 ${fmtYen(m.airportSales)} ÷ 待機 ${fmtHM(m.waitMin)}`)}
+   </div>
+   <div style="font-size:10px;color:var(--muted);line-height:1.5;margin-top:6px">※売上は、上の表の税込営収（割引後）です。拘束時間は、出勤から退勤までです。「羽田発」は、乗り場（1〜4号・国際線）または羽田空港の住所から乗せた記録で、待機時間はアプリが計測した羽田での待機時間の合計です</div>`;
+}
 function showSettlementReport(record,onClose){
+  const modalEl=document.getElementById('settlement-report-modal');
+  const wasOpen=modalEl.style.display==='flex';
   // 保存済みのsettlementLog内での位置を探す（退勤直後はpushした直後の
   // 末尾、設定タブの履歴から開いた場合はその記録そのもの）
   currentSettlementIndex=settlementLog.indexOf(record);
@@ -8730,7 +8808,11 @@ function showSettlementReport(record,onClose){
   document.getElementById('settlement-etc').textContent=fmtYen(settlementEtcDisplay(record));
   document.getElementById('settlement-uncollected-input').value=record.uncollected||0;
   updateSettlementTotalsDisplay(record);
-  document.getElementById('settlement-report-modal').style.display='flex';
+  renderSettlementMetrics(record);
+  modalEl.style.display='flex';
+  // 閉じていたレポートを開く時は、一番上から表示する（前に下までスクロールしていても）。再集計など、開いたまま作り直す時は、見ていた位置のまま
+  const scrollEl=document.getElementById('settlement-report-scroll');
+  if(scrollEl&&!wasOpen)scrollEl.scrollTop=0;
 }
 // ETC欄の金額の内訳を、保存されている生の数値のまま表示する診断機能。
 // ETC欄表示額 = 各トリップのETC入力の合計 ＋ 自腹高速。無料高速は
