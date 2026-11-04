@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261104-3 -->
+<!-- v20261104-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1562,7 +1562,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261104-3';
+const APP_BUILD='20261104-4';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -8727,7 +8727,7 @@ function fmtHM(mins){
   return Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
 }
 // 精算の記録（1回の勤務）1件分の指標。金額は精算レポートと同じ税込。
-// ・売上は「税込営収（割引後）」（＝運賃の合計。record.revenueAfterDiscount）。自腹高速は、地図の「自腹高速」ボタンの記録（record.jibaraHighwayTotal）と、運賃記録の高速代(toll)
+// ・売上は「税込営収（割引後）」（＝運賃の合計。record.revenueAfterDiscount）。自腹高速は、地図の「自腹高速」ボタンで記録した金額だけ（record.jibaraHighwayTotal）
 // ・拘束時間は、出勤から退勤まで（設定の「乗務記録CSV」の稼働時間と同じ）
 // ・営業回数・1本あたり単価は、運賃が記録された実車の数（手動で記録した1日の合計は除く）。空港（羽田）発は isHanedaTrip の記録
 // ・羽田待ち1時間あたり売上は、羽田での待機が合計15分以上の時だけ。計算できない時は null
@@ -8743,7 +8743,7 @@ function computeSettlementMetrics(record){
   const sumFare=arr=>arr.reduce((a,e)=>a+(e.fare||0),0);
   const sales=record.revenueAfterDiscount||0;
   const ridesSales=sumFare(rides),airportSales=sumFare(airportRides);
-  const tolls=(record.jibaraHighwayTotal||0)+entries.reduce((a,e)=>a+(e.toll||0),0);
+  const tolls=record.jibaraHighwayTotal||0;
   const boundMs=end>start?end-start:0;
   let waitMin=0;
   destinations.forEach(d=>{if(d&&d.type==='trip'&&!d.test&&inRange(d.ts||0)&&isHanedaTrip(d))waitMin+=tripWaitMinutes(d);});
