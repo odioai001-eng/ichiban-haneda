@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261107-1 -->
+<!-- v20261108-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -118,6 +118,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sch.jitsusha{background:rgba(34,197,94,.18);color:var(--green)}
 .sch.kaisou{background:rgba(245,158,11,.18);color:var(--amber)}
 .sch.sel{border-color:currentColor;transform:scale(1.04)}
+/* 実車中: 実車ボタンを、緑のべた塗り＋白い太字の「【実車中】」（枠は、選択中の枠＝文字の色の白）にして、文字を大きめに出す。ボタンの大きさ（高さ）は、
+   ほかの状態の時と変えない（行の高さが変わって、下の札がずれないように、行の高さを固定している） */
+.sch.jitsusha.now{background:#15803d;color:#fff;font-size:clamp(13px,4.1vw,17px);
+  line-height:17px;letter-spacing:.5px;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+/* 乗り場を出発したのに実車になっていない時（実車ボタンの押し忘れ）: 実車ボタンを、押すまで点滅させる。
+   0.5秒ごとに「明るい緑のべた塗り＋光る縁＋少し拡大」と「ふだんの薄い緑」を入れ替える（1秒に1回の点滅） */
+.sch.jitsusha.remind{position:relative;z-index:2;animation:jitsushaRemind 1s step-end infinite}
+@keyframes jitsushaRemind{
+  0%{background:#22c55e;color:#052e16;border-color:#fff;
+     box-shadow:0 0 0 4px rgba(255,255,255,.95),0 0 22px 8px rgba(34,197,94,.9);transform:scale(1.12)}
+  50%{background:rgba(34,197,94,.18);color:var(--green);border-color:transparent;box-shadow:none;transform:scale(1)}
+}
 /* 地図の上の「平均待機時間」。5つの札は、乗り場ボタンの真下に、同じ5列でそろえて2段に並べる（1段目＝いまの時間帯、
    2段目＝1つ後の時間帯）。乗り場の名前は、真上の乗り場ボタンが示すので、札には書かない。札の中は、上が平均（分）、その下が、
    平均の元になった記録の回数（○回）。タイトルは、その下の💡の行の左側（どの段がどの時間帯かを1行で示す）。
@@ -1565,7 +1577,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261107-1';
+const APP_BUILD='20261108-1';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -1939,6 +1951,7 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   window.addEventListener('storage',e=>{
     if(e.key==='taxi_runtime_state'&&!e.newValue&&isDuty){
       isDuty=false;
+      jitsushaReminderTs=null;syncStatusButtonsUi();
       stopGPS();myLat=null;myLng=null;dutyStart=null;
       if(dutyInterval){clearInterval(dutyInterval);dutyInterval=null;}
       if(waitInterval){clearInterval(waitInterval);waitInterval=null;}
@@ -3571,6 +3584,8 @@ function endDutyImmediate(){
   if(!isDuty)return;
   isDuty=false;
   pendingWaitFinalize=null;clearBoardDep();
+  // 退勤したら、実車ボタンの点滅と「【実車中】」の表示も終わらせる（休み中の画面に残さない）
+  jitsushaReminderTs=null;syncStatusButtonsUi();
   const bgWarn=document.getElementById('bg-warn-banner');
   if(bgWarn)bgWarn.remove();
   notifyAndroidDutyStatus(false);
@@ -4605,7 +4620,9 @@ function saveAppState(){
     spotChangeHistory,
     // 実車ボタンを乗り場のエリア内で先に押し、出発の確定を待っている間にリロードしても、
     // 確定した時に待機時間を正しくそろえられるよう保存する
-    pendingWaitFinalize
+    pendingWaitFinalize,
+    // 実車ボタンの押し忘れの点滅も、リロードをまたいで続ける（実車ボタンを押すまで点滅し続けるため）
+    jitsushaReminderTs
   }));
 }
 // オートフォロー・仲間フォローの状態は、出退勤の状態とは別に常に保存・復元する
@@ -4664,11 +4681,11 @@ function restoreAppState(){
     const s=Math.floor((Date.now()-dutyStart.getTime())/1000);
     document.getElementById('duty-elapsed').textContent=toHMS(s);
   },1000);
+  // 実車ボタンの押し忘れの点滅を復元する（まだ実車になっていない時だけ。古すぎるものは復元しない）
+  jitsushaReminderTs=(typeof st.jitsushaReminderTs==='number'&&currentStatus!=='jitsusha'
+    &&st.jitsushaReminderTs<=Date.now()&&Date.now()-st.jitsushaReminderTs<JITSUSHA_REMINDER_RESTORE_MAX_MS)?st.jitsushaReminderTs:null;
   // ステータスボタン復元
-  ['kuusha','jitsusha','kaisou'].forEach(k=>{
-    const el=document.getElementById('sch-'+k);
-    if(el)el.classList.toggle('sel',k===currentStatus);
-  });
+  syncStatusButtonsUi();
   // タイマー復元
   if(st.waitStartTs){
     waitStart=st.waitStartTs;
@@ -4745,11 +4762,49 @@ function restoreAppState(){
   toast('🔄 乗務状態を復元しました');
 }
 
+// ===== 実車ボタンの押し忘れ防止 =====
+// 乗り場（1〜4号・国際線）を出発したのに、まだ実車になっていない時は、実車ボタンを点滅させて知らせる（onDeparture）。
+// 実車ボタンを押すまで、点滅し続ける。点滅は、実車ボタンを押した時のほか、次の時にも止まる:
+//  ・空車・回送のボタンを押した時（お客様を乗せていない、と本人が答えたので。乗せていないのに、実車を押さないと点滅が止まらない、
+//    ということにならないように）
+//  ・退勤した時
+//  ・乗り場・プールに入り直した時（直前の「出発」がGPSの誤検知だったか、次の待機が始まったため）
+// 実車中は、実車ボタンを「【実車中】」と、大きめの文字で出す
+let jitsushaReminderTs=null; // 点滅を始めた時刻。nullなら点滅していない
+const JITSUSHA_REMINDER_RESTORE_MAX_MS=6*3600*1000; // アプリを開き直した時、これより古い点滅は復元しない
+// 3つの状態ボタン（選択中の枠）と、実車ボタンの「【実車中】」「点滅」の見た目を、今の状態に合わせる
+function syncStatusButtonsUi(){
+  ['kuusha','jitsusha','kaisou'].forEach(k=>{
+    const el=document.getElementById('sch-'+k);
+    if(el)el.classList.toggle('sel',k===currentStatus);
+  });
+  const j=document.getElementById('sch-jitsusha');
+  if(!j)return;
+  const now=isDuty&&currentStatus==='jitsusha';
+  const remind=isDuty&&currentStatus!=='jitsusha'&&jitsushaReminderTs!==null;
+  j.classList.toggle('now',now);
+  j.classList.toggle('remind',remind);
+  const label=now?'【実車中】':statusCfg.jitsusha.label;
+  if(j.textContent!==label)j.textContent=label;
+}
+function startJitsushaReminder(){
+  if(!isDuty||currentStatus==='jitsusha')return;
+  if(jitsushaReminderTs===null)jitsushaReminderTs=Date.now();
+  syncStatusButtonsUi();
+  saveAppState();
+}
+function stopJitsushaReminder(){
+  if(jitsushaReminderTs===null)return;
+  jitsushaReminderTs=null;
+  syncStatusButtonsUi();
+  if(isDuty)saveAppState();
+}
+
 function setStatus(s){
   const prev=currentStatus; currentStatus=s;
-  ['kuusha','jitsusha','kaisou'].forEach(k=>{
-    document.getElementById('sch-'+k).classList.toggle('sel',k===s);
-  });
+  // どの状態ボタンを押しても、実車ボタンの押し忘れの点滅は止める（詳しくは上の説明）
+  jitsushaReminderTs=null;
+  syncStatusButtonsUi();
   if(myMarker&&myLat)updateMyMarker(myDisplayLat??myLat,myDisplayLng??myLng);
   pushMyPosition();
   saveAppState();
@@ -7211,6 +7266,17 @@ function onDeparture(cp){
     toast(cp.icon+' '+cp.name+' を出発しました');
   }
   cp.stopConfirmed=false;
+  // 実車ボタンの押し忘れ防止: 乗り場（1〜4号・国際線）を出発したのに、まだ実車になっていなければ、実車ボタンを
+  // 点滅させる（実車ボタンを押すまで続く。startJitsushaReminder参照）。実際に待っていた時だけ対象にして、乗り場の脇を
+  // 通り過ぎただけでは点滅させない: その乗り場に1分以上止まっていた、羽田プールに1分以上いた、または号を選んでいた
+  // （お客様が待っていて、乗せてすぐ出る短い停車でも、プールで待っていれば対象になる）
+  // （出勤中でない・すでに実車の時は、startJitsushaReminder側で何もしない）
+  if(spotLabelFromCheckpointName(cp.name)){
+    const poolCpForRemind=checkpoints.find(c=>c.spots&&c.spots.length>0);
+    const poolArriveForRemind=poolCpForRemind?cpArriveTs[poolCpForRemind.id]:null;
+    const waitedInPool=!!poolArriveForRemind&&(Date.now()-poolArriveForRemind)>=CP_STOP_CONFIRM_MS;
+    if(hadConfirmedStop||waitedInPool||currentSpotSelection)startJitsushaReminder();
+  }
   // お客様を乗せた状態（実車）で羽田プール本体を出た＝プールでの待機は終わったため、実車ボタンを
   // 押した時点でプール内にいたために残していた号の選択・待機の起点を片付ける（clearPoolWaitState参照）
   if(cp.id==='haneda'&&currentStatus==='jitsusha')clearPoolWaitState();
@@ -7246,7 +7312,11 @@ function onArrival(cp,dist){
   // 新しい到着（滞在の開始・入り直し）では、前回の出発の記録や出発の候補は使わない。
   // プール・乗り場へ入り直したのは、直前の「出発」がGPSの誤検知だったか、次の待機が
   // 始まったかのどちらかのため
-  if(isBoardRelatedCp(cp))clearBoardDep();
+  if(isBoardRelatedCp(cp)){
+    clearBoardDep();
+    // 実車ボタンの押し忘れの点滅も止める（直前の「出発」がGPSの誤検知だったか、次の待機が始まったかのため）
+    stopJitsushaReminder();
+  }
   const timeStr=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
   if(cp.name&&cp.name.includes('国際線')&&cp.name.includes('第4'))lastIntlPool4EntryTs=Date.now();
   // 同じ滞在中にGPSの揺れ等で到着イベントが再発火しても、すでに選んだ号・到着時刻を消さない
@@ -10758,6 +10828,7 @@ function deleteMyAccount(){
   localStorage.removeItem('taxi_car');
   localStorage.removeItem('taxi_my_id');
   isDuty=false;
+  jitsushaReminderTs=null;syncStatusButtonsUi();
   stopGPS();
   document.getElementById('duty-btn').textContent='出勤する';
   document.getElementById('duty-btn').className='duty-btn off';
