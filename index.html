@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261108-6 -->
+<!-- v20261108-7 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1603,7 +1603,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261108-6';
+const APP_BUILD='20261108-7';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -2854,6 +2854,37 @@ function healStalePoolWait(){
   stalePoolWaitFarFixes=0;
   clearPoolWaitState();
 }
+// 国際線の待機も、国際線プールからはっきり離れたら片付ける（国際線プールの待機が、国内線プールまで残らないようにする③）。
+// 対象は、自動で始まった国際線プールの待機（待機場所が国際線プールの名前）と、ボタンで選んだ国際線のうち、選んだ後に降車が済んだ
+// （または、アプリを開き直して古さが分からない）もの。1〜4号と同じ決まりで、選んだ後にまだ降車していない国際線の選択は、
+// 国際線プールへ向かう途中で早めに選んでおいた場合があるため対象にしない。プール・乗り場の中にいる／実車中／テストモード／GPSの精度が
+// 悪い時も対象にしない。一時的なGPSのずれで誤って片付けないよう、離れている位置を続けて受け取った場合だけにする
+let staleIntlWaitFarFixes=0;
+function healStaleIntlWait(){
+  const auto=!!autoIntlWaitCp();
+  const sel=currentSpotSelection==='国際線';
+  if(testMode||(!auto&&!sel)||currentStatus==='jitsusha'||isInBoardArea()){staleIntlWaitFarFixes=0;return;}
+  if(!auto&&poolSelStamp>=0&&tripCompletedSeq<=poolSelStamp){staleIntlWaitFarFixes=0;return;}
+  const intls=checkpoints.filter(c=>isIntlCp(c)&&c.lat!==null);
+  if(!intls.length||myLat===null)return;
+  if(typeof myAccuracy==='number'&&myAccuracy>50)return;
+  if(intls.some(c=>haversine(myLat,myLng,c.lat,c.lng)<=cpOuterRadiusM(c)+STALE_POOL_WAIT_FAR_M)){staleIntlWaitFarFixes=0;return;}
+  if(++staleIntlWaitFarFixes<STALE_POOL_WAIT_FIXES)return;
+  staleIntlWaitFarFixes=0;
+  dropIntlWait();
+}
+// 国内線プール・乗り場の中にいるのに、待機場所が国際線プールの名前（自動で付いたもの）のままなら、国内線の名前に付け替える
+// （国際線プールを通ってきた人・アプリを開き直した人・国際線プールのエリアが国内線と重なる所にいる人。到着の知らせが来なくても直る。
+// 国際線プールの待機が、国内線プールまで残らないようにする②）。ボタンで選んだ国際線は、ここでは触らない。実車中は何もしない
+function reconcileAutoIntlWait(){
+  if(!isDuty||currentStatus==='jitsusha'||!autoIntlWaitCp())return;
+  const dom=domesticCpInside();
+  if(!dom||dom.lat===null||myLat===null)return;
+  dropIntlWait();
+  if(currentStatus==='kuusha'){
+    startWaitAt(dom,dom.name,Math.round(haversine(myLat,myLng,dom.lat,dom.lng)),new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}));
+  }
+}
 // マーカーを今の位置から新しい位置まで、指定した時間をかけて直線的に動かす。
 // 位置情報は1〜数秒おきにしか届かないため、そのままsetLatLngすると、地図上の
 // アイコンが「瞬間移動」を繰り返す飛び飛びの動きに見えていた。更新の間隔に
@@ -3440,6 +3471,9 @@ function handleGpsFix(pos,source){
     // 退場確定の待ち時間で十分に誤検知を防げるため、通常の判定ロジックに乗せる
     checkGeofences(myLat,myLng,isColdStart,myAccuracy);
     healStalePoolWait();
+    // 国際線プールの待機が、国内線プールまで残らないようにする（②③。詳しくはisIntlCpの上の説明）
+    healStaleIntlWait();
+    reconcileAutoIntlWait();
     // GPS初回フィックス時：プール内なら列選択モーダルを表示（表示可否はshowPoolLaneModal内で判定）
     if(isFirstFix){
       const cp=checkpoints.find(c=>c.id==='haneda');
@@ -7239,6 +7273,46 @@ function isBoardRelatedCp(cp){
 function isInBoardArea(){
   return checkpoints.some(c=>cpInside[c.id]&&isBoardRelatedCp(c));
 }
+// ===== 国際線プールの待機が、国内線プールまで残らないようにする =====
+// 国際線プール（名前に「国際線」が入るチェックポイント。第3・第4プール）で、空車のまま10秒以上いると、待機が自動で始まり、
+// 「待機場所」に、そのチェックポイントの名前（例: 国際線第4プール）が入る。仲間の地図には、その名前から「国際線 ○分」と出る。
+// 以前は、国際線プールを通ってそのまま国内線プールへ着いても、待機タイマーが動いているため名前が書き換わらず、国内線プールで
+// 待っているのに「国際線 ○分」のままだった。さらに、アプリを開き直すと、その名前の「国際線」から乗り場の選択が「国際線」になり、
+// 1〜4号と違って、離れても自動では消えなかった（次の実車も、国際線の乗車として記録された）。次の4つで、そうならないようにする
+//  ① 国内線プール・乗り場に着いた時に、国際線の待機（自動で始まったもの・ボタンで選んだ国際線）を片付けて、国内線として始め直す（onArrival）
+//  ② 国内線プール・乗り場の中にいるのに、待機場所が国際線プールの名前（自動で付いたもの）のままなら、国内線の名前に付け替える
+//     （到着の知らせが来ない時・アプリを開き直した時・国際線プールのエリアが国内線と重なる時。reconcileAutoIntlWait）
+//  ③ 国際線プールから離れた（外周＋300mより外に、8回続けて）ら、自動で始まった国際線の待機を片付ける（healStaleIntlWait）
+//  ④ 国際線プールのエリアが国内線と重なる所では、国際線プールの名前で待機を始めず、国内線の名前で始める（onArrivalの自動開始）
+// ボタンで選んだ「国際線」は、国内線の側にいる間は、②では触らない（国際線のつもりで選んだ人の選択を消さないため）
+// 国際線プールか（国内線プール・乗り場は、名前に「国際線」が入っていても含めない）
+function isIntlCp(cp){return !!(cp&&cp.name&&cp.name.includes('国際線')&&!isDomesticCp(cp));}
+// 国内線の側のチェックポイント（国内線プール本体・1〜4号乗り場）
+function isDomesticCp(cp){return !!(cp&&((cp.spots&&cp.spots.length>0)||/^[1-4]号$/.test(spotLabelFromCheckpointName(cp.name)||'')));}
+// 今いる国内線側のチェックポイント。乗り場（1〜4号）の中なら乗り場を、そうでなければ国内線プール本体を返す（どちらでもなければnull）
+function domesticCpInside(){
+  const ins=checkpoints.filter(c=>isDomesticCp(c)&&cpInside[c.id]);
+  return ins.find(c=>!(c.spots&&c.spots.length>0))||ins[0]||null;
+}
+// 今の「待機場所」の表示が、国際線プールの名前（待機の自動開始で付いたもの）なら、そのチェックポイント。
+// ボタンで選んだ時の文字（東京都大田区羽田空港…乗り場）は、チェックポイントの名前ではないので含まない
+function autoIntlWaitCp(){
+  const lbl=document.getElementById('wait-spot-lbl');
+  const name=lbl?(lbl.textContent||'').replace('待機場所: ','').replace('（終了）','').trim():'';
+  if(!name)return null;
+  return checkpoints.find(c=>isIntlCp(c)&&c.name===name)||null;
+}
+// 国際線の待機の最中か（ボタンで選んだ国際線・自動で始まった国際線プールの待機の、どちらも）
+function intlWaitActive(){return currentSpotSelection==='国際線'||!!autoIntlWaitCp();}
+// 国際線の待機を片付ける。選択・待機タイマー・待機場所の表示・プールの「到着ポップアップ済み」の印は、clearPoolWaitStateが戻す。
+// 仲間に送っている待機場所は、選択がある時はclearPoolWaitStateが消すが、自動で始まった待機（選択なし）の時は消さないため、ここで消す
+function dropIntlWait(){
+  const hadSelection=!!currentSpotSelection;
+  clearPoolWaitState();
+  if(!hadSelection&&db&&isDuty&&!testMode){
+    db.ref('drivers/'+myId).update({waitSince:null,waitSpot:null}).catch(err=>console.error('drivers waitSince/waitSpot clear failed',err));
+  }
+}
 // 出発が確定する時点での、待機の起点（GPSの到着時刻のうち最も古いもの）。出発の確定後は
 // 到着時刻(cpArriveTs)が消されるため、確定する時点で控えておく
 function waitOriginTsForDeparture(cp){
@@ -7386,6 +7460,11 @@ function onDeparture(cp){
 }
 
 function onArrival(cp,dist){
+  // 国際線の待機（自動で始まった国際線プールの待機・ボタンで選んだ国際線）のまま、国内線プール・乗り場に着いた時は、
+  // 国際線の待機を片付けて、国内線として始め直す（上の「国際線プールの待機が、国内線プールまで残らないようにする」の①）。
+  // 先に片付けるので、下の「新しい到着」の判定・到着ポップアップ・待機の自動開始は、国内線の到着として働く。実車中（お客様を乗せて走っている間）は触らない
+  // （降車して空車に戻った時に、まだ国内線プール・乗り場の中なら、下のreconcileAutoIntlWaitが付け替える）
+  if(currentStatus!=='jitsusha'&&isDomesticCp(cp)&&intlWaitActive())dropIntlWait();
   // 新しい到着（滞在の開始・入り直し）では、前回の出発の記録や出発の候補は使わない。
   // プール・乗り場へ入り直したのは、直前の「出発」がGPSの誤検知だったか、次の待機が
   // 始まったかのどちらかのため
@@ -7424,7 +7503,12 @@ function onArrival(cp,dist){
     // チェックポイント付近を通っただけでも、この自動スタートが働いて待機タイマーが
     // 動き出してしまい、実車中も空車に戻した後もカウントアップし続けてしまう
     // 不具合があったため、空車の時だけ自動スタートするようにする
-    if(cpInside[cp.id]&&isDuty&&currentStatus==='kuusha'&&!waitInterval)startWaitAt(cp,cp.name,dist,timeStr);
+    if(!(cpInside[cp.id]&&isDuty&&currentStatus==='kuusha'&&!waitInterval))return;
+    // 国際線プールのエリアが、国内線プール・乗り場と重なっている所では、国際線プールの名前で待機を始めず、国内線の名前で始める
+    // （最後に入ったエリアの名前が付く仕組みのため、重なっていると、国内線にいるのに国際線の名前が付いていた。上の④）
+    const dom=isIntlCp(cp)?domesticCpInside():null;
+    if(dom&&dom.lat!==null&&myLat!==null)startWaitAt(dom,dom.name,Math.round(haversine(myLat,myLng,dom.lat,dom.lng)),timeStr);
+    else startWaitAt(cp,cp.name,dist,timeStr);
   },10000);
   // 1分以上その場に停止した場合のみ通知（通過した場合は通知しない）
   // cpInsideフラグは出発確定までに別途60秒かかるため、ここでは使わず、
