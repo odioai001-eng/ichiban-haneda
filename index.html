@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261108-2 -->
+<!-- v20261108-3 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -335,6 +335,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .sec{font-size:11px;font-weight:700;color:var(--muted);margin:14px 0 8px;
   text-transform:uppercase;letter-spacing:.8px;
   display:flex;justify-content:space-between;align-items:center}
+/* 仲間の送り先の一覧（待機/送先タブの「仲間の送り先（人ごと）」とその見出し、地図の「仲間の状況」で📋を押すと出る送先の記録）の中では、
+   薄い色の文字（灰紫の--muted・うす白の--text）を、すべて白（#fff）にする。色の変数を、この囲みの中だけ白にし直すので、
+   中の時刻（水色・黄）・番号・金額・「あぶれ」などの色分けと、ほかの画面の文字の色は変わらない */
+.white-list{--muted:#fff;--text:#fff;color:#fff}
 /* 設定タブは項目数が多いため、各項目のタイトルをパッと見て分かるよう
    他のページより大きく・目立つ色にする */
 #page-settings .sec{font-size:16px;color:var(--accent);text-transform:none;letter-spacing:normal}
@@ -750,8 +754,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
   </div>
   <div id="dest-list"></div>
-  <div class="sec" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
-  <div id="team-dests-list"></div>
+  <div class="sec white-list" style="margin-top:18px">🚖 仲間の送り先（人ごと）</div>
+  <div id="team-dests-list" class="white-list"></div>
   <div id="dest-list-past-sec" style="display:none">
     <div class="sec" style="margin-top:18px">📅 過去の送り先（自分）</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
@@ -1586,7 +1590,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261108-2';
+const APP_BUILD='20261108-3';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -5489,7 +5493,7 @@ function makeDriverRow(id, d, isMe){
       </div>
     </div>
   </div>
-  ${!isMe?`<div id="ddests-${id}" style="display:none;padding:0 10px 10px"></div>`:''}`;
+  ${!isMe?`<div id="ddests-${id}" class="white-list" style="display:none;padding:0 10px 10px"></div>`:''}`;
 
 }
 
