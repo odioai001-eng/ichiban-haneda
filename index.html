@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261108-3 -->
+<!-- v20261108-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1590,7 +1590,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261108-3';
+const APP_BUILD='20261108-4';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -6138,6 +6138,30 @@ function latestTeamDestTs(id){
   Object.values(entries).forEach(e=>{if((e.ts||0)>max)max=e.ts||0;});
   return max;
 }
+// 仲間の送り先カードの通し番号（#1、#2、…）を、記録（ts）ごとに決めて返す（Map: ts → 番号）。
+//  ・その人のいまの出勤（dutyStart）以降の分は、出勤の最初の記録から数える
+//  ・それより前の分（前の出勤・前の日の記録）は、仲間の出退勤の記録が手元に無いため、前の記録から6時間以上あいた所を
+//    出勤の区切りとみなし、区切りごとに#1から数え直す（出勤と出勤の間は、休息で8時間以上あくのがふつうで、
+//    出勤の中で6時間以上記録が無いことは、まず無いため）
+//  以前は、いまの出勤より前の記録に番号が付かず、カードの番号が「#」だけになっていた
+const TEAM_SHIFT_GAP_MS=6*3600*1000;
+function computeTeamTripNumbers(trips,dutyStart){
+  const numMap=new Map();
+  let nowCount=0,olderCount=0,prevOlderTs=null;
+  trips.slice().sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(e=>{
+    const ts=e.ts||0;
+    let no;
+    if(ts>=dutyStart){
+      no=++nowCount;
+    }else{
+      if(prevOlderTs===null||ts-prevOlderTs>=TEAM_SHIFT_GAP_MS)olderCount=0;
+      no=++olderCount;
+      prevOlderTs=ts;
+    }
+    numMap.set(e.ts,no);
+  });
+  return numMap;
+}
 function renderTeamDests(){
   const el=document.getElementById('team-dests-list');
   if(!el)return;
@@ -6202,13 +6226,12 @@ function renderTeamDests(){
         <span style="font-size:12px;color:var(--muted);margin-left:6px">▶</span>
       </div>
       <div id="${folderId}" style="display:none;padding:10px 14px">`;
-    // 通し番号用に時系列ソート。退勤済み（driverDataから削除済み）の場合、
+    // 通し番号。退勤済み（driverDataから削除済み）の場合、
     // 0のままだと直近1か月分すべてが1本の通し番号になってしまうため、
-    // 直近の午前9時を「その日の開始」とみなして区切る（getEffectiveShiftStart）
+    // 直近の午前9時を「その日の開始」とみなして区切る（getEffectiveShiftStart）。
+    // いまの出勤より前の記録にも、番号を付ける（computeTeamTripNumbers）
     const driverDutyStart=getEffectiveShiftStart((driverData[driverId]&&driverData[driverId].dutyStartTs)||0);
-    const teamTrips=entries.filter(e=>e.type==='trip'&&(e.ts||0)>=driverDutyStart).sort((a,b)=>(a.ts||0)-(b.ts||0));
-    const teamNumMap=new Map();
-    teamTrips.forEach((e,i)=>teamNumMap.set(e.ts,i+1));
+    const teamNumMap=computeTeamTripNumbers(entries.filter(e=>e.type==='trip'),driverDutyStart);
     sortedDates.forEach(date=>{
       driverHtml+=`<div style="font-size:16px;color:var(--text);font-weight:800;margin-bottom:8px">📅 ${date}</div>`;
       groups[date].forEach((e,idx,arr)=>{
@@ -6220,7 +6243,7 @@ function renderTeamDests(){
           driverHtml+=`
           <div style="position:relative;border:2px solid #fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;background:var(--surface)">
             ${adminDelBtn}
-            <div style="font-size:15px;font-weight:800;color:var(--accent);margin-bottom:4px">#${tno}</div>
+            ${tno?`<div style="font-size:15px;font-weight:800;color:var(--accent);margin-bottom:4px">#${tno}</div>`:''}
             <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
               <span style="font-size:14px;font-weight:800;color:var(--cyan);white-space:nowrap">${esc(e.boardTime||'--:--')}</span>
               <span style="font-size:12px;color:var(--muted)">${boardDesc}</span>
