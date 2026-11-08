@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261108-4 -->
+<!-- v20261108-5 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1590,7 +1590,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261108-4';
+const APP_BUILD='20261108-5';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -1900,6 +1900,7 @@ loadSettings(); renderDests(); renderCPs(); renderSpotRow(); renderWaitHistory()
   },LOAD_SLOW_NOTICE_MS+500);
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden){pageHiddenAt=Date.now();startHiddenFeedStat();return;}
+    pageVisibleSince=Date.now();
     finishHiddenFeedStat();
     checkForUpdate();
     // 設定を変えるためにアプリの設定画面へ移動して戻ってきた時に、バックグラウンド診断の
@@ -2903,6 +2904,42 @@ function updateMyMarker(lat,lng,animMs){
     myMarker.setIcon(icon);
   }
 }
+// ===== 仲間の位置: すでに表示した位置より古い位置は使わない =====
+// 同じdrivers/{id}へ、書き手が複数いる（Android版アプリのネイティブのサービスと画面側のWeb・同じIDを使う2台目の端末 等）と、
+// 書き込みが届く順番が、位置を測った順番と食い違うことがある。古い位置が後から届くと、地図でアイコンが後ろへ戻って見える。
+// 位置を測った時刻で比べ、すでに表示した位置より古い位置は使わない（位置以外の、状態・車番・待機・tsなどは、新しい書き込みのまま使う）。
+//  ・画面側（Web）は、位置と一緒に posTs（位置を測った時刻）と、posLat・posLng（その位置の写し）を書く
+//  ・ネイティブは posTs を書かない。位置だけを書き換えるため、古い posTs が残るが、そのときは lat/lng と写しが食い違う。
+//    写しがいまの位置と同じ時だけ posTs を使い、違う時は、書いた時刻（ts）を位置の時刻とみなす
+const peerPosState={}; // {id:{posT:表示した位置の時刻,lat,lng,gpsWeak,rejectSince:古い位置を使わない状態が続き始めた時刻}}
+const PEER_POS_TOLERANCE_MS=2000;          // これ以内の前後は、そのまま使う（見た目に影響しない・時刻の付け方の細かい違いを許す）
+const PEER_POS_ORDER_WINDOW_MS=10*60*1000; // これより大きく古い時刻は、端末の時計が直された等とみなして、古い位置とは扱わない
+const PEER_POS_REJECT_MAX_MS=15000;        // 古い位置として使わない状態がこれだけ続いたら、最新の書き込みを使う（書き手が入れ替わった・時刻がずれた時に、アイコンが止まったままにならないように）
+function filterPeerPosition(id,d){
+  if(!d||typeof d!=='object')return d;
+  const lat=Number(d.lat),lng=Number(d.lng);
+  if(!d.lat||!d.lng||isNaN(lat)||isNaN(lng))return d; // 位置の無い書き込みは、そのまま
+  const ts=typeof d.ts==='number'?d.ts:0;
+  const own=typeof d.posTs==='number'&&d.posTs>0&&d.posLat===d.lat&&d.posLng===d.lng;
+  const posT=own?d.posTs:ts;
+  const now=Date.now();
+  const st=peerPosState[id];
+  if(!st){
+    peerPosState[id]={posT,lat:d.lat,lng:d.lng,gpsWeak:d.gpsWeak,rejectSince:0};
+    return d;
+  }
+  if(posT<st.posT-PEER_POS_TOLERANCE_MS&&st.posT-posT<PEER_POS_ORDER_WINDOW_MS){
+    if(!st.rejectSince)st.rejectSince=now;
+    if(now-st.rejectSince<PEER_POS_REJECT_MAX_MS){
+      return {...d,lat:st.lat,lng:st.lng,gpsWeak:st.gpsWeak};
+    }
+  }
+  // 使う。大きく古い時刻（時計の修正・書き手の入れ替わり）の時は、基準を置き直す。細かい前後は、新しい方を基準に保つ
+  st.posT=posT<st.posT-PEER_POS_TOLERANCE_MS?posT:Math.max(st.posT,posT);
+  st.rejectSince=0;
+  st.lat=d.lat;st.lng=d.lng;st.gpsWeak=d.gpsWeak;
+  return d;
+}
 // 仲間のマーカーを、前回の位置更新から今回までの間隔をかけて滑らかに動かす
 // （位置が変わっていない再描画では何もしない）
 function movePeerMarker(pm,lat,lng){
@@ -3121,6 +3158,8 @@ const GPS_MAX_PLAUSIBLE_SPEED_MPS=40; // 直前の採用位置からの実効速
 // 定期的に更新される方が実用上望ましい
 const GPS_STALE_OVERRIDE_MS=10000;
 let lastAcceptedFix=null; // {lat,lng,ts}
+// 最後に採用した位置を「測った」時刻。仲間の地図が、古い位置を見分けられるよう、位置と一緒に送る（pushMyPositionのposTs）
+let lastPosFixTs=0;
 let pendingJumpFix=null; // 直前に「ノイズによる飛び」として1回だけ却下した位置
 // 新しいGPSフィックスを採用してよいか判定する。本当に大きく移動した場合
 // （バックグラウンド復帰後の長時間経過など）まで拒否し続けないよう、同じ新しい
@@ -3204,6 +3243,18 @@ function startGPS(){
 // ネイティブから位置が届かない端末・状況（古いAndroid版・iPhone・通常のブラウザ等）では、
 // これまで通りブラウザ標準のGPSをそのまま使う
 let lastNativeFixTs=0,lastNativeWriterOkTs=0;
+// ネイティブのサービスが、この端末の位置をFirebaseへ書き続けている、と判断しているか（Android版アプリ）。
+// 「いま書けている（writerOk）」位置が届いたらtrue、位置が届いているのに書けていない状態が20秒続いたらfalseにする。
+// 位置がWebViewに届かなくなった間（他のアプリの陰に隠れた・画面を消した等）は、この判断を保つ。
+// （位置が届かなくなった途端に、Web側が「自分の番」と判断して、最後に届いた古い位置を新しい時刻で書いてしまうと、
+//   ネイティブが書いた新しい位置を上書きして、仲間の地図でアイコンが後ろへ戻って見える）
+let nativeWriterTrusted=false;
+// 画面（ページ）が見える状態になった時刻。他のアプリから戻った直後は、位置がまだ届いていないだけなので、
+// 「ネイティブが動いていない」とも、「GPSが弱い」とも、すぐには判断しない
+let pageVisibleSince=Date.now();
+const NATIVE_SILENT_VISIBLE_MS=45000; // 画面が見えているのに、ネイティブから位置が45秒届かない時は、ネイティブが動いていないとみなす
+const ANDROID_STALE_POS_MS=4000;      // Android版: 画面が隠れている間は、これより古い位置は書かない
+const ANDROID_RESUME_GRACE_MS=15000;  // Android版: 戻った直後は、この時間、古い位置の書き直し（GPS弱）をしない
 // ネイティブが位置を渡してから、ページがそれを受け取るまでの時間がこの値を超えている位置は、
 // 今の位置ではない（画面が非表示の間、OSがページの動作を止めていて、戻った瞬間にまとめて
 // 届いた等）ため、使わない
@@ -3238,7 +3289,14 @@ function loadHiddenReport(){
 function nativeFeedActive(){return Date.now()-lastNativeFixTs<8000;}
 // ネイティブ側が実際にFirebaseへ位置を書き込めている間は、Web側は位置（lat/lng/ts）を
 // 書かない（同じdrivers/{id}へ別々の位置を交互に書いて、仲間の画面でアイコンが飛ぶのを防ぐ）
-function nativeWriterActive(){return nativeFeedActive()&&Date.now()-lastNativeWriterOkTs<20000;}
+function nativeWriterActive(){
+  const now=Date.now();
+  // 位置が届いている間は、いまネイティブがFirebaseへ書けているか（writerOk）で判断する
+  if(nativeFeedActive())return now-lastNativeWriterOkTs<20000;
+  // 位置が届いていない間: 直前までネイティブが書けていたなら、書き続けているとみなす。
+  // 画面が隠れている間は、いつまでも。画面が見えているのに45秒届かない時は、ネイティブが動いていないとみなして、Web側が書く
+  return nativeWriterTrusted&&(document.hidden||now-Math.max(lastNativeFixTs,pageVisibleSince)<NATIVE_SILENT_VISIBLE_MS);
+}
 window.onNativeLocation=function(lat,lng,acc,spd,brg,ts,writerOk){
   if(!isDuty||!leafletMap)return;
   if(typeof lat!=='number'||typeof lng!=='number'||isNaN(lat)||isNaN(lng))return;
@@ -3251,7 +3309,8 @@ window.onNativeLocation=function(lat,lng,acc,spd,brg,ts,writerOk){
     hiddenFeedStat.fixes++;
   }
   lastNativeFixTs=now;
-  if(writerOk)lastNativeWriterOkTs=now;
+  if(writerOk){lastNativeWriterOkTs=now;nativeWriterTrusted=true;}
+  else if(nativeWriterTrusted&&now-lastNativeWriterOkTs>=20000)nativeWriterTrusted=false;
   handleGpsFix({coords:{
     latitude:lat,longitude:lng,
     accuracy:(typeof acc==='number'&&acc>=0)?acc:null,
@@ -3398,6 +3457,8 @@ function handleGpsFix(pos,source){
     const prevFixTs=lastAcceptedFix?lastAcceptedFix.ts:0;
     const fixDtMs=prevFixTs?Math.min(Math.max(gpsLastUpdate-prevFixTs,400),2500):0;
     lastAcceptedFix={lat:myLat,lng:myLng,ts:gpsLastUpdate};
+    // 位置を測った時刻。端末が知らせた時刻（pos.timestamp）が、届いた時刻の前後15秒以内ならそれを使い、そうでなければ届いた時刻を使う
+    lastPosFixTs=(typeof pos.timestamp==='number'&&Math.abs(gpsLastUpdate-pos.timestamp)<=15000)?pos.timestamp:gpsLastUpdate;
     // checkGeofences（出発・到着判定）は上のmyLat/myLng（生の値）をそのまま使う。
     // 地図の表示・自分のカメラ追従・仲間への位置共有には、平滑化した
     // myDisplayLat/myDisplayLngを使い、細かいブレを見た目上だけ抑える
@@ -3596,6 +3657,7 @@ function registerDriverOnDisconnect(){
 function endDutyImmediate(){
   if(!isDuty)return;
   isDuty=false;
+  nativeWriterTrusted=false;lastNativeWriterOkTs=0;
   pendingWaitFinalize=null;clearBoardDep();
   // 退勤したら、実車ボタンの点滅と「【実車中】」の表示も終わらせる（休み中の画面に残さない）
   jitsushaReminderTs=null;syncStatusButtonsUi();
@@ -4408,6 +4470,7 @@ async function adminForceStartDuty(){
 
 function _startDuty(){
   isDuty=true;
+  nativeWriterTrusted=false;lastNativeWriterOkTs=0;
   pendingWaitFinalize=null;clearBoardDep();
   notifyAndroidDutyStatus(true);
   const btn=document.getElementById('duty-btn');
@@ -5089,15 +5152,17 @@ function connectFirebase(config){
     });
     db.ref('drivers').on('child_added',snap=>{
       const id=snap.key;if(id===myId)return;
-      driverData[id]=snap.val();updatePeerMarker(id,snap.val());updateDriverList();
+      const d=filterPeerPosition(id,snap.val());
+      driverData[id]=d;updatePeerMarker(id,d);updateDriverList();
     });
     db.ref('drivers').on('child_changed',snap=>{
       const id=snap.key;if(id===myId)return;
-      driverData[id]=snap.val();updatePeerMarker(id,snap.val());updateDriverList();
+      const d=filterPeerPosition(id,snap.val());
+      driverData[id]=d;updatePeerMarker(id,d);updateDriverList();
     });
     db.ref('drivers').on('child_removed',snap=>{
       const id=snap.key;if(id===myId)return;
-      delete driverData[id];removePeerMarker(id);updateDriverList();
+      delete driverData[id];delete peerPosState[id];removePeerMarker(id);updateDriverList();
     });
     // ※ 画面にすぐ見せたいデータ（チャット・仲間の送り先）は、容量の大きい他のデータ（ランキング・
     //   乗り場別の統計・列移動・チャット全体の変更監視等）より先に要求する。Firebaseは1本の回線で、
@@ -5414,14 +5479,28 @@ function pushMyPosition(gpsWeak=false){
     return;
   }
   lastPresenceSig='';
+  // Android版アプリ: ネイティブのサービスが別の経路で位置を書いていることがあり、上のnativeWriterActiveで
+  // 見分けられない場合もある。その時に、Web側が古い位置を新しい時刻で書くと、ネイティブが書いた新しい位置を
+  // 上書きして、仲間の地図でアイコンが後ろへ戻って見える。そのため、画面が他のアプリの陰に隠れている間は、
+  // 古い位置を書かない。他のアプリから戻った直後も、新しい位置が届くのを少し待ってから「GPS弱」の書き直しをする
+  if(window.AndroidBridge){
+    const posAge=gpsLastUpdate>0?Date.now()-gpsLastUpdate:Infinity;
+    if(document.hidden&&posAge>ANDROID_STALE_POS_MS)return;
+    if(gpsWeak&&Date.now()-pageVisibleSince<ANDROID_RESUME_GRACE_MS)return;
+  }
   // 最後に位置を取得してから長く経っている（バックグラウンドから復帰した直後で、
   // まだ新しい位置が届いていない等）間は、古い位置を新しい時刻（ts）つきで
   // 書き込まない。GPSが途切れた場合は、別途gpsWeakのハートビートが送り続ける
   if(!gpsWeak&&gpsLastUpdate>0&&Date.now()-gpsLastUpdate>12000)return;
+  const lat=myDisplayLat??myLat,lng=myDisplayLng??myLng;
+  // posTs＝この位置を測った時刻（tsは、この書き込みをした時刻）。posLat・posLngは、posTsと一緒に書いた位置の写し。
+  // 仲間の地図は、これで「古い位置」を見分ける。ネイティブが後から位置（lat/lng）だけを書き換えた時は、
+  // lat/lngと写しが食い違うので、古いposTsが残っていても、新しい位置を古い位置と間違えない
   db.ref('drivers/'+myId).update({
     ...base,
-    lat:myDisplayLat??myLat,lng:myDisplayLng??myLng,
-    ts:Date.now(),gpsWeak:gpsWeak||null
+    lat,lng,
+    ts:Date.now(),posTs:lastPosFixTs||gpsLastUpdate||Date.now(),posLat:lat,posLng:lng,
+    gpsWeak:gpsWeak||null
   }).catch(err=>console.error('drivers position update failed',err));
 }
 let lastPresenceSig='',lastPresenceWriteTs=0;
@@ -12647,11 +12726,13 @@ document.addEventListener('visibilitychange',async()=>{
           const all=snap.val()||{};
           Object.keys(all).forEach(id=>{
             if(id===myId)return;
-            driverData[id]=all[id];
-            updatePeerMarker(id,all[id]);
+            const d=filterPeerPosition(id,all[id]);
+            driverData[id]=d;
+            updatePeerMarker(id,d);
           });
           // 消えたドライバーを削除
           Object.keys(peerMarkers).forEach(id=>{if(!all[id])removePeerMarker(id);});
+          Object.keys(peerPosState).forEach(id=>{if(!all[id])delete peerPosState[id];});
           updateDriverList();
         });
       },800);
