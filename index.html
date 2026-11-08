@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261108-4 -->
+<!-- v20261108-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -137,6 +137,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
   width:min(88vw,440px);box-sizing:border-box;padding:18px 12px;border-radius:18px;text-align:center;
   background:#facc15;color:#111;border:4px solid #111;box-shadow:0 8px 28px rgba(0,0,0,.55);
   font-size:clamp(26px,8.2vw,40px);font-weight:900;line-height:1.35;letter-spacing:.04em;pointer-events:none}
+/* 実車ボタンを押した直後に、画面の中央へ大きく出す表示（上に「ステータス」、その下に大きく「🟢 実車」）。以前は、画面の上に小さく
+   「ステータス: 🟢 実車」と出ていて、他の表示（到着の緑の枠など）や上のボタンと重なって見づらかった。約3秒で消える（STATUS_POPUP_MS）。
+   地図や下のボタンを押せなくならないよう、タップは下の画面に通す（pointer-events:none）。ダイアログ（z-index 2000以上）の下に出る。
+   縁の色は、実車の色（緑）。表示のオン・オフは、クラス show */
+#status-pop{position:fixed;left:50%;top:50%;z-index:1600;width:min(88vw,440px);box-sizing:border-box;padding:18px 12px 20px;
+  border-radius:22px;text-align:center;background:rgba(13,13,26,.96);color:#fff;border:5px solid #22c55e;
+  box-shadow:0 10px 34px rgba(0,0,0,.6);pointer-events:none;
+  opacity:0;visibility:hidden;transform:translate(-50%,-50%) scale(.92);transition:opacity .25s,transform .25s,visibility 0s linear .25s}
+#status-pop.show{opacity:1;visibility:visible;transform:translate(-50%,-50%) scale(1);transition:opacity .25s,transform .25s}
+#status-pop .sp-cap{font-size:clamp(15px,4.4vw,20px);font-weight:700;letter-spacing:.1em;opacity:.85}
+#status-pop .sp-main{font-size:clamp(44px,14vw,72px);font-weight:900;line-height:1.2;margin-top:2px;white-space:nowrap}
 /* 地図の上の「平均待機時間」。5つの札は、乗り場ボタンの真下に、同じ5列でそろえて2段に並べる（1段目＝いまの時間帯、
    2段目＝1つ後の時間帯）。乗り場の名前は、真上の乗り場ボタンが示すので、札には書かない。札の中は、上が平均（分）、その下が、
    平均の元になった記録の回数（○回）。タイトルは、その下の💡の行の左側（どの段がどの時間帯かを1行で示す）。
@@ -1577,6 +1588,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 <div class="toast" id="toast"></div>
 <!-- 実車ボタンの押し忘れ防止: 点滅と同時に、画面の中央へ大きく出す案内（syncStatusButtonsUiで出し入れする） -->
 <div id="jitsusha-remind-msg" role="alert" aria-live="assertive" hidden>【実車ボタンを<br>押して下さい】</div>
+<!-- 実車ボタンを押した直後に、画面の中央へ大きく出す表示（showStatusPopup。約3秒で消える。タップは下の画面に通す） -->
+<div id="status-pop" role="status" aria-live="polite"><div class="sp-cap">ステータス</div><div class="sp-main" id="status-pop-main"></div></div>
 
 <script>
 const FIREBASE_CONFIG = {
@@ -1590,7 +1603,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261108-4';
+const APP_BUILD='20261108-6';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -4817,6 +4830,26 @@ function stopJitsushaReminder(){
   if(isDuty)saveAppState();
 }
 
+// 実車ボタンを押した直後に、画面の中央へ大きく出す表示（「ステータス」と、その下に大きく「🟢 実車」）。STATUS_POPUP_MS（3秒）で消える。
+// 以前は、画面の上に小さく「ステータス: 🟢 実車」と出ていたが、他の表示や上のボタンと重なって見づらく、押せたかどうかが分かりにくかった
+const STATUS_POPUP_MS=3000;
+let statusPopupTimer=null;
+function showStatusPopup(s){
+  const pop=document.getElementById('status-pop');
+  const cfg=statusCfg[s];
+  if(!pop||!cfg)return;
+  const main=document.getElementById('status-pop-main');
+  if(main)main.textContent=cfg.label;
+  pop.classList.add('show');
+  // 続けて押された時は、消すまでの3秒を、最後に押した時から数え直す
+  if(statusPopupTimer)clearTimeout(statusPopupTimer);
+  statusPopupTimer=setTimeout(hideStatusPopup,STATUS_POPUP_MS);
+}
+function hideStatusPopup(){
+  const pop=document.getElementById('status-pop');
+  if(pop)pop.classList.remove('show');
+}
+
 function setStatus(s){
   const prev=currentStatus; currentStatus=s;
   // どの状態ボタンを押しても、実車ボタンの押し忘れの点滅は止める（詳しくは上の説明）
@@ -4825,7 +4858,11 @@ function setStatus(s){
   if(myMarker&&myLat)updateMyMarker(myDisplayLat??myLat,myDisplayLng??myLng);
   pushMyPosition();
   saveAppState();
-  toast('ステータス: '+statusCfg[s].label);
+  // 実車ボタンを押した時は、押せたことが一目で分かるよう、画面の中央に大きく出す。空車・回送は、続けて運賃の入力画面などが
+  // 出るため、従来どおり上に小さく出す。どの状態ボタンを押しても、前に出ていた大きな表示は、すぐ消す
+  hideStatusPopup();
+  if(s==='jitsusha')showStatusPopup(s);
+  else toast('ステータス: '+statusCfg[s].label);
   if(s==='jitsusha'){
     jitsushaStart=Date.now();
     longJitsushaNotified=false;
