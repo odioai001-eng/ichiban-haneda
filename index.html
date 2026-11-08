@@ -7284,7 +7284,13 @@ function isInBoardArea(){
 //     （到着の知らせが来ない時・アプリを開き直した時・国際線プールのエリアが国内線と重なる時。reconcileAutoIntlWait）
 //  ③ 国際線プールから離れた（外周＋300mより外に、8回続けて）ら、自動で始まった国際線の待機を片付ける（healStaleIntlWait）
 //  ④ 国際線プールのエリアが国内線と重なる所では、国際線プールの名前で待機を始めず、国内線の名前で始める（onArrivalの自動開始）
+//  ⑤ 国際線プールの待機は、国際線プールの中で1分以上止まっていた時だけ自動で始める（onArrivalの60秒後の確認）。第3・第4プールのエリアは、
+//     第3ターミナルの前の道路を含んでおり、国内線へ向かう車がそこを通り抜けるだけで、以前は到着の10秒後に待機が始まっていた
+//     （エリアから出たあとも、出発が確定するまでは「圏内」のままなので、10秒後の時点でまだ圏内と判断された）。これが「国際線プールに入っていない
+//     のに、国際線になる」原因だった。通り抜けただけの車は、60秒後にはもうエリアの外にいるか、走行中のため、始まらない
 // ボタンで選んだ「国際線」は、国内線の側にいる間は、②では触らない（国際線のつもりで選んだ人の選択を消さないため）
+const INTL_WAIT_RECHECK_MS=10000;   // 国際線プールで走行中だった時に、待機を始めてよいかを見直す間隔
+const INTL_WAIT_MAX_RECHECKS=18;    // 見直す回数の上限（到着の60秒後から、さらに約3分間）
 // 国際線プールか（国内線プール・乗り場は、名前に「国際線」が入っていても含めない）
 function isIntlCp(cp){return !!(cp&&cp.name&&cp.name.includes('国際線')&&!isDomesticCp(cp));}
 // 国内線の側のチェックポイント（国内線プール本体・1〜4号乗り場）
@@ -7504,11 +7510,16 @@ function onArrival(cp,dist){
     // 動き出してしまい、実車中も空車に戻した後もカウントアップし続けてしまう
     // 不具合があったため、空車の時だけ自動スタートするようにする
     if(!(cpInside[cp.id]&&isDuty&&currentStatus==='kuusha'&&!waitInterval))return;
-    // 国際線プールのエリアが、国内線プール・乗り場と重なっている所では、国際線プールの名前で待機を始めず、国内線の名前で始める
-    // （最後に入ったエリアの名前が付く仕組みのため、重なっていると、国内線にいるのに国際線の名前が付いていた。上の④）
-    const dom=isIntlCp(cp)?domesticCpInside():null;
-    if(dom&&dom.lat!==null&&myLat!==null)startWaitAt(dom,dom.name,Math.round(haversine(myLat,myLng,dom.lat,dom.lng)),timeStr);
-    else startWaitAt(cp,cp.name,dist,timeStr);
+    if(isIntlCp(cp)){
+      // 国際線プールのエリアが、国内線プール・乗り場と重なっている所では、国際線プールの名前で待機を始めず、国内線の名前で始める
+      // （最後に入ったエリアの名前が付く仕組みのため、重なっていると、国内線にいるのに国際線の名前が付いていた。上の④）
+      const dom=domesticCpInside();
+      if(dom&&dom.lat!==null&&myLat!==null)startWaitAt(dom,dom.name,Math.round(haversine(myLat,myLng,dom.lat,dom.lng)),timeStr);
+      // 国際線プールの中だけにいる時は、ここでは始めない。エリアの中を通り抜けただけの車（国際線プールの脇の道を通って国内線へ向かう人など）に、
+      // 待機を始めさせないため、下の「到着から60秒後の確認」で、実際に止まっていた時だけ始める（上の⑤）
+      return;
+    }
+    startWaitAt(cp,cp.name,dist,timeStr);
   },10000);
   // 1分以上その場に停止した場合のみ通知（通過した場合は通知しない）
   // cpInsideフラグは出発確定までに別途60秒かかるため、ここでは使わず、
@@ -7527,6 +7538,25 @@ function onArrival(cp,dist){
     if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
     toast(intlArrivalText||(cp.icon+' '+cp.name+' 到着！'));
   },60000);
+  // 国際線プールの待機を自動で始める（上の⑤）。到着から60秒後に、まだエリアの中にいて、走行中でもなければ始める。
+  // 走行中の時（広いエリアの奥へ進んでいる最中など）は、10秒おきに見直して、止まったら始める。エリアの外に出ていれば（通り抜けた）始めない。
+  // 空車・出勤中・待機タイマーが動いていない時だけ（10秒後の自動開始と同じ条件）
+  if(isIntlCp(cp)){
+    if(cp.intlWaitTimer)clearTimeout(cp.intlWaitTimer);
+    const checkIntlWait=(rechecks)=>{
+      cp.intlWaitTimer=null;
+      if(!(cpInside[cp.id]&&isDuty&&currentStatus==='kuusha'&&!waitInterval))return;
+      if(myLat===null||myLng===null||!isInsideCP(myLat,myLng,cp))return;
+      if(movingFastNow()){
+        if(rechecks<INTL_WAIT_MAX_RECHECKS)cp.intlWaitTimer=setTimeout(()=>checkIntlWait(rechecks+1),INTL_WAIT_RECHECK_MS);
+        return;
+      }
+      const dom=domesticCpInside();
+      if(dom&&dom.lat!==null)startWaitAt(dom,dom.name,Math.round(haversine(myLat,myLng,dom.lat,dom.lng)),timeStr);
+      else startWaitAt(cp,cp.name,dist,timeStr);
+    };
+    cp.intlWaitTimer=setTimeout(()=>checkIntlWait(0),CP_STOP_CONFIRM_MS);
+  }
   renderSpotRow();
 }
 
