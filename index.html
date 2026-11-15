@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261108-7 -->
+<!-- v20261115-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1345,8 +1345,9 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
 </div>
 
 <div id="duty-end-confirm-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
-  <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
-    <div style="text-align:center;font-size:16px;font-weight:700;margin-bottom:18px">退勤時刻を確認してください</div>
+  <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;max-height:calc(100vh - 32px);overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.6)">
+    <div style="text-align:center;font-size:16px;font-weight:700;margin-bottom:8px">退勤時刻を確認してください</div>
+    <div style="text-align:center;font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:16px">押し間違えた時は、「戻る」で乗務に戻れます</div>
     <div style="margin-bottom:20px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:600">退勤時刻</div>
       <input id="duty-end-time" type="text" inputmode="none" readonly placeholder="例: 18:00" onclick="openTimeKeypad('duty-end-time')"
@@ -1358,7 +1359,8 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:16px;color:var(--fg);outline:none">
     </div>
     <div style="display:flex;gap:10px">
-      <button onclick="confirmEndDuty()" class="btn btn-p" style="flex:1">退勤する</button>
+      <button id="duty-end-back-btn" onclick="cancelEndDuty()" class="btn btn-g" style="flex:1;box-sizing:border-box;padding:13px 10px;font-size:15px;font-weight:700">戻る</button>
+      <button id="duty-end-ok-btn" onclick="confirmEndDuty()" class="btn btn-p" style="flex:1;box-sizing:border-box;border:1px solid transparent;padding:13px 10px;font-size:15px;font-weight:700">退勤する</button>
     </div>
   </div>
 </div>
@@ -1603,7 +1605,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261108-7';
+const APP_BUILD='20261115-1';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -3570,6 +3572,8 @@ function toggleDuty(){
   // 即座に行う。モーダルでの確認・記録処理を待たせて消えるまでに間が
   // 空いたり、モーダルの2回目のボタンを押し忘れて消えないままになる
   // 事態を防ぐため
+  // 押し間違いの時に、確認画面の「戻る」で乗務に戻せるよう、押す直前の状態を先に控えておく（cancelEndDuty）
+  captureDutyEndUndo();
   endDutyImmediate();
   const now=new Date();
   const hh=String(now.getHours()).padStart(2,'0');
@@ -3640,6 +3644,85 @@ function registerDriverOnDisconnect(){
   if(window.AndroidBridge)return;
   db.ref('drivers/'+myId).onDisconnect().remove();
 }
+// ===== 退勤ボタンの押し間違いを取り消す（退勤時刻の確認画面の「戻る」） =====
+// 退勤ボタンを押した瞬間に、乗務を終える処理（endDutyImmediate: 仲間の地図からアイコンを消す・GPSを止める・乗務の状態を消す・
+// 暫定の勤務記録を残す 等）が済んでしまう。そのため、「戻る」は画面を閉じるだけでは足りず、乗務の状態を戻す必要がある。
+// 押す直前の状態をここに控えておき、アプリを開き直した時に乗務を復元するのと同じ仕組み（restoreAppState）で戻す。
+// 退勤時刻の確認画面で「退勤する」を押して確定した後（confirmEndDuty）は、戻せない（精算・チャット通知まで済むため）
+let dutyEndUndo=null;        // {state:押す直前のtaxi_runtime_state, boardDep, poolSelStamp, startTs:出勤時刻}
+let dutyEndRemovePromise=null; // 退勤時に行った、Firebase上の自分のレコード削除（完了を待つため）
+function captureDutyEndUndo(){
+  try{
+    saveAppState(); // 最新の状態を保存し直してから控える
+    dutyEndUndo={
+      state:localStorage.getItem('taxi_runtime_state'),
+      boardDep:boardDep?JSON.parse(JSON.stringify(boardDep)):null,
+      poolSelStamp,
+      startTs:dutyStart?dutyStart.getTime():null
+    };
+  }catch(e){dutyEndUndo=null;console.error('退勤前の状態を控えられませんでした',e);}
+}
+function cancelEndDuty(){
+  const modal=document.getElementById('duty-end-confirm-modal');
+  // 既に乗務に戻っている（「戻る」が二重に押された等）時は、何もしないで画面を閉じるだけ
+  if(isDuty){modal.style.display='none';return;}
+  const u=dutyEndUndo;
+  if(!u||!u.state){
+    toast('⚠️ 乗務に戻せませんでした。「退勤する」で確定してから、出勤し直してください');
+    return;
+  }
+  // 乗務の状態を、押す直前に戻す。restoreAppStateは、isDuty・出勤時刻・状態（空車/実車）・待機タイマー・乗り場の選択・
+  // 営業開始メーター・燃料・高速・ボタンの表示・GPSなどを戻す。待機の確定待ち・出発の記録も戻す
+  // （ネイティブへ渡す内容と、Firebaseへ送る内容は、退勤で消えたため、送り直す必要がある。下で必ず送り直す）
+  lastAndroidPresenceSig='';lastPresenceSig='';
+  localStorage.setItem('taxi_runtime_state',u.state);
+  boardDep=u.boardDep;saveBoardDep();
+  restoreAppState();
+  if(!isDuty){
+    // 戻せなかった（通常は起きない）。押した後の状態（退勤済み）のままにして、確認画面は残す
+    localStorage.removeItem('taxi_runtime_state');clearBoardDep();
+    toast('⚠️ 乗務に戻せませんでした。「退勤する」で確定してから、出勤し直してください');
+    return;
+  }
+  // 暫定の勤務記録（退勤ボタンを押した時にendDutyImmediateが残したもの）を消す。乗務は続くため、退勤の記録は残さない
+  if(u.startTs){
+    try{
+      const log=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
+      const kept=log.filter(s=>s.startTs!==u.startTs);
+      if(kept.length!==log.length)safeSaveLocalArray('taxi_shift_log',kept,'出退勤記録');
+    }catch(e){console.error('暫定の勤務記録の取り消しに失敗しました',e);}
+  }
+  // アプリを開き直した時の復元では、乗り場の選択の古さが分からないものとして扱う（poolSelStamp=-1）。ここでは分かっているので、押す直前のまま戻す
+  if(currentSpotSelection&&typeof u.poolSelStamp==='number')poolSelStamp=u.poolSelStamp;
+  // Android版アプリのネイティブの位置送信サービスを、また動かす（退勤で止めている）。状態・車番等も渡し直す
+  notifyAndroidDutyStatus(true);
+  // 退勤した時に消したFirebase上の自分のレコードを、出勤中の状態に戻す。位置・状態（lat/lng/ts/status）は、次のGPSで届く。
+  // それ以外の、出来事があった時にしか送っていない項目（出勤時刻・帰庫予定・待機中の「○号 ○分」）は、ここで送り直す
+  if(db&&!testMode){
+    const startTs=dutyStart.getTime();
+    // 退勤した時のFirebase上のレコード削除が終わってから戻す（先に戻すと、あとから削除が走って、また消えてしまう）
+    Promise.resolve(dutyEndRemovePromise).catch(()=>{}).then(()=>{
+      if(!isDuty)return; // その間に、また退勤された
+      // dutyActive（乗務中の印）も送る。位置（ts）が届くまでは、仲間の画面には出ない（どの画面も、tsの新しさも見ている）。
+      // 乗り場を出発した時の自動のチャット通知は、この印を確かめてから送るため、位置が届く前でも、送れるようにしておく
+      const upd={dutyStartTs:startTs,dutyActive:true};
+      if(waitInterval&&waitStart){
+        const lbl=document.getElementById('wait-spot-lbl');
+        const sp=lbl?lbl.textContent.replace('待機場所: ','').replace('未設定','').trim():'';
+        upd.waitSince=waitStart;
+        upd.waitSpot=sp||null;
+      }
+      db.ref('drivers/'+myId).update(upd).catch(err=>console.error('drivers record restore failed',err));
+      registerDriverOnDisconnect();
+      pushMyPlanFinish();
+    });
+    pushTeamSales(); // グループランキングの自分の行も、今の状態に合わせて送り直す
+  }
+  renderDests();
+  modal.style.display='none';
+  dutyEndUndo=null;dutyEndRemovePromise=null;
+  toast('↩️ 退勤をやめて、乗務に戻りました');
+}
 function endDutyImmediate(){
   if(!isDuty)return;
   isDuty=false;
@@ -3656,7 +3739,8 @@ function endDutyImmediate(){
     // 地図のピン・仲間リストはどちらもtsの新しさだけを見て「乗務中か」を
     // 判定しているため、ts:0への更新さえ通れば確実に非表示になる
     myRef.update({ts:0,dutyActive:false}).catch(e=>console.error('退勤時のFirebase更新(ts)に失敗しました',e));
-    myRef.remove()
+    // 確認画面の「戻る」（cancelEndDuty）が、この削除が終わってから出勤中の登録を戻せるよう、promiseを控えておく
+    dutyEndRemovePromise=myRef.remove()
       .then(()=>{
         // 出勤中に予約したonDisconnect（切断時の自動削除）は、自分で明示的に
         // 削除できた後は不要なので解除する。remove()より先に解除してしまうと、
@@ -3715,6 +3799,7 @@ function confirmEndDuty(){
   if(!document.getElementById('duty-meter-end').value.trim()){toast('⚠️ 営業終了メーターを入力してください');return;}
   const timeVal=document.getElementById('duty-end-time').value;
   document.getElementById('duty-end-confirm-modal').style.display='none';
+  dutyEndUndo=null;dutyEndRemovePromise=null; // 確定したら、もう戻せない
 
   let endTs=Date.now();
   if(timeVal&&dutyStart){
