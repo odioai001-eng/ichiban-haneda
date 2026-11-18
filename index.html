@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261115-1 -->
+<!-- v20261118-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1020,7 +1020,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     </div>
     <div class="sec">🗂 送り先データの管理</div>
     <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">待機/送り先タブの記録は、今月を含めて約6か月分が残ります。それより古い記録は、各自が記録を追加する時に自動で整理されます（運賃の高い記録は、歴代送り先ランキングに残ります）。</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">待機/送り先タブの記録は、今月を含めて約6か月分が残ります。それより古い記録は、各自が記録を追加する時に自動で整理されます（税抜15,000円以上の記録と、各自の運賃の上位10件は、歴代送り先ランキングの保管に残ります）。</div>
       <button class="btn btn-g" onclick="adminCheckTeamDestsRange()" style="width:100%">🔍 現在の記録範囲・データ量を確認する（削除しません）</button>
       <div style="font-size:12px;color:var(--muted);margin-top:10px;margin-bottom:8px;line-height:1.6">以前の月次リセットで消えてしまった送り先データを、リセット直前のバックアップから戻します。今ある記録は変わらず、無い記録だけが戻ります（通常は、新しい版を開いた時に自動で行われます）。</div>
       <button class="btn btn-g" onclick="restoreDestsFromBackup(true)" style="width:100%">🔄 消えた送り先データをバックアップから戻す</button>
@@ -1605,7 +1605,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261115-1';
+const APP_BUILD='20261118-1';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -4011,7 +4011,7 @@ function openCsvExportModal(mode){
   document.getElementById('csv-export-title-text').textContent=sales?'売り上げランキングのCSV保存とリセット':'送り先データのCSV保存と全削除';
   document.getElementById('csv-export-desc').textContent=sales
     ?'下のボタンでCSVファイルを保存してください。保存が終わったら「リセットする」を押すと、月が替わったのに前月の値のまま残っている行が、新しい月の0に戻ります。送り先データ（待機/送り先タブ・歴代送り先ランキング）は削除されません。'
-    :'下のボタンをタップしてCSVファイルを保存してください。保存が完了したら「削除する」を押すと、仲間全員分の送り先データがFirebase上から削除されます（歴代送り先ランキングの上位は残ります）。通常の月次リセットでは使いません。';
+    :'下のボタンをタップしてCSVファイルを保存してください。保存が完了したら「削除する」を押すと、仲間全員分の送り先データがFirebase上から削除されます（歴代送り先ランキングの記録（税抜15,000円以上・各自の上位10件）は残ります）。通常の月次リセットでは使いません。';
   const destsLink=document.getElementById('csv-download-link'),salesLink=document.getElementById('csv-sales-download-link');
   destsLink.textContent=sales?'📥 送り先データをダウンロード（記録用・削除しません）':'📥 送り先データをダウンロード';
   destsLink.className='btn '+(sales?'btn-g':'btn-p');
@@ -4327,7 +4327,7 @@ async function confirmSalesRankingReset(){
 // 送り先データを全員分削除する（管理者が手動で行う。月次リセットでは行わない）。
 // 削除の前に、歴代送り先ランキング用に各自の運賃上位を別の場所（team_alltime）へ移して残す
 async function confirmDeleteAllTeamDests(){
-  if(!confirm('仲間全員分の送り先データを全て削除しますか？（待機/送り先タブの記録も消えます。歴代送り先ランキングの上位は残ります）'))return;
+  if(!confirm('仲間全員分の送り先データを全て削除しますか？（待機/送り先タブの記録も消えます。歴代送り先ランキングの記録（税抜15,000円以上・各自の上位10件）は残ります）'))return;
   closeCsvExportModal();
   const snap=await db.ref('team_dests').once('value');
   const backupTs=Date.now();
@@ -6675,14 +6675,19 @@ function buildRankTripCardHtml(d,rank,driverLabel,delBtn){
 // 延ばすほど通信量と起動時間が増える（目安: 1人1か月で約0.1MB。設定画面の「現在の記録範囲を確認する」にデータ量が出る）
 const DEST_KEEP_MONTHS_BACK=5;
 function destRetentionCutoffTs(nowDate){const n=nowDate||new Date();return new Date(n.getFullYear(),n.getMonth()-DEST_KEEP_MONTHS_BACK,1).getTime();}
-// 整理する前に、各自の運賃の上位ALLTIME_KEEP_PER_DRIVER件を、歴代ランキングの保管（team_alltime/{driverId}/t{ts}）へ移す
-// （グループの上位10件は、その人自身の上位10件の中に必ず入っているので、これで足りる）。
-// 表示は「保管分＋今ある分（team_dests）」を合わせた上位10件
+// 整理する前に、次の記録を、歴代ランキングの保管（team_alltime/{driverId}/t{ts}）へ移して残す:
+//  ・各自の運賃の上位ALLTIME_KEEP_PER_DRIVER件（本人の歴代ランキング用。上位10件）
+//  ・税抜（exTax。画面に出る金額）がALLTIME_MIN_EXTAX円以上の記録は、すべて（グループの歴代ランキング用）
+// グループの歴代ランキングは、「保管分＋今ある分（team_dests）」を合わせた、税抜ALLTIME_MIN_EXTAX円以上の記録を、件数の上限なく、運賃の高い順に表示する。
+// 本人の歴代ランキングは、上位10件
 const ALLTIME_KEEP_PER_DRIVER=10;
+const ALLTIME_MIN_EXTAX=15000;
 const ALLTIME_FIELDS=['type','ts','dateStr','boardTime','boardAddr','boardSpot','spotHistory','alightTime','alightAddr','waitMins','waitMinsStr','fare','driverName','driverId','manual'];
 function allTimeKeyOf(ts){return 't'+ts;}
 // 保管の対象にする記録（運賃が入った送迎。テスト出勤の記録は除く）
 function isAllTimeTrip(e){return !!e&&e.type==='trip'&&e.fare>0&&!!e.ts&&!e.test;}
+// グループの歴代送り先ランキングに載せる記録（税抜が、画面に出る金額で、ALLTIME_MIN_EXTAX円以上）
+function isAllTimeBigTrip(e){return !!e&&e.type==='trip'&&exTax(e.fare)>=ALLTIME_MIN_EXTAX;}
 function pickAllTimeFields(e,driverId){
   const o={};
   ALLTIME_FIELDS.forEach(k=>{if(e[k]!==undefined&&e[k]!==null)o[k]=e[k];});
@@ -6691,7 +6696,7 @@ function pickAllTimeFields(e,driverId){
 }
 // 運賃の高い順。同額なら先に記録した方を上にする
 function compareAllTimeTrips(a,b){return (b.fare||0)-(a.fare||0)||(a.ts||0)-(b.ts||0);}
-// 保管（stored）に、送り先データ（dests）の運賃上位を加えて、各自の上位だけを残すための書き込み内容を作る。
+// 保管（stored）に、送り先データ（dests）の運賃上位・税抜ALLTIME_MIN_EXTAX円以上の記録を加えて、各自の分だけを残すための書き込み内容を作る。
 // 戻り値は team_alltime への update() にそのまま渡せる形（'driverId/t{ts}'→記録、不要になった記録はnull）。
 // 同じ記録（同じts）は1件にまとめ、送り先データ側（新しい方）の内容を優先する。何度実行しても結果は同じ
 function buildAllTimeArchiveUpdates(stored,dests){
@@ -6703,7 +6708,8 @@ function buildAllTimeArchiveUpdates(stored,dests){
     Object.values(have).forEach(e=>{if(isAllTimeTrip(e))cand.set(e.ts,e);});
     Object.values((dests&&dests[id])||{}).forEach(e=>{if(isAllTimeTrip(e))cand.set(e.ts,pickAllTimeFields(e,id));});
     const keep={};
-    Array.from(cand.values()).sort(compareAllTimeTrips).slice(0,ALLTIME_KEEP_PER_DRIVER).forEach(e=>{keep[allTimeKeyOf(e.ts)]=e;});
+    // 上位ALLTIME_KEEP_PER_DRIVER件（本人の歴代ランキング用）と、税抜ALLTIME_MIN_EXTAX円以上のすべて（グループの歴代ランキング用）
+    Array.from(cand.values()).sort(compareAllTimeTrips).forEach((e,i)=>{if(i<ALLTIME_KEEP_PER_DRIVER||isAllTimeBigTrip(e))keep[allTimeKeyOf(e.ts)]=e;});
     Object.keys(keep).forEach(k=>{if(JSON.stringify(have[k])!==JSON.stringify(keep[k]))updates[id+'/'+k]=keep[k];});
     Object.keys(have).forEach(k=>{if(!(k in keep))updates[id+'/'+k]=null;});
   });
@@ -6807,11 +6813,13 @@ function renderRankAllTimePersonal(){
     ?trips.slice(0,10).map((d,i)=>buildRankTripCardHtml(d,i+1,null)).join('')
     :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
 }
-// ⑤ 歴代送り先ランキング（グループ・1回の送先ごと、日付含む）
+// ⑤ 歴代送り先ランキング（グループ・1回の送先ごと、日付含む）。税抜ALLTIME_MIN_EXTAX円以上の送り先を、すべて載せる
+let rankAllTimeGroupSig='';
 function renderRankAllTimeGroup(){
   const el=document.getElementById('rank-alltime-group');
   if(!el)return;
   if(!isRankingOptedIn()){
+    rankAllTimeGroupSig='';
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px">上の「本日の売り上げランキング（グループ）」から入室してください</div>';
     return;
   }
@@ -6820,14 +6828,21 @@ function renderRankAllTimeGroup(){
   // ありません」と表示すると、データが消えたと誤解されてしまうため、
   // 初回の読み込みが完了するまでは「読み込み中」と表示する（保管分も同じ）
   if(!teamDestsLoaded||!teamAllTimeLoaded){
+    rankAllTimeGroupSig='';
     el.innerHTML='<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">読み込み中...</div>';
     return;
   }
-  const allTrips=collectAllTimeTrips();
-  el.innerHTML=allTrips.length
-    ?allTrips.slice(0,10).map((d,i)=>buildRankTripCardHtml(d,i+1,d.driverName||'不明',
+  // 税抜ALLTIME_MIN_EXTAX円以上の記録を、すべて載せる（件数の上限は設けない）。運賃の高い順
+  const bigTrips=collectAllTimeTrips().filter(isAllTimeBigTrip);
+  // 件数が多くなっても、画面の描き直しが重くならないよう、表示する内容（と、管理者の削除ボタンの有無・保管先のエラー）が前回と同じ間は、描き直さない
+  const sig=JSON.stringify([bigTrips,isAdmin,teamAllTimeError||null]);
+  if(sig===rankAllTimeGroupSig&&el.firstChild)return;
+  rankAllTimeGroupSig=sig;
+  el.innerHTML=bigTrips.length
+    ?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">税抜¥${ALLTIME_MIN_EXTAX.toLocaleString()}以上の送り先を、すべて表示しています（全${bigTrips.length}件）</div>`
+      +bigTrips.map((d,i)=>buildRankTripCardHtml(d,i+1,d.driverName||'不明',
         d._archived?adminDelBtnHtml(`adminDeleteAllTimeTrip('${d._id}','${d._dKey}')`):'')).join('')
-    :'<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">記録がありません</div>';
+    :`<div style="text-align:center;color:var(--muted);font-size:13px;padding:14px">税抜¥${ALLTIME_MIN_EXTAX.toLocaleString()}以上の記録は、まだありません</div>`;
   if(teamAllTimeError&&isAdmin)el.innerHTML+='<div style="font-size:11px;color:var(--red);margin-top:6px;line-height:1.5">⚠️ 歴代ランキングの保管先（team_alltime）を読み込めませんでした（'+esc(String(teamAllTimeError))+'）。Firebaseのルールで team_alltime の読み書きを許可してください。</div>';
 }
 // 端末の入れ替え・localStorageクリア等でuidが変わると、同じ人の重複した行が
