@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261118-1 -->
+<!-- v20261119-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -883,6 +883,28 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">退勤のたびに自動で作成される精算表（燃料・メーター・運賃の内訳等）の一覧です。タップすると内容を再表示できます。本日と前日の分が並び、それより前の分は「📁 前日より前の記録」にまとめてあります（タップで開閉）。毎月1日の朝9:00に、前の月までに退勤した分（月末に始めて月初の朝に退勤した夜勤の分も含む）が自動で削除されます。</div>
    <div id="settlement-log-list"></div>
   </div>
+  <div class="sec">📅 勤務時間管理</div>
+  <div class="card">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">自分の出勤・退勤時間の記録一覧です。押し忘れ・押し間違いがあった場合は、下の「編集」「削除」から直接修正できます。</div>
+   <label>今月の出勤予定日数</label>
+   <input type="number" id="s-target-days" placeholder="例: 12">
+   <label>今月の目標金額（円）</label>
+   <input type="number" id="s-target-amount" placeholder="例: 900000">
+   <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
+   <div id="work-stats-out" style="margin-top:10px"></div>
+   <div id="shift-entries-list" style="margin-top:10px"></div>
+  </div>
+  <div class="sec">💰 売上管理（税抜）</div>
+  <div class="card">
+   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。表示する月は、下の「💰 売上管理」欄の「◀ 前月 / 次月 ▶」で切り替えられます。</div>
+   <div style="margin-bottom:8px"><span id="fare-day-entries-label" style="font-size:13px;font-weight:700">今月</span></div>
+   <div id="fare-day-entries-list"></div>
+  </div>
+<div class="sec">💰 売上管理</div>
+<div class="card">
+ <div id="sales-stats-out"></div>
+ <div id="fare-entries-list" style="margin-top:10px"></div>
+</div>
   <div class="sec">🛰 バックグラウンドのGPS診断</div>
   <div class="card" id="bg-diag-card">
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">他のアプリを使っている間や、画面を消している間も、仲間の地図への位置の送信と、プール・乗り場の出入りの判定（待機時間の計測）が止まらないための設定を確認します（Androidアプリ版のみ）。</div>
@@ -919,22 +941,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       <span style="font-size:10px;color:var(--muted)">初期: 0000</span>
     </div>
   </div>
-  <div class="sec">📅 勤務時間管理</div>
-  <div class="card">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">自分の出勤・退勤時間の記録一覧です。押し忘れ・押し間違いがあった場合は、下の「編集」「削除」から直接修正できます。</div>
-   <label>今月の出勤予定日数</label>
-   <input type="number" id="s-target-days" placeholder="例: 12">
-   <label>今月の目標金額（円）</label>
-   <input type="number" id="s-target-amount" placeholder="例: 900000">
-   <button class="btn btn-p" onclick="saveTargetDays()" style="width:100%">保存する</button>
-   <div id="work-stats-out" style="margin-top:10px"></div>
-   <div id="shift-entries-list" style="margin-top:10px"></div>
-  </div>
-<div class="sec">💰 売上管理</div>
-<div class="card">
- <div id="sales-stats-out"></div>
- <div id="fare-entries-list" style="margin-top:10px"></div>
-</div>
   <div class="sec">👤 ドライバー設定</div>
   <div class="card">
     <label>ドライバー名</label><input type="text" id="s-name" placeholder="例: 田中">
@@ -1055,12 +1061,6 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
       📍 位置情報の設定を開く（「常に許可」にしてください）
     </button>
   </div>
-  <div class="sec">💰 売上管理（税抜）</div>
-  <div class="card">
-   <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6">日ごとの売上（税抜）の記録一覧です。「編集」「削除」から直接修正できます。新しい日を追加する場合は「売上の手動記録・修正」から記録してください。表示する月は、下の「💰 売上管理」欄の「◀ 前月 / 次月 ▶」で切り替えられます。</div>
-   <div style="margin-bottom:8px"><span id="fare-day-entries-label" style="font-size:13px;font-weight:700">今月</span></div>
-   <div id="fare-day-entries-list"></div>
-  </div>
   <div class="sec">🔍 住所デバッグ</div>
   <div class="card">
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">現在地のNominatimレスポンスを確認します</div>
@@ -1092,7 +1092,7 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
     <input type="text" inputmode="none" readonly id="sl-end" placeholder="例: 18:00" onclick="openTimeKeypad('sl-end')" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;color:var(--fg);margin-bottom:4px">
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px">※日をまたぐ勤務（夜勤）の場合、退勤時刻は翌日として自動計算されます</div>
     <button class="btn btn-p" onclick="saveManualShift()" style="width:100%">この内容で記録する</button>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px">保存した内容は、下の「勤務時間管理」の記録一覧から確認・編集・削除できます。</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">保存した内容は、上の「勤務時間管理」の記録一覧から確認・編集・削除できます。</div>
   </div>
   <div class="sec">💰 売上の手動記録・修正</div>
   <div class="card">
@@ -1605,7 +1605,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261118-1';
+const APP_BUILD='20261119-1';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -8146,9 +8146,14 @@ function renderWorkStats(){
   <div class="row2"><span class="rl">残り出勤日数</span><span class="rv">${remainDays}日</span></div>
   <div class="row2"><span class="rl">残り営業時間</span><span class="rv">${hoursToHM(remainHoursRaw)}</span></div>
   <div class="row2"><span class="rl">1日あたり目安</span><span class="rv" style="color:var(--gold);font-weight:800">${perDayStr}</span></div>
+  <div class="row2"><span class="rl">今月の売上（税抜・繰越込み）</span><span class="rv" id="work-month-fare" style="color:var(--green);font-weight:800">${workMonthFareText()}</span></div>
  `;
  renderShiftEntries();
 }
+// 勤務時間管理の「今月の売上（税抜・繰越込み）」。「💰 売上管理」の「今月の売上（税抜・繰越込み）」と同じ金額
+// （今月の売上（税抜。出勤中の今回の分を含む）＋前日までの繰越額）。売上が変わった時は、renderSalesStatsが、この欄だけ更新する
+function workMonthFareText(){return '¥'+(getMonthFareExTax(0)+getCarryover().fare).toLocaleString();}
+function updateWorkMonthFare(){const el=document.getElementById('work-month-fare');if(el)el.textContent=workMonthFareText();}
 
 function saveManualShift(){
   const dateVal=document.getElementById('sl-date').value;
@@ -10149,6 +10154,7 @@ function renderSalesStats(){
  renderFareEntries();
  renderManualFareEntries();
  renderFareDayEntries();
+ updateWorkMonthFare(); // 勤務時間管理の「今月の売上（税抜・繰越込み）」も、同じ金額に合わせる
 }
 
 function renderFareEntries(){
