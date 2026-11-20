@@ -1,0 +1,9 @@
+# 記録した写真・CSV・診断結果は、公開リポジトリに入れない（著作権・通行人が写るため）
+data/
+diag/
+haneda-stand-data/
+images/
+captures.csv
+counts.csv
+__pycache__/
+*.pyc
