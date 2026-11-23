@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261119-1 -->
+<!-- v20261123-1 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -469,6 +469,23 @@ label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
   width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
 .modal h3{font-size:15px;font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between}
 .mc{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer}
+/* 仲間への個別メッセージのポップアップ（地図の仲間のアイコンをタップすると開く）。
+   9000の確認画面（退勤・待機開始など）より下にして、大事な確認が隠れないようにする */
+#peer-msg-modal{position:fixed;inset:0;z-index:8500;background:rgba(0,0,0,.6);display:none;align-items:flex-start;justify-content:center;
+  padding:calc(env(safe-area-inset-top,0px) + 64px) 14px 14px;box-sizing:border-box}
+.pm-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:16px;width:100%;max-width:380px;
+  max-height:calc(100vh - 90px);overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.6);box-sizing:border-box}
+.pm-thread{display:flex;flex-direction:column;gap:6px;margin:12px 0 4px}
+.pm-b{max-width:84%;padding:7px 11px;border-radius:14px;font-size:14px;line-height:1.45;word-break:break-word;white-space:pre-wrap;box-sizing:border-box}
+.pm-b.in{align-self:flex-start;background:var(--surface2);border:1px solid var(--border)}
+.pm-b.out{align-self:flex-end;background:var(--accent);color:#fff;border:1px solid transparent}
+.pm-b.new{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
+.pm-b.failed{opacity:.6}
+.pm-b small{display:block;font-size:10px;opacity:.75;margin-top:2px}
+#pm-mic{flex-shrink:0;width:58px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);color:var(--fg);font-size:26px;cursor:pointer}
+#pm-mic.on{background:var(--red);color:#fff;border-color:var(--red)}
+#pm-input{flex:1;min-width:0;resize:none;line-height:1.4;padding:8px 10px;border-radius:12px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--fg);font-size:16px;font-family:inherit;box-sizing:border-box}
 .setup-screen{position:fixed;inset:0;background:var(--bg);z-index:5000;
   display:none;align-items:center;justify-content:center;padding:24px}
 .setup-screen.open{display:flex}
@@ -1365,6 +1382,35 @@ textarea.fb-config{height:120px;font-size:12px;font-family:monospace}
   </div>
 </div>
 
+<!-- 仲間への個別メッセージ（地図の仲間のアイコンをタップすると開く。マイクで話すか入力して、その人だけに送れる。
+     その人から届いた時も、同じポップアップで表示する） -->
+<div id="peer-msg-modal" onclick="if(event.target===this)closePeerMsg()">
+  <div class="pm-card">
+    <div id="pm-incoming" style="display:none;margin-bottom:10px;padding:8px 10px;border-radius:10px;background:rgba(34,197,94,.15);border:1px solid var(--green);font-size:13px;align-items:center;justify-content:space-between;gap:8px">
+      <span id="pm-incoming-txt" style="min-width:0;word-break:break-all"></span>
+      <button class="btn btn-p" onclick="showPendingDm()" style="padding:6px 12px;font-size:13px;flex-shrink:0">見る</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div style="min-width:0">
+        <div id="pm-title" style="font-size:17px;font-weight:800;word-break:break-all"></div>
+        <div id="pm-sub" style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5"></div>
+      </div>
+      <button class="mc" onclick="closePeerMsg()" aria-label="閉じる">✕</button>
+    </div>
+    <div class="pm-thread" id="pm-thread"></div>
+    <div style="display:flex;gap:8px;align-items:stretch;margin-top:10px">
+      <button id="pm-mic" onclick="togglePeerVoice()" aria-label="音声入力">🎤</button>
+      <textarea id="pm-input" rows="3" maxlength="200" placeholder="🎤で話すか、ここに入力"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendPeerMsg();}"></textarea>
+    </div>
+    <div id="pm-note" style="font-size:12px;color:var(--muted);min-height:16px;margin-top:6px;line-height:1.5"></div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-g" onclick="closePeerMsg()" style="flex:1;box-sizing:border-box;padding:13px 10px;font-size:15px;font-weight:700">閉じる</button>
+      <button id="pm-send" class="btn btn-p" onclick="sendPeerMsg()" style="flex:1;box-sizing:border-box;border:1px solid transparent;padding:13px 10px;font-size:15px;font-weight:700">送信</button>
+    </div>
+  </div>
+</div>
+
 <div id="wait-start-confirm-modal" style="position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px">
   <div style="background:var(--surface);border-radius:20px;padding:28px 22px 22px;width:100%;max-width:340px;box-shadow:0 12px 40px rgba(0,0,0,.6)">
     <div style="text-align:center;font-size:16px;font-weight:700;margin-bottom:18px">待機開始時刻を確認してください</div>
@@ -1605,7 +1651,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261119-1';
+const APP_BUILD='20261123-1';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -2991,13 +3037,15 @@ function updatePeerMarker(id,d){
   else if(d.lat&&d.lng){
     const m=L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
     m._lastPos=[Number(d.lat),Number(d.lng)];m._lastMoveAt=Date.now();
-    m.bindPopup(`<b>${esc(d.name||'不明')}</b><br>${statusCfg[status].label}<br>${d.car||''}`);
+    // 以前は、名前・状態・車番だけの小さな吹き出し（Leafletのpopup）を出していた。今は、同じ内容に加えて、
+    // マイクで話して（または入力して）その人だけにメッセージを送れる、ポップアップを開く
     m.on('click',()=>{
       followPeerId=id;autoFollow=false;
       const fb=document.getElementById('follow-btn');
       if(fb){fb.classList.add('on');fb.title='フォロー中: '+(d.name||'仲間');}
       leafletMap.setView([d.lat,d.lng],16);
       saveFollowState();
+      openPeerMsg(id);
     });
     peerMarkers[id]=m;
   }
@@ -5273,6 +5321,8 @@ function connectFirebase(config){
     });
     // 直近100件の読み込みが完了した（0件の場合も含む）ことを知らせる。同じ範囲の購読なので、通信は増えない
     db.ref('chat').limitToLast(100).once('value',()=>finishChatLoading());
+    // 仲間からの個別メッセージ（自分宛ての枠 dm/{自分のid} だけを購読する。全員に見えるチャットとは別）
+    db.ref('dm/'+myId).limitToLast(30).on('child_added',snap=>handleIncomingDm(snap.key,snap.val()));
     // team_dests全体をルートで1本の'value'リスナーとして購読すると、
     // 誰か1人が1件記録するたびに「その時点の仲間全員分の全期間の記録」を
     // まるごと再送・再パースすることになる。仲間の人数・記録件数が増えるほど
@@ -12675,6 +12725,177 @@ function appendChatBubble(m,isMe,fbKey){
 function deleteChatMessage(fbKey){
   if(!confirm('このメッセージを削除しますか？'))return;
   if(db)db.ref('chat/'+fbKey).remove();
+}
+
+// ===== 仲間への個別メッセージ =====
+// 地図の仲間のアイコンをタップ → ポップアップ → マイクで話す（または入力）→ その人だけに送る。
+// 全員に見えるチャット（chat）とは別に、dm/{相手のid} に1通ずつ保存する。受け取る側は、自分宛て
+// （dm/{自分のid}）だけを購読し、受け取ったらサーバーから消す（端末には履歴を残す）。
+// 相手が通信できない・アプリを開いていない間もメッセージはサーバーに残り、次に開いた時に表示される
+// （DM_MAX_AGE_MS より古いものは、表示せずに捨てる）。
+const DM_MAX_LEN=200,DM_MAX_AGE_MS=12*3600*1000,DM_KEEP=20,DM_SHOW=4,DM_SEND_GAP_MS=3000;
+let peerMsgTo=null,peerMsgNameFallback='',peerVoice=null,peerVoiceOn=false,peerMsgLastSendAt=0;
+let seenDmKeys=new Set(),dmQueue=[],peerMsgDraft={};
+const dmThreadKey=id=>'taxi_dm_'+id;
+function loadDmThread(id){
+  try{const l=JSON.parse(localStorage.getItem(dmThreadKey(id))||'[]');return Array.isArray(l)?l:[];}catch(e){return [];}
+}
+function saveDmThread(id,list){
+  try{localStorage.setItem(dmThreadKey(id),JSON.stringify(list.slice(-DM_KEEP)));}catch(e){console.error('dm thread save failed',e);}
+}
+function addDmThread(id,dir,text,ts,extra){
+  const l=loadDmThread(id);
+  ts=ts||Date.now();
+  // アプリを2つ開いている場合など、同じメッセージが2回届いても、記録は1回だけにする
+  if(l.some(e=>e.dir===dir&&e.ts===ts&&e.text===text))return;
+  l.push(Object.assign({dir,text,ts},extra||{}));
+  saveDmThread(id,l);
+}
+function dmTimeText(ts){
+  return new Date(ts||Date.now()).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
+function renderPeerThread(){
+  const el=document.getElementById('pm-thread');if(!el||!peerMsgTo)return;
+  const all=loadDmThread(peerMsgTo);
+  el.innerHTML=all.slice(-DM_SHOW).map(m=>
+    `<div class="pm-b ${m.dir==='out'?'out':'in'}${m.unread?' new':''}${m.failed?' failed':''}">${esc(m.text)}<small>${dmTimeText(m.ts)}${m.failed?'　⚠️送れませんでした':''}</small></div>`).join('');
+  el.scrollTop=el.scrollHeight;
+  // 見せたものは、既読にする（次に開いた時に、また「新着」の枠が付かないように）
+  if(all.some(m=>m.unread)){all.forEach(m=>{if(m.unread)delete m.unread;});saveDmThread(peerMsgTo,all);}
+}
+function hidePmIncoming(){
+  const box=document.getElementById('pm-incoming');if(box)box.style.display='none';
+}
+function openPeerMsg(id,nameFallback){
+  if(!id||id===myId)return;
+  const modal=document.getElementById('peer-msg-modal'),inp=document.getElementById('pm-input');
+  if(!modal||!inp)return;
+  stopPeerVoice();
+  // 別の人のポップアップから切り替える時は、書きかけの文を、その人の分として取っておく
+  if(peerMsgTo&&peerMsgTo!==id)peerMsgDraft[peerMsgTo]=inp.value;
+  peerMsgTo=id;peerMsgNameFallback=nameFallback||'';
+  const d=driverData[id];
+  const name=(d&&d.name)||peerMsgNameFallback||'仲間';
+  document.getElementById('pm-title').textContent='💬 '+name+'さん';
+  document.getElementById('pm-sub').textContent=d
+    ?((statusCfg[d.status||'kuusha']||statusCfg.kuusha).label+(d.car?'　'+d.car:''))
+    :'いま地図にいません（次にアプリを開いた時に届きます）';
+  inp.value=peerMsgDraft[id]||'';
+  document.getElementById('pm-note').textContent='';
+  dmQueue=dmQueue.filter(p=>p.id!==id);
+  if(!dmQueue.length)hidePmIncoming();else showPmIncomingBanner();
+  renderPeerThread();
+  modal.style.display='flex';
+}
+function closePeerMsg(){
+  stopPeerVoice();
+  const inp=document.getElementById('pm-input'),modal=document.getElementById('peer-msg-modal');
+  if(peerMsgTo&&inp)peerMsgDraft[peerMsgTo]=inp.value;
+  if(modal)modal.style.display='none';
+  peerMsgTo=null;
+  // 書いている間に、ほかの人から届いていたメッセージがあれば、続けて表示する
+  if(dmQueue.length){const p=dmQueue.shift();openPeerMsg(p.id,p.name);}
+}
+function setPmMicUi(on){
+  const b=document.getElementById('pm-mic');if(!b)return;
+  b.classList.toggle('on',!!on);
+  b.textContent=on?'⏹':'🎤';
+}
+function stopPeerVoice(){
+  if(peerVoice){try{peerVoice.onend=null;peerVoice.onerror=null;peerVoice.stop();}catch(e){}peerVoice=null;}
+  peerVoiceOn=false;setPmMicUi(false);
+}
+function togglePeerVoice(){
+  const note=document.getElementById('pm-note'),inp=document.getElementById('pm-input');
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){note.textContent='⚠️ この端末は音声入力に非対応です。キーボードのマイク🎤で入力してください';inp.focus();return;}
+  if(peerVoiceOn){stopPeerVoice();note.textContent='';return;}
+  const r=new SR();
+  r.lang='ja-JP';r.interimResults=false;r.maxAlternatives=1;
+  r.onstart=()=>{peerVoiceOn=true;setPmMicUi(true);note.textContent='🎤 話してください…';};
+  r.onresult=e=>{
+    const txt=(e.results&&e.results[0]&&e.results[0][0]&&e.results[0][0].transcript)||'';
+    if(txt)inp.value=(inp.value+txt).slice(0,DM_MAX_LEN);
+    note.textContent=txt?'✅ 聞き取れました。直して「送信」を押してください':'聞き取れませんでした。もう一度どうぞ';
+  };
+  r.onend=()=>{peerVoiceOn=false;peerVoice=null;setPmMicUi(false);};
+  r.onerror=e=>{
+    peerVoiceOn=false;peerVoice=null;setPmMicUi(false);
+    if(e.error==='aborted')return;
+    note.textContent=e.error==='not-allowed'||e.error==='service-not-allowed'?'⚠️ マイクが許可されていません（端末の設定で許可してください）'
+      :e.error==='no-speech'?'聞き取れませんでした。もう一度どうぞ':'⚠️ 音声認識エラー: '+e.error;
+  };
+  peerVoice=r;
+  try{r.start();}catch(e){peerVoice=null;note.textContent='⚠️ 音声入力を始められませんでした';}
+}
+function sendPeerMsg(){
+  const to=peerMsgTo;if(!to)return;
+  const inp=document.getElementById('pm-input'),note=document.getElementById('pm-note');
+  const text=inp.value.trim().slice(0,DM_MAX_LEN);
+  if(!text){note.textContent='メッセージを入力するか、🎤で話してください';return;}
+  if(!db){note.textContent='⚠️ Firebase未接続のため送信できません';return;}
+  const now=Date.now();
+  if(now-peerMsgLastSendAt<DM_SEND_GAP_MS){note.textContent='少し待ってから、もう一度送ってください';return;}
+  peerMsgLastSendAt=now;
+  stopPeerVoice();
+  const d=driverData[to],toName=(d&&d.name)||peerMsgNameFallback||'仲間';
+  const m={from:myId,name:localStorage.getItem('taxi_name')||'自分',text,ts:now,time:dmTimeText(now)};
+  const offline=!fbConnected;
+  // 送信自体が失敗（権限・通信エラー等）した時に、送れたように見えたままにならないよう、失敗時は
+  // 記録に「送れませんでした」を付け、書いた文を、次に開いた時に戻す
+  db.ref('dm/'+to).push(m).catch(err=>{
+    console.error('dm push failed',err);
+    peerMsgLastSendAt=0;
+    const l=loadDmThread(to);const x=l.find(e=>e.dir==='out'&&e.ts===now);
+    if(x){x.failed=true;saveDmThread(to,l);}
+    peerMsgDraft[to]=text;
+    if(peerMsgTo===to){inp.value=text;renderPeerThread();note.textContent='⚠️ 送信に失敗しました: '+((err&&err.message)||'通信エラー');}
+    toast('⚠️ '+toName+'さんへの送信に失敗しました');
+  });
+  addDmThread(to,'out',text,now);
+  inp.value='';peerMsgDraft[to]=''; // 送ったので、入力欄も下書きも空にする（閉じる時に、下書きとして残らないように）
+  toast(offline?'📡 通信できていません。つながり次第、'+toName+'さんへ送ります':'✅ '+toName+'さんに送りました');
+  closePeerMsg();
+}
+// 自分宛て（dm/{自分のid}）に届いたメッセージを、ポップアップで表示する
+function handleIncomingDm(key,m){
+  if(!key||!m||typeof m!=='object')return;
+  if(seenDmKeys.has(key))return;seenDmKeys.add(key);
+  const ref=db?db.ref('dm/'+myId+'/'+key):null;
+  const drop=()=>{if(ref)ref.remove().catch(()=>{});};
+  const from=String(m.from||''),text=String(m.text||'').trim().slice(0,DM_MAX_LEN);
+  if(!from||from===myId||!text){drop();return;}
+  // 長い間アプリを開いていなかった間に届いた古いものは、表示せずに片づける
+  if(Date.now()-(m.ts||0)>DM_MAX_AGE_MS){drop();return;}
+  const name=String(m.name||'仲間').slice(0,20);
+  addDmThread(from,'in',text,m.ts,{unread:true,name});
+  drop(); // 受け取り済み（サーバーからは消す。端末には履歴を残してある）
+  showIncomingDm(from,name,text);
+  // アプリの画面が見えている間は、ポップアップだけで足りる。見えていない時だけ、スマホの通知も出す
+  if(document.visibilityState!=='visible')sendNotif('💬 '+name+'さんから',text,'dm-'+key);
+}
+function showPmIncomingBanner(){
+  const box=document.getElementById('pm-incoming'),txt=document.getElementById('pm-incoming-txt');
+  if(!box||!txt||!dmQueue.length)return;
+  const last=dmQueue[dmQueue.length-1];
+  txt.textContent=dmQueue.length>1?`💬 ${dmQueue.length}人から新着があります`:`💬 ${last.name}さんから新着: ${last.text.slice(0,30)}${last.text.length>30?'…':''}`;
+  box.style.display='flex';
+}
+function showIncomingDm(from,name,text){
+  const modal=document.getElementById('peer-msg-modal');
+  const open=!!modal&&modal.style.display==='flex';
+  if(!open){openPeerMsg(from,name);return;}
+  if(peerMsgTo===from){renderPeerThread();return;}
+  // 別の人へのメッセージを書いている最中は、書いている内容を消さずに、上に知らせだけ出す
+  // 待っている人は、届いた順に並べる（同じ人から重ねて届いた時は、順番を変えず、新しい内容に差し替える）
+  const q=dmQueue.find(p=>p.id===from);
+  if(q){q.name=name;q.text=text;}else dmQueue.push({id:from,name,text});
+  showPmIncomingBanner();
+}
+function showPendingDm(){
+  if(!dmQueue.length)return;
+  const p=dmQueue.shift();
+  openPeerMsg(p.id,p.name);
 }
 
 async function debugGeocode(){
