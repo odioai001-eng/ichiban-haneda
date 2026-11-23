@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261123-2 -->
+<!-- v20261123-4 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -440,6 +440,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',sa
 .msg-row.me .bubble{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
 .msg-row:not(.me) .bubble{background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:4px}
 .msg-meta{font-size:10px;color:var(--muted);margin-top:2px}
+.read-count{color:var(--green);font-weight:700}
 .msg-name{font-size:11px;color:var(--muted);margin-bottom:2px}
 .chat-footer{display:flex;gap:8px;padding:8px 12px;background:var(--surface);
   border-top:1px solid var(--border)}
@@ -484,6 +485,7 @@ label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
 .pm-date{align-self:center;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:3px 14px;
   font-size:13px;font-weight:700;color:var(--text);margin:6px 0 2px}
 .pm-b small{display:block;font-size:10px;opacity:.75;margin-top:2px}
+.pm-b .pm-read{font-weight:700}
 #pm-mic{flex-shrink:0;width:58px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);color:var(--fg);font-size:26px;cursor:pointer}
 #pm-mic.on{background:var(--red);color:#fff;border-color:var(--red)}
 #pm-input{flex:1;min-width:0;resize:none;line-height:1.4;padding:8px 10px;border-radius:12px;border:1px solid var(--border);
@@ -1653,7 +1655,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261123-2';
+const APP_BUILD='20261123-4';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -5314,6 +5316,9 @@ function connectFirebase(config){
       const m=snap.val();if(!m)return;
       const isMe=m.uid===myId;
       appendChatBubble(m,isMe,snap.key);
+      // 他人のメッセージの時刻を覚えておく（「読んだ時刻」を決める時に使う）。チャット画面を開いたまま（アプリの画面が見えている間）に届いたものは、その場で「読んだ」ことにする
+      if(!isMe&&(m.ts||0)>chatSeenMaxTs)chatSeenMaxTs=m.ts;
+      if(chatOnPage&&!isMe)markChatRead();
       // 接続後に届いた他人のメッセージのみ未読カウント
       if(!chatOnPage&&!isMe&&(m.ts||0)>chatInitTs){
         unreadChatCount++;updateChatBadge();
@@ -5325,6 +5330,12 @@ function connectFirebase(config){
     db.ref('chat').limitToLast(100).once('value',()=>finishChatLoading());
     // 仲間からの個別メッセージ（自分宛ての枠 dm/{自分のid} だけを購読する。全員に見えるチャットとは別）
     db.ref('dm/'+myId).limitToLast(30).on('child_added',snap=>handleIncomingDm(snap.key,snap.val()));
+    // 送ったメッセージが読まれたか（dm_reads/{自分のid}/{読んだ人のid} ＝ その人が読んだ、自分のメッセージの時刻）
+    db.ref('dm_reads/'+myId).on('value',snap=>{
+      const v=snap.val();
+      dmReadMap=(v&&typeof v==='object')?v:{};
+      if(peerMsgTo)renderPeerThread(); // ポップアップを開いている間に読まれたら、すぐ「既読」を付ける
+    },err=>console.error('dm_reads read failed',err));
     // team_dests全体をルートで1本の'value'リスナーとして購読すると、
     // 誰か1人が1件記録するたびに「その時点の仲間全員分の全期間の記録」を
     // まるごと再送・再パースすることになる。仲間の人数・記録件数が増えるほど
@@ -11857,6 +11868,32 @@ function toggleVoiceInput(){
   voiceRecog.start();
 }
 
+// 全員のチャットを「読んだ」時刻（chat_reads/{自分のid}）を、仲間に知らせる。仲間の画面の、その時刻より前に送った自分のメッセージに、
+// 読んだ人の数（「既読2」）が付く。チャット画面を開いた時だけでなく、開いたまま（アプリの画面が見えている間）に届いたメッセージも、
+// その場で読んだことにする。続けて届いた時に書き込みが増えすぎないよう、1回書いたら、1.5秒は空ける
+const CHAT_READ_GAP_MS=1500,CHAT_READ_SKEW_MS=10000;
+let chatReadLastAt=0,chatReadTimer=null,chatSeenMaxTs=0;
+// 書く「読んだ時刻」。いまの時刻を基本にするが、仲間の端末の時計が、自分の端末より少し進んでいても、読んだメッセージに「既読」が付くよう、
+// 前に書いてから届いた仲間のメッセージの、最新の時刻まで進める（時計が大きくずれた端末のせいで、読んでいないものまで「既読」にならないよう、
+// いまより10秒先までにする）
+function chatReadPointer(){
+  const now=Date.now();
+  const p=Math.min(Math.max(now,chatSeenMaxTs),now+CHAT_READ_SKEW_MS);
+  chatSeenMaxTs=0; // 次に書く時は、それ以降に届いた分だけで決める
+  return p;
+}
+function markChatRead(){
+  if(!db||!chatOnPage||document.visibilityState!=='visible')return;
+  const wait=CHAT_READ_GAP_MS-(Date.now()-chatReadLastAt);
+  if(wait>0){
+    if(!chatReadTimer)chatReadTimer=setTimeout(()=>{chatReadTimer=null;markChatRead();},wait);
+    return;
+  }
+  chatReadLastAt=Date.now();
+  db.ref('chat_reads/'+myId).set(chatReadPointer()).catch(err=>console.error('chat_reads set failed',err));
+}
+// チャット画面を開いたまま画面が消えていた間に届いたものを、他のアプリから戻ってきて読んだ時にも知らせる
+document.addEventListener('visibilitychange',markChatRead);
 function refreshChatReadCounts(){
   const reads=Object.entries(chatReadMap);
   document.querySelectorAll('.read-count').forEach(el=>{
@@ -12767,7 +12804,7 @@ function appendChatBubble(m,isMe,fbKey){
     <div class="av ${isMe?'me-av':'other'}" style="background:${avColor}">${esc(init)}</div>
     <div>
       ${bodyHtml}
-      <div class="msg-meta">${m.time}<span class="read-count" data-ts="${m.ts||0}"></span>${delBtn}</div>
+      <div class="msg-meta">${m.time}${isMe?`<span class="read-count" data-ts="${m.ts||0}"></span>`:''}${delBtn}</div>
       ${buildReactionBarHtml(fbKey,m.reactions)}
     </div>`;
   container.appendChild(div);container.scrollTop=container.scrollHeight;
@@ -12789,6 +12826,29 @@ function deleteChatMessage(fbKey){
 const DM_MAX_LEN=200,DM_MAX_AGE_MS=12*3600*1000,DM_KEEP=20,DM_SHOW=4,DM_SEND_GAP_MS=3000;
 let peerMsgTo=null,peerMsgNameFallback='',peerVoice=null,peerVoiceOn=false,peerMsgLastSendAt=0;
 let seenDmKeys=new Set(),dmQueue=[],peerMsgDraft={};
+// ----- 既読（相手が読んだら、送ったメッセージに「既読」を付ける）-----
+// 読んだ側は、相手のメッセージをポップアップに表示したら（アプリの画面が見えている間に）、「どの時刻のメッセージまで読んだか」を
+// dm_reads/{相手のid}/{自分のid} に書く。送った側は dm_reads/{自分のid} を見て、その時刻までに送ったメッセージに「既読」を付ける。
+// 時刻は、相手のメッセージについていた時刻（ts）をそのまま使う（端末ごとの時計のずれで、既読が付かない・早く付く、を防ぐため）
+let dmReadMap={};         // 相手のid → 相手が読んだ、自分のメッセージの時刻（ts）の最大
+const dmReadSentUpTo={};  // 相手のid → 読んだことを知らせ済みの、相手のメッセージの時刻（ts）
+let dmReadPending=null;   // 画面が見えていない間に表示した分 {id,upTo}。見えるようになった時に知らせる
+function sendDmRead(from,upTo){
+  if(!db||!from||!(upTo>0))return;
+  if(upTo<=(dmReadSentUpTo[from]||0))return;
+  dmReadSentUpTo[from]=upTo;
+  db.ref('dm_reads/'+from+'/'+myId).set(upTo).catch(err=>{
+    console.error('dm_reads set failed',err);
+    if(dmReadSentUpTo[from]===upTo)delete dmReadSentUpTo[from]; // 知らせられなかった時は、次に表示した時に、もう一度知らせる
+  });
+}
+// 画面が見えていない間にポップアップを開いていた時は、見えるようになった時に、まだ同じポップアップを開いていれば、読んだことにする
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible'||!dmReadPending)return;
+  const p=dmReadPending;dmReadPending=null;
+  const modal=document.getElementById('peer-msg-modal');
+  if(peerMsgTo===p.id&&modal&&modal.style.display==='flex')sendDmRead(p.id,p.upTo);
+});
 const dmThreadKey=id=>'taxi_dm_'+id;
 function loadDmThread(id){
   try{const l=JSON.parse(localStorage.getItem(dmThreadKey(id))||'[]');return Array.isArray(l)?l:[];}catch(e){return [];}
@@ -12810,17 +12870,29 @@ function dmTimeText(ts){
 function renderPeerThread(){
   const el=document.getElementById('pm-thread');if(!el||!peerMsgTo)return;
   const all=loadDmThread(peerMsgTo);
+  const shown=all.slice(-DM_SHOW);
+  const readUpTo=Number(dmReadMap[peerMsgTo])||0; // 相手が読んだ、自分のメッセージの時刻
   let lastDay=null;
-  el.innerHTML=all.slice(-DM_SHOW).map(m=>{
+  el.innerHTML=shown.map(m=>{
     // 日付が変わったところ（いちばん上を含む）に、日付の見出し（例: 2026年11月23日(月祝)）を入れる
     const day=jpDateKey(m.ts);
     const sep=day!==lastDay?`<div class="pm-date">${esc(jpDateLabel(m.ts))}</div>`:'';
     lastDay=day;
-    return sep+`<div class="pm-b ${m.dir==='out'?'out':'in'}${m.unread?' new':''}${m.failed?' failed':''}">${esc(m.text)}<small>${dmTimeText(m.ts)}${m.failed?'　⚠️送れませんでした':''}</small></div>`;
+    // 自分が送ったメッセージは、相手が読んだ所まで（その時刻以前）に「既読」を付ける。送れなかったものには付けない
+    const mts=Number(m.ts)||0;
+    const readMark=(m.dir==='out'&&!m.failed&&mts>0&&mts<=readUpTo)?'　<span class="pm-read">既読</span>':'';
+    return sep+`<div class="pm-b ${m.dir==='out'?'out':'in'}${m.unread?' new':''}${m.failed?' failed':''}">${esc(m.text)}<small>${dmTimeText(m.ts)}${m.failed?'　⚠️送れませんでした':''}${readMark}</small></div>`;
   }).join('');
   el.scrollTop=el.scrollHeight;
   // 見せたものは、既読にする（次に開いた時に、また「新着」の枠が付かないように）
   if(all.some(m=>m.unread)){all.forEach(m=>{if(m.unread)delete m.unread;});saveDmThread(peerMsgTo,all);}
+  // 相手のメッセージを見せたら、読んだことを相手に知らせる（相手の画面で、送ったメッセージに「既読」が付く）。
+  // アプリの画面が見えていない間は、まだ読んでいないので、見えるようになってから知らせる
+  const upTo=shown.reduce((a,m)=>(m.dir==='in'&&(m.ts||0)>a)?(m.ts||0):a,0);
+  if(upTo>0){
+    if(document.visibilityState==='visible')sendDmRead(peerMsgTo,upTo);
+    else dmReadPending={id:peerMsgTo,upTo};
+  }
 }
 function hidePmIncoming(){
   const box=document.getElementById('pm-incoming');if(box)box.style.display='none';
@@ -13221,7 +13293,7 @@ function showPage(name,btn){
   if(name==='chat'){
     chatOnPage=true;unreadChatCount=0;updateChatBadge();
     setTimeout(()=>{const c=document.getElementById('chat-msgs');c.scrollTop=c.scrollHeight;},60);
-    if(db){db.ref('chat_reads/'+myId).set(Date.now()).catch(err=>console.error('chat_reads set failed',err));}
+    markChatRead();
   }else{chatOnPage=false;}
 }
 
