@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261123-4 -->
+<!-- v20261123-5 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1655,7 +1655,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261123-4';
+const APP_BUILD='20261123-5';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -4161,8 +4161,8 @@ async function adminCheckTeamDestsRange(){
     perDriver.push({driverId,driverName:driverName||'(不明)',driverTripCount,driverMaxTs});
   });
   perDriver.sort((a,b)=>(b.driverMaxTs||0)-(a.driverMaxTs||0));
-  const fmt=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}):'−';
-  const fmtDT=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'記録なし';
+  const fmt=ts=>ts?jpDateLabel(ts):'−';
+  const fmtDT=ts=>ts?jpDateTimeLabel(ts):'記録なし';
   // 同じ氏名が複数の端末ID（アプリ再インストール等）に分かれて記録されていないか、
   // ここで一緒に確認できるようにする（🔗 同じ氏名の重複した記録をまとめる、で解消できる）
   const nameCounts={};
@@ -4211,7 +4211,7 @@ async function mergeDuplicateTeamDests(){
   });
   const dupGroups=Object.entries(byName).filter(([name,ids])=>ids.length>1);
   if(!dupGroups.length){alert('氏名が重複している記録は見つかりませんでした。');return;}
-  const fmt=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}):'記録なし';
+  const fmt=ts=>ts?jpDateLabel(ts):'記録なし';
   dupGroups.forEach(([name,ids])=>ids.sort((a,b)=>(b.maxTs||0)-(a.maxTs||0)));
   const previewLines=dupGroups.map(([name,ids])=>{
     const [primary,...others]=ids;
@@ -5836,10 +5836,10 @@ function resetWaitAndHistory(){
   let removeLast=false;
   if(idx>=0){
     const d=destinations[idx];
-    const dateText=d.dateStr||(d.ts?new Date(d.ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'}):'');
+    const dateText=d.dateStr?jpDateLabelOf(d.dateStr,d.ts):(d.ts?jpDateLabel(d.ts):'');
     const place=[d.boardAddr,d.alightAddr].filter(Boolean).join(' → ');
     const desc=`${dateText} ${d.boardTime||''}${d.alightTime?'→'+d.alightTime:''} ${place}${d.fare>0?'　¥'+d.fare.toLocaleString():''}${d.manual?'（手動で記録）':''}`.trim();
-    removeLast=confirm(`待機タイマーをリセットします。\n\n直近の送り先の記録も削除しますか？\n・${desc.slice(0,80)}\n\nOK＝この記録も削除する\nキャンセル＝タイマーのリセットだけ`);
+    removeLast=confirm(`待機タイマーをリセットします。\n\n直近の送り先の記録も削除しますか？\n・${desc.slice(0,90)}\n\nOK＝この記録も削除する\nキャンセル＝タイマーのリセットだけ`);
   }
   resetWait();
   boardInfo=null;manualWaitStartTime=null;manualWaitAddr=null;
@@ -6324,7 +6324,7 @@ function renderWaitHistory(){
   let lastDate='';
   el.innerHTML=hist.map(h=>{
     let dateHeader='';
-    if(h.date!==lastDate){lastDate=h.date;dateHeader=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 4px">${h.date}</div>`;}
+    if(h.date!==lastDate){lastDate=h.date;dateHeader=`<div style="font-size:11px;color:var(--muted);font-weight:700;padding:8px 2px 4px">${esc(jpDateLabelOf(h.date,h.ts))}</div>`;}
     const mins=Math.round((h.sec||0)/60);
     const minsLabel=mins>=1?` 待機時間${mins}分`:'';
     return dateHeader+`
@@ -6452,7 +6452,7 @@ function renderTeamDests(){
     const driverDutyStart=getEffectiveShiftStart((driverData[driverId]&&driverData[driverId].dutyStartTs)||0);
     const teamNumMap=computeTeamTripNumbers(entries.filter(e=>e.type==='trip'),driverDutyStart);
     sortedDates.forEach(date=>{
-      driverHtml+=`<div style="font-size:16px;color:var(--text);font-weight:800;margin-bottom:8px">📅 ${date}</div>`;
+      driverHtml+=`<div style="font-size:16px;color:var(--text);font-weight:800;margin-bottom:8px">📅 ${esc(jpDateLabelOf(date,groups[date][0].ts))}</div>`;
       groups[date].forEach((e,idx,arr)=>{
         const isLast=idx===arr.length-1;
         if(e.type==='trip'){
@@ -6715,7 +6715,7 @@ function buildRankTripCardHtml(d,rank,driverLabel,delBtn){
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
       <div style="font-size:15px;font-weight:800;color:${rank===1?'var(--gold)':'var(--accent)'}">${rank}位</div>
       ${driverLabel?`<div style="font-size:12px;font-weight:700;color:var(--cyan)">${esc(driverLabel)}</div>`:''}
-      <div style="font-size:12px;font-weight:700;color:var(--cyan)">${esc(d.dateStr||'')}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--cyan)">${esc(jpDateLabelOf(d.dateStr,d.ts))}</div>
       ${delBtn?`<div style="margin-left:auto">${delBtn}</div>`:''}
     </div>
     <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
@@ -8257,7 +8257,7 @@ function renderShiftEntries(){
   const endStr=s.endTs?new Date(s.endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'-';
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
    <div style="flex:1;font-size:12px">
-    <span style="color:var(--muted)">${s.dateStr}</span>
+    <span style="color:var(--muted)">${esc(jpDateLabelOf(s.dateStr,s.startTs))}</span>
     <span style="font-weight:700;color:var(--gold);margin-left:6px">${hStr}</span>
     <div style="margin-top:2px"><span style="color:var(--green)">🟢 ${startStr}</span> <span style="color:var(--muted)">→</span> <span style="color:var(--red)">🔴 ${endStr}</span></div>
    </div>
@@ -8275,7 +8275,7 @@ function editShiftEntry(startTs){
  const curStartDate=new Date(cur.startTs);
  const curStartStr=curStartDate.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
  const curEndStr=cur.endTs?new Date(cur.endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'';
- const newStartVal=prompt(`出勤時刻（${cur.dateStr}、例: 09:00）`,curStartStr);
+ const newStartVal=prompt(`出勤時刻（${jpDateLabelOf(cur.dateStr,cur.startTs)}、例: 09:00）`,curStartStr);
  if(newStartVal===null)return;
  const newEndVal=prompt('退勤時刻（例: 21:30。出勤時刻より前の場合は翌日扱いにします）',curEndStr);
  if(newEndVal===null)return;
@@ -8402,7 +8402,7 @@ function renderFareDayEntries(){
    :'';
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
    <div style="flex:1;font-size:12px">
-    <span style="color:var(--muted)">${d.dateStr}</span>${rangeStr}
+    <span style="color:var(--muted)">${esc(jpDateLabelOf(d.dateStr,d.ts))}</span>${rangeStr}
     <div style="margin-top:2px">
      <span style="font-weight:700;color:var(--green)">¥${exTax(d.fare).toLocaleString()}</span>
      ${d.toll?`<span style="color:var(--red);margin-left:6px">高速¥${d.toll.toLocaleString()}</span>`:''}
@@ -8420,9 +8420,9 @@ async function editFareDayEntry(ts){
  if(!g)return;
  // 表示（税抜）に合わせて、入力も税抜で受け付ける。保存はfare=税込という
  // 他の集計箇所との前提を崩さないよう、入力値を税込に変換してから保存する
- const newFareExTax=await promptNumber(`${g.dateStr} の売上合計（円・税抜）`,exTax(g.fare));
+ const newFareExTax=await promptNumber(`${jpDateLabelOf(g.dateStr,g.ts)} の売上合計（円・税抜）`,exTax(g.fare));
  if(newFareExTax===null)return;
- const newToll=await promptNumber(`${g.dateStr} の自腹高速代合計（円）`,g.toll);
+ const newToll=await promptNumber(`${jpDateLabelOf(g.dateStr,g.ts)} の自腹高速代合計（円）`,g.toll);
  if(newToll===null)return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  log=g.tsRange
@@ -8439,7 +8439,7 @@ async function editFareDayEntry(ts){
 function deleteFareDayEntry(ts){
  const g=getMonthFareDays(salesStatsMonthOffset).find(d=>d.ts===ts);
  if(!g)return;
- if(!confirm(g.dateStr+' の売上記録を削除しますか？'))return;
+ if(!confirm(jpDateLabelOf(g.dateStr,g.ts)+' の売上記録を削除しますか？'))return;
  let log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
  log=g.tsRange
   ?log.filter(e=>!((e.ts||0)>=g.tsRange.start&&(e.ts||0)<=g.tsRange.end))
@@ -8485,7 +8485,7 @@ function saveManualFareEntry(){
  const shiftLogForCheck=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
  const matchingShift=shiftLogForCheck.find(s=>s.dateStr===selDateStr||(s.endTs&&s.startTs<dayEnd&&s.endTs>=dayStart));
  if(matchingShift){
-  const ok=confirm(`⚠️ ${selDateStr}には既に乗務記録があります。\n\nこのツールで記録すると、その乗務とは紐付かない別記録になり、売上管理の一覧で二重表示・不整合の原因になることがあります。\n\nできれば「勤務時間管理」または「売上管理」の${selDateStr}の行にある「編集」から入力し直してください。\n\nこのまま手動記録として追加しますか？`);
+  const ok=confirm(`⚠️ ${jpDateLabel(entryDate.getTime())}には既に乗務記録があります。\n\nこのツールで記録すると、その乗務とは紐付かない別記録になり、売上管理の一覧で二重表示・不整合の原因になることがあります。\n\nできれば「勤務時間管理」または「売上管理」の${selDateStr}の行にある「編集」から入力し直してください。\n\nこのまま手動記録として追加しますか？`);
   if(!ok)return;
  }
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
@@ -8494,7 +8494,7 @@ function saveManualFareEntry(){
   fare,toll:0,ts:entryDate.getTime(),tripTs:null,manual:true
  });
  safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
- toast(`✅ ${dateVal} の売上 ¥${fareExTax.toLocaleString()}（税抜）を記録しました`);
+ toast(`✅ ${jpDateLabel(entryDate.getTime())} の売上 ¥${fareExTax.toLocaleString()}（税抜）を記録しました`);
  document.getElementById('sf-date').value='';
  document.getElementById('sf-fare').value='';
  renderSalesStats();
@@ -8510,7 +8510,7 @@ function renderManualFareEntries(){
  el.innerHTML=entries.map(e=>{
   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
    <div style="flex:1;font-size:12px">
-    <span style="color:var(--muted)">${e.dateStr}</span>
+    <span style="color:var(--muted)">${esc(jpDateLabelOf(e.dateStr,e.ts))}</span>
     <span style="font-weight:700;color:var(--green);margin-left:6px">¥${exTax(e.fare||0).toLocaleString()}</span>
    </div>
    <button onclick="editManualFareEntry(${e.ts})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--accent);cursor:pointer">編集</button>
@@ -9250,7 +9250,7 @@ function showSettlementReport(record,onClose){
   currentSettlementIndex=settlementLog.indexOf(record);
   currentSettlementOnClose=onClose||null;
   currentSettlementRecord=record;
-  document.getElementById('settlement-date-label').textContent=record.dateStr||'';
+  document.getElementById('settlement-date-label').textContent=jpDateLabelOf(record.dateStr,record.shiftStartTs);
   document.getElementById('settlement-fuel-rows').innerHTML=record.fuelEntries&&record.fuelEntries.length
     ?record.fuelEntries.map(e=>`<div>${new Date(e.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}　${e.amount.toFixed(2)}L</div>`).join('')
     :'<div>記録なし</div>';
@@ -9307,7 +9307,7 @@ function showSettlementTripDetail(){
   const shiftFares=fareLog.filter(e=>(e.ts||0)>=record.shiftStartTs&&(e.ts||0)<=record.shiftEndTs)
     .sort((a,b)=>(a.ts||0)-(b.ts||0));
   if(!shiftFares.length){alert('この期間の運賃記録が見つかりませんでした。');return;}
-  const fmtT=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  const fmtT=ts=>ts?jpDateTimeLabel(ts):'−';
   const lines=shiftFares.map((e,i)=>{
     const method=e.paymentMethod?paymentMethodLabel(e.paymentMethod):'未設定';
     const welfare=e.paymentMethod==='welfare'?`（${e.welfareSheets||0}枚）`:'';
@@ -9404,7 +9404,7 @@ function recomputeSettlementFromFareLog(){
   // 押しても数字が変わらないという報告が続いたため、実際に何が行われたかを
   // その場で確認できる診断結果を必ず表示するようにする（憶測で「直った」と
   // 案内しないため）
-  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  const fmt=ts=>ts?jpDateTimeLabel(ts):'−';
   const msg=`再集計の診断結果\n\n`+
     `対象期間: ${fmt(record.shiftStartTs)} 〜 ${fmt(record.shiftEndTs)}\n`+
     `期間内の送り先トリップ数: ${syncResult.inRangeCount}件\n`+
@@ -9451,7 +9451,7 @@ function renderSettlementLogList(){
     const {paymentAmount}=computeSettlementTotals(r);
     return `<div class="settle-row" onclick="openSettlementFromLog(${i})" style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
      <div style="flex:1;font-size:12px">
-      <span style="color:var(--muted)">${esc(r.dateStr||'')}</span>
+      <span style="color:var(--muted)">${esc(jpDateLabelOf(r.dateStr,r.shiftStartTs))}</span>
       <span style="font-weight:700;color:var(--gold);margin-left:6px">${fmtYen(paymentAmount)}</span>
      </div>
      <button onclick="event.stopPropagation();deleteSettlementLogEntry(${i})" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--red);cursor:pointer;flex-shrink:0">🗑削除</button>
@@ -9474,7 +9474,7 @@ function renderSettlementLogList(){
 function deleteSettlementLogEntry(index){
   const r=settlementLog[index];
   if(!r)return;
-  if(!confirm(`${r.dateStr||'この日'}の精算記録を削除しますか？`))return;
+  if(!confirm(`${r.dateStr?jpDateLabelOf(r.dateStr,r.shiftStartTs):'この日'}の精算記録を削除しますか？`))return;
   settlementLog.splice(index,1);
   localStorage.setItem('taxi_settlement_log',JSON.stringify(settlementLog));
   renderSettlementLogList();
@@ -10622,7 +10622,7 @@ async function checkMyTeamDestsSync(){
   const fbTsSet=new Set(fbEntries.map(e=>e.ts).filter(Boolean));
   const missing=localTargets.filter(d=>!fbTsSet.has(d.ts));
   const missingButMarkedSynced=missing.filter(d=>d.synced);
-  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  const fmt=ts=>ts?jpDateTimeLabel(ts):'−';
   if(!missing.length){
     alert(`✅ この端末の送り先記録${localTargets.length}件は、すべてFirebase上に存在することを確認できました（Firebase上の合計: ${fbEntries.length}件）。\n\n送信側の問題ではないため、仲間の画面に表示されない場合は、仲間側の受信・表示の問題の可能性が高いです。`);
     return;
@@ -10647,7 +10647,7 @@ async function checkMyTeamDestsSync(){
 async function recoverOrphanedFareLogTrips(){
   const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
   const orphans=log.filter(e=>e.tripTs&&!destinations.find(d=>d.ts===e.tripTs));
-  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  const fmt=ts=>ts?jpDateTimeLabel(ts):'−';
   if(!orphans.length){
     alert('運賃記録（taxi_fare_log）は、すべて対応する送り先カードが見つかりました。復元が必要な記録はありませんでした。');
     return;
@@ -10766,9 +10766,9 @@ async function findAndRestoreLostDests(){
       .sort((a,b)=>((b.manual?1:0)-(a.manual?1:0))||((b.ts||0)-(a.ts||0)))
       .slice(0,10)
       .map(e=>{
-        const day=e.dateStr||new Date(e.ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'});
+        const day=e.dateStr?jpDateLabelOf(e.dateStr,e.ts):jpDateLabel(e.ts);
         const place=[e.boardAddr,e.alightAddr].filter(Boolean).join(' → ');
-        return `・${day} ${e.boardTime||''}${e.alightTime?'→'+e.alightTime:''} ${place}${e.fare>0?'　¥'+e.fare.toLocaleString():''}${e.manual?'（手動）':''}`.slice(0,70);
+        return `・${day} ${e.boardTime||''}${e.alightTime?'→'+e.alightTime:''} ${place}${e.fare>0?'　¥'+e.fare.toLocaleString():''}${e.manual?'（手動）':''}`.slice(0,80);
       });
     return lines.join('\n')+(list.length>lines.length?`\n…ほか${list.length-lines.length}件`:'');
   };
@@ -10777,7 +10777,7 @@ async function findAndRestoreLostDests(){
     const srcLines=[];
     if(groups.trash.length)srcLines.push(`・この端末の控え（共有側から消えた分）：${countText(groups.trash)}`);
     if(groups.backup.length){
-      const when=backupTs?new Date(backupTs).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit'})+'時点の':'';
+      const when=backupTs?jpDateLabel(backupTs)+'時点の':'';
       srcLines.push(`・削除前の${when}バックアップ：${countText(groups.backup)}`);
     }
     if(groups.alltime.length)srcLines.push(`・歴代ランキングの保管（手動で記録した分）：${groups.alltime.length}件`);
@@ -10858,7 +10858,7 @@ async function recoverDataByName(){
   // 反映させる。復元した記録の日時範囲だけを対象にする
   let fareLogResult={changed:false,createdCount:0,updatedCount:0};
   if(importedCount>0&&minTs!==null)fareLogResult=resyncFareLogFromDestinations(minTs,maxTs);
-  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'−';
+  const fmt=ts=>ts?jpDateTimeLabel(ts):'−';
   alert(`復元結果\n\n取り込んだ件数: ${importedCount}件\nスキップ（重複）: ${skippedCount}件\n対象期間: ${fmt(minTs)} 〜 ${fmt(maxTs)}\n\n運賃記録（taxi_fare_log）にも反映しました（新規${fareLogResult.createdCount}件・更新${fareLogResult.updatedCount}件）。\n\n※運賃記録が元々どの端末にも一切残っていなかった場合（アンインストールで完全に失われた場合）、金額の内訳までは復元できていません。送り先タブの各記録に運賃・支払い方法が表示されていればFirebase上に残っていたものです。`);
   toast(`✅ ${importedCount}件のデータを復元しました`);
 }
@@ -11231,7 +11231,7 @@ function loadAccountList(){
       const statusCls=alive?'color:var(--green)':'color:var(--muted)';
       // オンライン/オフラインのラベルだけだと「今まさに更新され続けているのか」が
       // 分かりにくいという声があったため、実際の最終更新日時もそのまま表示する
-      const tsStr=d.ts?new Date(d.ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'記録なし';
+      const tsStr=d.ts?jpDateTimeLabel(d.ts,true):'記録なし';
       return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600">${esc(d.name||'名前なし')}${isMe?' <span style="font-size:10px;color:var(--accent)">(自分)</span>':''}</div>
@@ -11410,7 +11410,7 @@ function buildDestEntryHtml(d,numMap){
 function buildDestGroupsHtml(dateKeys,groups,numMap){
   let html='';
   dateKeys.forEach(date=>{
-    html+=`<div style="font-size:16px;color:var(--text);font-weight:800;padding:10px 2px 8px">📅 ${date}</div>`;
+    html+=`<div style="font-size:16px;color:var(--text);font-weight:800;padding:10px 2px 8px">📅 ${esc(jpDateLabelOf(date,groups[date][0].ts))}</div>`;
     groups[date].slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(d=>{
       html+=buildDestEntryHtml(d,numMap);
     });
@@ -12248,7 +12248,7 @@ function renderPoolMoveHistoryLog(){
   const spots=['1号','2号','3号','4号'];
   const list=poolMoveHistory.slice().sort((a,b)=>b.startTs-a.startTs);
   el.innerHTML=list.map(h=>{
-    const dateStr=new Date(h.startTs).toLocaleDateString('ja-JP',{month:'numeric',day:'numeric',weekday:'short'});
+    const dateStr=jpDateLabel(h.startTs);
     const startStr=new Date(h.startTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
     const endStr=new Date(h.endTs).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
     const waitMin=Math.max(0,Math.round((h.endTs-h.startTs)/60000));
@@ -12486,7 +12486,7 @@ function renderPendingList(){
       <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1">
           <div style="font-size:13px;font-weight:700">${esc(v.name)} ${v.car?'/ '+esc(v.car):''}</div>
-          <div style="font-size:11px;color:var(--muted)">${new Date(v.ts).toLocaleString('ja-JP')}</div>
+          <div style="font-size:11px;color:var(--muted)">${jpDateTimeLabel(v.ts,true)}</div>
         </div>
         <button class="btn btn-p" style="padding:5px 10px;font-size:12px" onclick="approveUser('${uid}','${esc(v.name)}','${esc(v.car||'')}')">承認</button>
         <button class="btn btn-d" style="padding:5px 10px;font-size:12px" onclick="rejectUser('${uid}','${esc(v.name)}')">拒否</button>
@@ -12536,7 +12536,7 @@ function renderAccessList(key){
       <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:700">${esc(v.lastName)} ${esc(v.firstName)}</div>
-          <div style="font-size:11px;color:var(--muted)">申請日時：${new Date(v.ts).toLocaleString('ja-JP')}</div>
+          <div style="font-size:11px;color:var(--muted)">申請日時：${jpDateTimeLabel(v.ts,true)}</div>
         </div>
         <button class="btn btn-p" style="padding:5px 10px;font-size:12px" onclick="approveAccessUser('${key}','${id}')">許可</button>
         <button class="btn btn-d" style="padding:5px 10px;font-size:12px" onclick="rejectAccessUser('${key}','${id}')">拒否</button>
@@ -12544,7 +12544,7 @@ function renderAccessList(key){
     const list=Object.entries(approved).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
     const cnt=document.getElementById(key+'-approved-count');
     if(cnt)cnt.textContent=list.length?' '+list.length+'人':'';
-    const ymd=ts=>ts?new Date(ts).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}):'-';
+    const ymd=ts=>ts?jpDateLabel(ts):'-';
     aEl.innerHTML=list.length?list.map(([id,v])=>`
       <div style="display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="flex:1;min-width:0">
@@ -12752,6 +12752,33 @@ function jpDateLabel(ts){
   if(isNaN(t.getTime()))return '';
   const y=t.getFullYear(),m=t.getMonth()+1,d=t.getDate();
   return `${y}年${m}月${d}日(${'日月火水木金土'[t.getDay()]}${isJpHoliday(y,m,d)?'祝':''})`;
+}
+// 保存してある日付の文字（「11/23」「2026/11/23」）を、画面に出す時だけ「2026年11月23日(月祝)」の表記にする。
+// 保存してある文字そのもの（グループ分け・照合・CSV・ファイル名に使っている）は変えない。
+// 年のない「11/23」は、基準の時刻（refTs。無ければ今）にいちばん近い年の日付とみなす（年の変わり目でも合う）。
+// 「日付不明」など、日付として読めない文字や、2/30のように無い日付は、そのまま返す
+function jpDateLabelOf(dateStr,refTs){
+  const raw=dateStr==null?'':String(dateStr);
+  const m=raw.trim().match(/^(?:(\d{4})[\/\-年]\s*)?(\d{1,2})[\/\-月]\s*(\d{1,2})日?$/);
+  if(!m)return raw;
+  const mo=+m[2],da=+m[3];
+  const at=y=>new Date(y,mo-1,da,12);                                                  // その年のその日の正午
+  const valid=y=>{const t=at(y);return t.getFullYear()===y&&t.getMonth()===mo-1&&t.getDate()===da;}; // 2/30など、無い日付は除く
+  let y;
+  if(m[1])y=+m[1];
+  else{
+    const ref=(Number.isFinite(+refTs)&&+refTs>0)?new Date(+refTs):new Date();
+    const ry=ref.getFullYear();
+    y=[ry-1,ry,ry+1].filter(valid).sort((a,b)=>Math.abs(at(a)-ref)-Math.abs(at(b)-ref))[0];
+  }
+  if(y===undefined||!valid(y))return raw;
+  return jpDateLabel(at(y).getTime());
+}
+// 日付と時刻（例: 2026年11月23日(月祝) 14:05）。確認・管理用の表示で使う。withSecがtrueなら秒まで（14:05:09）
+function jpDateTimeLabel(ts,withSec){
+  const t=new Date(ts);
+  if(!ts||isNaN(t.getTime()))return '';
+  return jpDateLabel(ts)+' '+t.toLocaleTimeString('ja-JP',withSec?{hour:'2-digit',minute:'2-digit',second:'2-digit'}:{hour:'2-digit',minute:'2-digit'});
 }
 
 let lastChatDateStr=null;
@@ -13070,7 +13097,7 @@ function debugPoolBadge(){
   const poolLabel=currentPoolWait();
   const activeWait=myActiveWaitInfo();
   const hCp=checkpoints.find(c=>c.id==='haneda');
-  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'−';
+  const fmt=ts=>ts?jpDateTimeLabel(ts,true):'−';
   out.textContent=[
     `【バッジ計算結果（currentPoolWait）】`,
     poolLabel?`✅ 表示されるはず: ${poolLabel.spot} ${poolLabel.mins}分`:'❌ 表示されない（currentPoolWaitがnull）',
@@ -13107,7 +13134,7 @@ async function debugTodaySales(){
   const out=document.getElementById('debug-todaysales-out');
   out.style.display='block';
   out.textContent='読み込み中…';
-  const fmt=ts=>ts?new Date(ts).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'−';
+  const fmt=ts=>ts?jpDateTimeLabel(ts,true):'−';
   const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
   const bizStart=getBusinessDayStart();
   const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
@@ -13171,7 +13198,7 @@ async function repairAllFareLogFromDestinations(){
   let minTs=null;
   destinations.forEach(d=>{if(d.ts&&(minTs===null||d.ts<minTs))minTs=d.ts;});
   if(minTs===null){toast('⚠️ 対象になる記録がありません');return;}
-  const fromStr=new Date(minTs).toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'});
+  const fromStr=jpDateLabel(minTs);
   if(!confirm(`送り先タブに残っている全期間（${fromStr}〜現在）の内容をもとに、運賃記録を再同期しますか？\n（送り先タブ側の記録は変更されません。件数が多いと少し時間がかかります）`))return;
   const result=resyncFareLogFromDestinations(minTs,Date.now());
   pushTeamSales();
