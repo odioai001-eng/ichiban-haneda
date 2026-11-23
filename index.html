@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261123-1 -->
+<!-- v20261123-2 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -481,6 +481,8 @@ label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
 .pm-b.out{align-self:flex-end;background:var(--accent);color:#fff;border:1px solid transparent}
 .pm-b.new{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
 .pm-b.failed{opacity:.6}
+.pm-date{align-self:center;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:3px 14px;
+  font-size:13px;font-weight:700;color:var(--text);margin:6px 0 2px}
 .pm-b small{display:block;font-size:10px;opacity:.75;margin-top:2px}
 #pm-mic{flex-shrink:0;width:58px;border-radius:14px;border:1px solid var(--border);background:var(--surface2);color:var(--fg);font-size:26px;cursor:pointer}
 #pm-mic.on{background:var(--red);color:#fff;border-color:var(--red)}
@@ -1651,7 +1653,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261123-1';
+const APP_BUILD='20261123-2';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -12664,6 +12666,57 @@ function userColorFromId(str){
  return `hsl(${hue},65%,50%)`;
 }
 
+// ===== 日付の表記（全員のチャットの日付の区切り・個人メッセージの履歴で共通）=====
+// 例: 2026年11月23日(月祝)。西暦・曜日つきで、国民の祝日（振替休日・国民の休日を含む）には「祝」を付ける。
+// 祝日は、現在の法律どおりに計算する（2019〜2099年。2019〜2021年の特例も入れてある。それ以前の年には「祝」を付けない）。
+// 将来、祝日の決まりが法律で変わった時は、ここを直す必要がある
+function jpHolidayRaw(y,m,d){
+  if(y<2019||y>2099)return false;
+  const nthMon=(mon,n)=>1+((8-new Date(y,mon-1,1).getDay())%7)+(n-1)*7; // mon月の第n月曜日の日付
+  const ex=y-1980,leap=Math.floor(ex/4);
+  const spring=Math.floor(20.8431+0.242194*ex-leap),autumn=Math.floor(23.2488+0.242194*ex-leap); // 春分の日・秋分の日
+  switch(m){
+    case 1:return d===1||d===nthMon(1,2);                  // 元日・成人の日
+    case 2:return d===11||(d===23&&y>=2020);                // 建国記念の日・天皇誕生日（2月23日は2020年から。2019年は祝日なし）
+    case 3:return d===spring;                               // 春分の日
+    case 4:return d===29;                                   // 昭和の日
+    case 5:return d===3||d===4||d===5||(y===2019&&d===1);   // 憲法記念日・みどりの日・こどもの日（2019年は即位の日も）
+    case 7:return d===(y===2020?23:y===2021?22:nthMon(7,3))||(y===2020&&d===24)||(y===2021&&d===23); // 海の日（2020・2021年は五輪のため移動）・同年のスポーツの日
+    case 8:return d===(y===2020?10:y===2021?8:11);          // 山の日（2020・2021年は五輪のため移動）
+    case 9:return d===nthMon(9,3)||d===autumn;              // 敬老の日・秋分の日
+    case 10:return (y===2020||y===2021)?false:(d===nthMon(10,2)||(y===2019&&d===22)); // スポーツの日（2020・2021年は7月に移動）・2019年は即位礼正殿の儀の日
+    case 11:return d===3||d===23;                           // 文化の日・勤労感謝の日
+    default:return false;
+  }
+}
+function isJpHoliday(y,m,d){
+  if(jpHolidayRaw(y,m,d))return true;
+  if(y<2019||y>2099)return false;
+  const at=n=>{const p=new Date(y,m-1,d+n);return [p.getFullYear(),p.getMonth()+1,p.getDate(),p.getDay()];};
+  // 振替休日: 日曜と重なった祝日のあと、最初の「祝日でない日」。前日から順にさかのぼり、祝日が続いた先頭が日曜なら、今日は振替休日
+  for(let k=1;k<=7;k++){
+    const [py,pm,pd,pw]=at(-k);
+    if(!jpHolidayRaw(py,pm,pd))break;
+    if(pw===0)return true;
+  }
+  // 国民の休日: 前日と翌日がどちらも祝日にはさまれた平日（日曜を除く）
+  if(new Date(y,m-1,d).getDay()!==0){
+    const a=at(-1),b=at(1);
+    if(jpHolidayRaw(a[0],a[1],a[2])&&jpHolidayRaw(b[0],b[1],b[2]))return true;
+  }
+  return false;
+}
+function jpDateKey(ts){
+  const t=new Date(ts||Date.now());
+  return t.getFullYear()+'-'+(t.getMonth()+1)+'-'+t.getDate();
+}
+function jpDateLabel(ts){
+  const t=new Date(ts||Date.now());
+  if(isNaN(t.getTime()))return '';
+  const y=t.getFullYear(),m=t.getMonth()+1,d=t.getDate();
+  return `${y}年${m}月${d}日(${'日月火水木金土'[t.getDay()]}${isJpHoliday(y,m,d)?'祝':''})`;
+}
+
 let lastChatDateStr=null;
 
 function appendChatBubble(m,isMe,fbKey){
@@ -12674,7 +12727,7 @@ function appendChatBubble(m,isMe,fbKey){
   const container=document.getElementById('chat-msgs');
   // 日付が変わったら区切り線を挿入
   if(m.ts){
-    const dStr=new Date(m.ts).toLocaleDateString('ja-JP',{month:'2-digit',day:'2-digit',weekday:'short'});
+    const dStr=jpDateLabel(m.ts);
     if(dStr!==lastChatDateStr){
       lastChatDateStr=dStr;
       const sep=document.createElement('div');
@@ -12757,8 +12810,14 @@ function dmTimeText(ts){
 function renderPeerThread(){
   const el=document.getElementById('pm-thread');if(!el||!peerMsgTo)return;
   const all=loadDmThread(peerMsgTo);
-  el.innerHTML=all.slice(-DM_SHOW).map(m=>
-    `<div class="pm-b ${m.dir==='out'?'out':'in'}${m.unread?' new':''}${m.failed?' failed':''}">${esc(m.text)}<small>${dmTimeText(m.ts)}${m.failed?'　⚠️送れませんでした':''}</small></div>`).join('');
+  let lastDay=null;
+  el.innerHTML=all.slice(-DM_SHOW).map(m=>{
+    // 日付が変わったところ（いちばん上を含む）に、日付の見出し（例: 2026年11月23日(月祝)）を入れる
+    const day=jpDateKey(m.ts);
+    const sep=day!==lastDay?`<div class="pm-date">${esc(jpDateLabel(m.ts))}</div>`:'';
+    lastDay=day;
+    return sep+`<div class="pm-b ${m.dir==='out'?'out':'in'}${m.unread?' new':''}${m.failed?' failed':''}">${esc(m.text)}<small>${dmTimeText(m.ts)}${m.failed?'　⚠️送れませんでした':''}</small></div>`;
+  }).join('');
   el.scrollTop=el.scrollHeight;
   // 見せたものは、既読にする（次に開いた時に、また「新着」の枠が付かないように）
   if(all.some(m=>m.unread)){all.forEach(m=>{if(m.unread)delete m.unread;});saveDmThread(peerMsgTo,all);}
