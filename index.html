@@ -44,7 +44,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20261123-5 -->
+<!-- v20261123-6 -->
 <title>イチバン羽田チームアプリ</title>
 <link rel="apple-touch-icon" href="https://odioai001-eng.github.io/ichiban-haneda/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1655,7 +1655,7 @@ const FIREBASE_CONFIG = {
 };
 // 修正をpushしても、アプリを起動しっぱなしだと古いプログラムのまま動き続けてしまうため、
 // サーバー側のこの値が変わったら「更新があります」バナーで気づけるようにする
-const APP_BUILD='20261123-5';
+const APP_BUILD='20261123-6';
 // 各自のスマホが計算して送る「本日・今月の売上」（team_sales）の計算方法の版。計算方法を直したときだけ上げる。
 // 1 = 月末に始めた夜勤の売上が今月に混ざる／本日に前の営業日の売上が出る不具合が残っていた版（calcVerを送らない）
 // 2 = それらを直した版。仲間の画面は、各自のスマホが送った値をそのまま表示するため、更新していないスマホの値は、
@@ -7899,29 +7899,40 @@ function saveTargetDays(){
  updateDailyBar();
 }
 
+// 本日（営業日＝朝9:00〜翌朝9:00）の売上に数える出勤（シフト）の時間帯。
+// 設定タブ「売上管理」の「本日の売上」と、グループランキングの本日の売上（自分の行・各自のスマホが送る値）は、必ずこの時間帯で数える。
+// 以前は、退勤後の数え方が違っていた（売上管理＝最後の出勤だけ／ランキング＝今の営業日に退勤した出勤すべて）ため、
+// 同じ営業日に出勤を2回した人（押し間違いで退勤して出勤し直した時など）・夜勤明けにまた出勤した人で、ランキングだけ大きくなっていた。
+//  ・出勤中: 今回の出勤（出勤してから今まで）＋ 今の営業日の開始以降に出勤して、すでに退勤した出勤すべて
+//    （同じ営業日に一旦退勤してすぐ出勤し直した場合も、それより前の分が抜け落ちない）
+//  ・退勤後: 今の営業日の開始以降に出勤した出勤すべて（出勤中と同じ数え方）。今の営業日に出勤を始めた出勤が無く、夜勤を朝9時すぎに終えた
+//    時だけは、その出勤（今の営業日の開始以降に退勤した、いちばん新しいもの）
+//  ・どれも無い（今の営業日に出勤していない）: 空（売上管理は、直近の出勤の分を表示する。ランキングは0円）
+function getBizDayShiftRanges(){
+  const bizStart=getBusinessDayStart();
+  const done=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]').filter(s=>s&&s.startTs&&s.endTs);
+  const onDuty=!!(isDuty&&dutyStart);
+  let list=done.filter(s=>s.startTs>=bizStart);
+  if(!onDuty&&!list.length){
+    const ended=done.filter(s=>s.endTs>=bizStart);
+    list=ended.length?[ended.reduce((a,b)=>b.endTs>a.endTs?b:a)]:[];
+  }
+  const ranges=list.map(s=>({start:s.startTs,end:s.endTs}));
+  if(onDuty)ranges.unshift({start:dutyStart.getTime(),end:Infinity});
+  return ranges;
+}
 function getTodayShiftFareEntries(){
   const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
-  if(isDuty&&dutyStart){
-    // 出勤中は、暦日ではなく「出勤してからの累計」を本日分として扱う（夜勤で日付をまたいでもリセットされない）。
-    // ただし、同じ営業日中に一旦退勤してすぐ出勤し直した場合（押し間違い等）、それより前の
-    // シフト分の記録がここから抜け落ち、「本日の売上」「本日の目標まであと」が実際より
-    // 少なく（0円に）見えてしまう不具合があった。getBusinessDayFareEntries（グループ
-    // ランキング用）では既に同様の対策済みだったが、こちら（個人の目標表示等で使用）には
-    // 反映されていなかったため、同じ営業日に完了している他のシフトも合算するようにする
-    const bizStart=getBusinessDayStart();
-    const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
-    const ranges=[{start:dutyStart.getTime(),end:Infinity}];
-    shiftLog.filter(s=>s.endTs&&s.startTs>=bizStart).forEach(s=>ranges.push({start:s.startTs,end:s.endTs}));
-    return log.filter(e=>ranges.some(r=>(e.ts||0)>=r.start&&(e.ts||0)<=r.end));
-  }
-  // 退勤後は、直近に完了した出退勤（出勤〜退勤）の時間帯そのものに絞る。
-  // 「今日の日付」でフォールバックすると、日をまたいだ夜勤の翌日に確認した時や
-  // 日付が変わった瞬間に表示がリセットされてしまうため、暦日ではなく実際の
-  // 出勤〜退勤の時刻を基準にする
+  // 出勤中は、暦日ではなく「出勤してからの累計」を本日分として扱う（夜勤で日付をまたいでもリセットされない）。
+  // 退勤後も、暦日ではなく実際の出勤〜退勤の時刻を基準にする（日をまたいだ夜勤の翌日に確認した時や、
+  // 日付が変わった瞬間に、表示がリセットされてしまうため）
+  const ranges=getBizDayShiftRanges();
+  if(ranges.length)return log.filter(e=>ranges.some(r=>(e.ts||0)>=r.start&&(e.ts||0)<=r.end));
+  // 今の営業日に出勤していない時は、直近に完了した出退勤（出勤〜退勤）の時間帯に絞る（売上管理の表示。これまでどおり）。
+  // 手動追加した過去分のシフトが後から配列に追加されている場合もあるため、
+  // 配列の並び順ではなく退勤時刻(endTs)が最も新しいものを直近の勤務とする
   const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
   if(shiftLog.length){
-    // 手動追加した過去分のシフトが後から配列に追加されている場合もあるため、
-    // 配列の並び順ではなく退勤時刻(endTs)が最も新しいものを直近の勤務とする
     const last=shiftLog.reduce((a,b)=>(!a||b.endTs>a.endTs)?b:a,null);
     return log.filter(e=>(e.ts||0)>=last.startTs&&(e.ts||0)<=last.endTs);
   }
@@ -8240,6 +8251,8 @@ function saveManualShift(){
   safeSaveLocalArray('taxi_shift_log',log,'出退勤記録');
   renderShiftEntries();
   renderWorkStats();
+  renderSalesStats();
+  pushTeamSales(); // 本日の売上に数える出勤が変わるため、ランキングへも送り直す
   toast('✅ 出勤・退勤記録を保存しました');
   document.getElementById('sl-start').value='';
   document.getElementById('sl-end').value='';
@@ -8298,6 +8311,7 @@ function editShiftEntry(startTs){
  // 売上管理側の一覧もこのシフトの時刻範囲を元に組み立てているため、
  // ここで更新しないと勤務時間管理とは別の古い表示のまま残ってしまう
  renderSalesStats();
+ pushTeamSales(); // 本日の売上に数える出勤が変わるため、ランキングへも送り直す
 }
 
 function deleteShiftEntry(startTs){
@@ -8308,6 +8322,7 @@ function deleteShiftEntry(startTs){
  toast('🗑 記録を削除しました');
  renderWorkStats();
  renderSalesStats();
+ pushTeamSales(); // 本日の売上に数える出勤が変わるため、ランキングへも送り直す（送り直さないと、消す前の金額が残る）
 }
 
 // 「勤務時間管理」と同じ形式（1回の勤務ごとに1行・編集/削除できる）で売上を確認
@@ -9370,7 +9385,10 @@ function resyncFareLogFromDestinations(shiftStartTs,shiftEndTs){
       changed=true;createdCount++;
     }
   });
-  if(changed)safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
+  if(changed){
+    safeSaveLocalArray('taxi_fare_log',log,'運賃記録');
+    pushTeamSales(); // 運賃記録が変わったので、ランキングへも送り直す
+  }
   return {changed,inRangeCount,updatedCount,createdCount};
 }
 // 保存済みの精算記録は退勤時点のtaxi_fare_logの内容を1回だけ集計して保存
@@ -10091,16 +10109,12 @@ function getMyTodayFareExTax(){
  return exTax(getTodayShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0));
 }
 // グループの「本日の売り上げランキング」に出す、自分の本日の売上（税抜）。ランキングの「本日」は、朝9:00〜翌朝9:00の
-// 営業日（getBusinessDayStart）で区切る。出勤中は、出勤してからの累計（getMyTodayFareExTax）。退勤後は、今の営業日に
-// かかっている出退勤（今の営業日の開始以降に退勤した出退勤）の売上だけにする。以前は、退勤後は直近の出退勤の売上を、
-// それが前の営業日のもの（例: 昨夜の夜勤が明け方に終わり、昼にアプリを開いた時）でも「本日」として出していたため、
-// 本日出勤していない人にも、前日の売上が本日のランキングに出ていた（売上管理の「本日の売上」は、これまでどおり）
+// 営業日（getBusinessDayStart）で区切る。数える出勤は、売上管理の「本日の売上」と同じ（getBizDayShiftRanges）。
+// 今の営業日に出勤していない人は0円（昨夜までの出勤の売上を、本日として出さない）
 function getMyBizDayFareExTax(){
- if(isDuty&&dutyStart)return getMyTodayFareExTax();
- const bizStart=getBusinessDayStart();
+ const ranges=getBizDayShiftRanges();
+ if(!ranges.length)return 0;
  const log=JSON.parse(localStorage.getItem('taxi_fare_log')||'[]');
- const shiftLog=JSON.parse(localStorage.getItem('taxi_shift_log')||'[]');
- const ranges=shiftLog.filter(s=>s.endTs&&s.endTs>=bizStart).map(s=>({start:s.startTs,end:s.endTs}));
  return exTax(log.filter(e=>ranges.some(r=>(e.ts||0)>=r.start&&(e.ts||0)<=r.end)).reduce((a,e)=>a+(e.fare||0),0));
 }
 // 出勤中でまだtaxi_shift_logに入っていない、今回のシフトの記録
@@ -10122,27 +10136,30 @@ function pushTeamSales(){
  if(!db)return;
  if(!isRankingOptedIn())return;
  if(testMode)return; // テスト出勤中の売上は、仲間のグループランキング（team_sales）に反映しない
- const name=localStorage.getItem('taxi_name')||'自分';
- const carry=getCarryover();
- const now=new Date();
- const todayBizStart=getBusinessDayStart(now.getTime());
- // 本日・今月とも、設定の「💰 売上管理（税抜）」の日別一覧と同じ計算式
- // （税込の合計をまとめて税抜換算）で集計する
- const todayFare=getMyBizDayFareExTax();
- const monthFareRaw=getMonthFareExTax(0)+carry.fare;
- const monthDaysRaw=getMonthShifts().length+carry.days;
- // 1日平均は「退勤して1日分として確定した」売上・日数だけで計算する。
- // まだ退勤していない当日分の売上は、日数の方はまだ+1されていないため、
- // 平均の分子からも除いておく（退勤した瞬間にその日の売上と日数が両方まとめて加わる）
- // monthFareは税抜きなので、差し引くongoingFareも同じ税抜き基準で計算する
- const ongoingFare=exTax(getOngoingShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0));
- const monthKey=currentSalesMonthKey();
  const ref=db.ref('team_sales/'+myId);
  // 手動修正(monthAdjust)や前月分の退避には「Firebase上の自分の今の記録」が必要。
  // アプリ起動直後はteamSalesの受信がまだ終わっていないことがあり、その状態で
  // 書き込むと前月分を退避しないまま新しい月の値で上書きしてしまうため、
  // 毎回Firebaseから直接読み直してから書き込む
  ref.once('value').then(snap=>snap.val()||{},()=>(teamSales&&teamSales[myId])||{}).then(stored=>{
+  // 送る金額は、ここ（書き込む直前）で計算する。以前は、この読み込みを始める前に計算していたため、続けて何度か送った時
+  // （運賃を入力してすぐ直した時など）に、読み込みが後から終わった古い方の呼び出しが、新しい値のあとに古い（多い）値を書いてしまい、
+  // 仲間の画面に、実際より多い金額が残ることがあった
+  const name=localStorage.getItem('taxi_name')||'自分';
+  const carry=getCarryover();
+  const now=new Date();
+  const todayBizStart=getBusinessDayStart(now.getTime());
+  // 本日・今月とも、設定の「💰 売上管理（税抜）」の日別一覧と同じ計算式
+  // （税込の合計をまとめて税抜換算）で集計する
+  const todayFare=getMyBizDayFareExTax();
+  const monthFareRaw=getMonthFareExTax(0)+carry.fare;
+  const monthDaysRaw=getMonthShifts().length+carry.days;
+  // 1日平均は「退勤して1日分として確定した」売上・日数だけで計算する。
+  // まだ退勤していない当日分の売上は、日数の方はまだ+1されていないため、
+  // 平均の分子からも除いておく（退勤した瞬間にその日の売上と日数が両方まとめて加わる）
+  // monthFareは税抜きなので、差し引くongoingFareも同じ税抜き基準で計算する
+  const ongoingFare=exTax(getOngoingShiftFareEntries().reduce((a,e)=>a+(e.fare||0),0));
+  const monthKey=currentSalesMonthKey();
   // グループランキングの手動修正(monthAdjust)は自動集計との「差分」として保持し、
   // 自動集計が更新されるたびにその差分を足し続けることで、自動計算を止めずに
   // 「今のズレだけ直す」を実現する
@@ -10193,6 +10210,7 @@ function renderSalesStats(){
  // 今月を見ている時だけ合算する（過去の月を遡って見る時には含めない）
  const carry=salesStatsMonthOffset===0?getCarryover():{fare:0,days:0};
  const todayEntries=getTodayShiftFareEntries();
+ const todayShiftCount=getBizDayShiftRanges().length; // 本日の売上に数えている出勤の回数（2回以上の時は、合計であることを添える）
  const sum=(arr,key)=>arr.reduce((a,e)=>a+(e[key]||0),0);
  // 「今月の売上」は日ごとの売上一覧（getMonthFareDays、シフト単位で集計済み）の
  // 合計を使う（暦のtsで絞ると月をまたぐ夜勤の日付変更後の記録が漏れるため）。金額は月間ランキングと共通の計算（getMonthFareExTax）。出勤中の分は、同じ
@@ -10204,7 +10222,7 @@ function renderSalesStats(){
  if(salesStatsMonthOffset===0)monthToll+=sum(getOngoingShiftFareEntries(),'toll');
  const monthLabel=salesStatsMonthLabel(salesStatsMonthOffset);
  out.innerHTML=`
-  <div class="row2"><span class="rl">本日の売上（税抜）</span><span class="rv" style="color:var(--green)">¥${getMyTodayFareExTax().toLocaleString()}</span></div>
+  <div class="row2"><span class="rl">本日の売上（税抜）</span><span class="rv" style="color:var(--green)">¥${getMyTodayFareExTax().toLocaleString()}${todayShiftCount>=2?`<span id="today-shift-count" style="font-size:10px;font-weight:400;color:var(--muted)">（出勤${todayShiftCount}回分の合計）</span>`:''}</span></div>
   <div class="row2"><span class="rl">本日の自腹高速代</span><span class="rv" style="color:var(--red)">¥${sum(todayEntries,'toll').toLocaleString()}</span></div>
   <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px">
    <button class="btn btn-g" onclick="changeSalesStatsMonth(-1)" style="font-size:11px;padding:5px 10px">◀ 前月</button>
