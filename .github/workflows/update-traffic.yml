@@ -26,6 +26,10 @@ jobs:
         run: pip install requests beautifulsoup4 lxml
 
       - name: 交通情報を取得してページを生成
+        id: update
+        # 取得に失敗した時も、次の「コミット」まで進める（ページに「古い情報です」の表示を入れて残すため）。
+        # 失敗は、いちばん下の手順で、実行を失敗にして知らせる
+        continue-on-error: true
         run: python scripts/update_traffic.py
 
       - name: 変更があればコミット・反映
@@ -36,6 +40,19 @@ jobs:
           if git diff --cached --quiet; then
             echo "変更なし。コミットをスキップします。"
           else
-            git commit -m "自動更新: 首都高交通規制情報 ($(date '+%Y-%m-%d %H:%M'))"
+            if [ "${{ steps.update.outcome }}" = "failure" ]; then
+              MSG="自動更新: 首都高交通規制情報（取得に失敗・古い情報の表示を更新）"
+            else
+              MSG="自動更新: 首都高交通規制情報"
+            fi
+            git commit -m "$MSG ($(date '+%Y-%m-%d %H:%M'))"
+            # ほかの自動更新（運行情報・イベント）が先に反映されていても、取り込んでから送る
+            git pull --rebase origin main
             git push
           fi
+
+      - name: 取得に失敗していたら、実行を失敗にして知らせる
+        if: steps.update.outcome == 'failure'
+        run: |
+          echo "::error title=首都高サイトから規制情報を取得できませんでした::ページには「古い情報です」と表示されています。失敗の理由は「交通情報を取得してページを生成」のログを見てください。"
+          exit 1
