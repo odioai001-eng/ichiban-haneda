@@ -35,7 +35,13 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 .footer-note{background:#161628;border:1px solid #2a2a4a;border-radius:12px;padding:14px 16px;
   font-size:11px;color:#7878a0;line-height:1.7;margin-top:24px}
 .empty-msg{text-align:center;color:#7878a0;font-size:13px;padding:30px 10px}
+.stale-warn{display:none;font-size:12px;color:#fecaca;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.5);
+  border-radius:10px;padding:11px 13px;margin-bottom:14px;line-height:1.7}
+.stale-warn b{color:#fff}
+.stale-warn small{display:block;margin-top:4px;color:#fca5a5;font-size:11px}
 </style>
+<meta name="data-fetched-at" content="2026-09-14T15:43:00+09:00">
+<meta name="data-last-error" content="HTTP 429 Too Many Requests">
 </head>
 <body>
 
@@ -48,6 +54,12 @@ h1{font-size:19px;font-weight:800;margin-bottom:4px;display:flex;align-items:cen
 <div class="sub">大規模・長期規制の一覧＋日別工事マップへのリンク</div>
 <div class="updated">🔄 自動更新：2026年09月14日 15:43 時点（1日3回・11時/17時/21時ごろに自動更新されます）</div>
 
+
+<div class="stale-warn" id="stale-warn">
+  ⚠️ この一覧は<b id="stale-when"></b>。首都高のサイトから、自動で取得できていません。<br>
+  古い情報なので、<b>「本日は規制なし」とは限りません</b>。必ず、下の「最新の一覧をサイトで直接見る」で確認してください。
+  <small id="stale-reason"></small>
+</div>
 
 <div class="filter-row">
   <button class="filter-btn active" id="filter-today" onclick="setFilter('today')">📍 本日・夜勤帯のみ</button>
@@ -412,6 +424,33 @@ function setFilter(mode){
   document.getElementById('filter-all').classList.toggle('active',mode==='all');
 }
 setFilter('today');
+</script>
+
+<script id="stale-check">
+// 取得できた時刻（meta data-fetched-at）から 36 時間より長くたっていたら（または時刻が不明なら）、「古い情報です」と出す
+(function(){
+  var STALE_HOURS=36;
+  function meta(n){var m=document.querySelector('meta[name="'+n+'"]');return m?(m.getAttribute('content')||''):'';}
+  var t=Date.parse(meta('data-fetched-at'));
+  var known=!isNaN(t);
+  if(known&&(Date.now()-t)/3600000<=STALE_HOURS)return;
+  var w=document.getElementById('stale-warn');
+  if(!w)return;
+  w.style.display='block';
+  var when=document.getElementById('stale-when');
+  if(known){
+    var j=new Date(t+9*3600000);
+    when.textContent='、'+(j.getUTCMonth()+1)+'月'+j.getUTCDate()+'日 '+j.getUTCHours()+':'+('0'+j.getUTCMinutes()).slice(-2)+' 時点のまま止まっています';
+  }else{
+    when.textContent='、いつ取得したものか分かりません';
+  }
+  var err=meta('data-last-error');
+  if(err)document.getElementById('stale-reason').textContent='取得できなかった理由: '+err;
+  var u=document.querySelectorAll('.updated');
+  for(var i=0;i<u.length;i++)u[i].style.display='none';
+  var em=document.getElementById('empty-msg');
+  if(em)em.textContent='古い情報のため、本日の規制の有無は分かりません。下のリンクで、公式の一覧を確認してください';
+})();
 </script>
 
 </body>
